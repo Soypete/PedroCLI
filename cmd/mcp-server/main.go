@@ -90,9 +90,23 @@ func main() {
 	reviewerAgent.RegisterTool(bashTool)
 	reviewerAgent.RegisterTool(testTool)
 
+	debuggerAgent := agents.NewDebuggerAgent(cfg, backend, jobManager)
+	debuggerAgent.RegisterTool(fileTool)
+	debuggerAgent.RegisterTool(gitTool)
+	debuggerAgent.RegisterTool(bashTool)
+	debuggerAgent.RegisterTool(testTool)
+
+	triagerAgent := agents.NewTriagerAgent(cfg, backend, jobManager)
+	triagerAgent.RegisterTool(fileTool)
+	triagerAgent.RegisterTool(gitTool)
+	triagerAgent.RegisterTool(bashTool)
+	triagerAgent.RegisterTool(testTool)
+
 	// Wrap agents as tools for MCP
 	server.RegisterTool(mcp.NewAgentTool(builderAgent))
 	server.RegisterTool(mcp.NewAgentTool(reviewerAgent))
+	server.RegisterTool(mcp.NewAgentTool(debuggerAgent))
+	server.RegisterTool(mcp.NewAgentTool(triagerAgent))
 
 	// Start server
 	log.Println("Pedroceli MCP server starting...")
