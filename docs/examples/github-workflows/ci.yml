@@ -1,0 +1,90 @@
+# Example GitHub Actions workflow for continuous integration
+# Copy this file to .github/workflows/ci.yml to use it
+#
+# This workflow runs fast unit tests on every commit for quick feedback.
+# E2E tests (which require RUN_E2E_TESTS=1) are automatically skipped.
+
+name: CI
+
+# Run unit tests on every push and PR
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run unit tests
+        run: |
+          # Run all tests except E2E tests (which require RUN_E2E_TESTS=1)
+          go test ./... -v -race -coverprofile=coverage.out -covermode=atomic
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.out
+          flags: unittests
+          fail_ci_if_error: false
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+          args: --timeout=5m
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Build CLI
+        run: go build -v -o pedrocli ./cmd/pedrocli
+
+      - name: Build MCP Server
+        run: go build -v -o mcp-server ./cmd/mcp-server
+
+      - name: Build Web Server
+        run: go build -v -o web-server ./cmd/web-server

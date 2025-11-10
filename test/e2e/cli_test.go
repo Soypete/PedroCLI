@@ -9,9 +9,7 @@ import (
 )
 
 func TestCLI_Build_Command(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
+	SkipUnlessE2E(t)
 
 	// Build the CLI binary first
 	cliPath := buildCLI(t)
@@ -44,9 +42,7 @@ func TestCLI_Build_Command(t *testing.T) {
 }
 
 func TestCLI_Debug_Command(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
+	SkipUnlessE2E(t)
 
 	cliPath := buildCLI(t)
 	defer os.Remove(cliPath)
@@ -78,9 +74,7 @@ func TestCLI_Debug_Command(t *testing.T) {
 }
 
 func TestCLI_Review_Command(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
+	SkipUnlessE2E(t)
 
 	cliPath := buildCLI(t)
 	defer os.Remove(cliPath)
@@ -109,9 +103,7 @@ func TestCLI_Review_Command(t *testing.T) {
 }
 
 func TestCLI_Triage_Command(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
+	SkipUnlessE2E(t)
 
 	cliPath := buildCLI(t)
 	defer os.Remove(cliPath)
@@ -140,9 +132,7 @@ func TestCLI_Triage_Command(t *testing.T) {
 }
 
 func TestCLI_Help_Command(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
+	SkipUnlessE2E(t)
 
 	cliPath := buildCLI(t)
 	defer os.Remove(cliPath)
@@ -166,9 +156,7 @@ func TestCLI_Help_Command(t *testing.T) {
 }
 
 func TestCLI_Version_Command(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
+	SkipUnlessE2E(t)
 
 	cliPath := buildCLI(t)
 	defer os.Remove(cliPath)

@@ -11,6 +11,17 @@ import (
 	"github.com/soypete/pedrocli/pkg/llm"
 )
 
+// SkipUnlessE2E skips the test unless RUN_E2E_TESTS environment variable is set.
+// E2E tests are expensive and should only run when explicitly enabled, such as:
+// - When a PR is marked ready for review
+// - When manually triggered in CI
+// - During local development with: RUN_E2E_TESTS=1 go test ./test/e2e
+func SkipUnlessE2E(t *testing.T) {
+	if os.Getenv("RUN_E2E_TESTS") == "" {
+		t.Skip("Skipping E2E test - set RUN_E2E_TESTS=1 to run")
+	}
+}
+
 // TestEnvironment holds all the resources needed for E2E tests
 type TestEnvironment struct {
 	WorkDir    string

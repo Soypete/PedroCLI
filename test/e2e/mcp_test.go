@@ -12,9 +12,7 @@ import (
 )
 
 func TestMCP_Initialize(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
+	SkipUnlessE2E(t)
 
 	env := SetupTestEnvironment(t)
 	defer env.Cleanup()
@@ -54,9 +52,7 @@ func TestMCP_Initialize(t *testing.T) {
 }
 
 func TestMCP_ToolsList(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
+	SkipUnlessE2E(t)
 
 	env := SetupTestEnvironment(t)
 	defer env.Cleanup()
@@ -126,9 +122,7 @@ func TestMCP_ToolsList(t *testing.T) {
 }
 
 func TestMCP_ToolCall_FileRead(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
+	SkipUnlessE2E(t)
 
 	env := SetupTestEnvironment(t)
 	defer env.Cleanup()
@@ -183,9 +177,7 @@ func TestMCP_ToolCall_FileRead(t *testing.T) {
 }
 
 func TestMCP_ToolCall_FileWrite(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
+	SkipUnlessE2E(t)
 
 	env := SetupTestEnvironment(t)
 	defer env.Cleanup()
@@ -224,9 +216,7 @@ func TestMCP_ToolCall_FileWrite(t *testing.T) {
 }
 
 func TestMCP_ToolCall_SearchGrep(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
+	SkipUnlessE2E(t)
 
 	env := SetupTestEnvironment(t)
 	defer env.Cleanup()

@@ -11,9 +11,7 @@ import (
 )
 
 func TestBuilderAgent_E2E(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
+	SkipUnlessE2E(t)
 
 	env := SetupTestEnvironment(t)
 	defer env.Cleanup()
@@ -72,9 +70,7 @@ func TestBuilderAgent_E2E(t *testing.T) {
 }
 
 func TestDebuggerAgent_E2E(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
+	SkipUnlessE2E(t)
 
 	env := SetupTestEnvironment(t)
 	defer env.Cleanup()
@@ -143,9 +139,7 @@ func Add(a, b int) int {
 }
 
 func TestReviewerAgent_E2E(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
+	SkipUnlessE2E(t)
 
 	env := SetupTestEnvironment(t)
 	defer env.Cleanup()
@@ -202,9 +196,7 @@ func Process(data string) string {
 }
 
 func TestTriagerAgent_E2E(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
+	SkipUnlessE2E(t)
 
 	env := SetupTestEnvironment(t)
 	defer env.Cleanup()

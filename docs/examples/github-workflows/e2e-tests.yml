@@ -1,0 +1,53 @@
+# Example GitHub Actions workflow for E2E tests
+# Copy this file to .github/workflows/e2e-tests.yml to use it
+#
+# This workflow demonstrates how to run expensive E2E tests only when needed,
+# rather than on every commit.
+
+name: E2E Tests
+
+# Run E2E tests only when explicitly triggered:
+# 1. When a PR is marked ready for review
+# 2. When manually triggered via workflow_dispatch button
+# 3. On main branch pushes (optional - commented out by default)
+on:
+  pull_request:
+    types: [ready_for_review]
+  workflow_dispatch:  # Adds "Run workflow" button in GitHub Actions UI
+  # push:
+  #   branches: [main]  # Uncomment to run on main branch
+
+jobs:
+  e2e-tests:
+    name: End-to-End Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run E2E tests
+        env:
+          RUN_E2E_TESTS: "1"
+        run: |
+          go test ./test/e2e -v -timeout 30m
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: |
+            test/e2e/*.log
+            test/e2e/coverage.*
+          retention-days: 7
