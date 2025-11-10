@@ -333,9 +333,12 @@ Features:
 - **Text or voice input**: Type or speak your requests
 - **Real-time progress**: Watch agents work with live updates via WebSocket
 - **Job management**: View recent jobs and their results
+- **Debug viewer**: Inspect complete conversation history and tool execution for any job
 - **Self-hosted STT/TTS**: Complete privacy with local whisper.cpp and Piper
 
-See [Web UI Documentation](docs/WEB_UI.md) for full deployment guide.
+**Documentation:**
+- [Web Server API Reference](docs/WEB_SERVER_API.md) - Complete API documentation including debug endpoints
+- [E2E Testing Guide](docs/E2E_TESTING.md) - How to run and write end-to-end tests
 
 ### 7. MCP Server Integration
 
@@ -473,8 +476,8 @@ Full config example:
     "max_inference_runs": 20
   },
   "debug": {
-    "enabled": false,
-    "keep_temp_files": false,
+    "enabled": false,            // Enable to save conversation history for debug viewer
+    "keep_temp_files": false,    // Keep job files after completion
     "log_level": "info"
   },
   "init": {
@@ -493,8 +496,9 @@ make build-mac      # Mac (arm64 + amd64)
 make build-linux    # Linux
 
 # Test
-make test           # Run all tests
-make test-coverage  # With coverage
+make test                      # Run all tests
+make test-coverage             # With coverage
+RUN_E2E_TESTS=1 make test      # Include end-to-end tests
 
 # Format & Lint
 make fmt

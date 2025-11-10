@@ -4,49 +4,7 @@ Complete implementation specifications for the Pedroceli autonomous coding agent
 
 ## 📋 Quick Navigation
 
-### Overview
-- [Project Overview](01-overview.md) - What Pedroceli is and why
-- [Architecture](02-architecture.md) - System design and MCP structure
-
-### Phase 1: MCP Server Core (Weeks 1-2)
-- [Phase 1 Overview](phase1-00-overview.md)
-- [MCP Server Spec](phase1-01-mcp-server.md)
-- [llama.cpp Backend](phase1-02-llamacpp-backend.md)
-- [Agent: Builder](phase1-03-agent-builder.md)
-- [Agent: Debugger](phase1-04-agent-debugger.md)
-- [Agent: Reviewer](phase1-05-agent-reviewer.md)
-- [Agent: Triager](phase1-06-agent-triager.md)
-- [Tool System](phase1-07-tools.md)
-- [Job Management](phase1-08-jobs.md)
-
-### Phase 2: CLI Client (Week 3)
-- [Phase 2 Overview](phase2-00-overview.md)
-- [CLI Implementation](phase2-01-cli.md)
-- [MCP Client Library](phase2-02-mcp-client.md)
-
-### Phase 3: Ollama Backend (Week 4)
-- [Phase 3 Overview](phase3-00-overview.md)
-- [Ollama Implementation](phase3-01-ollama.md)
-- [Backend Factory](phase3-02-backend-factory.md)
-
-### Phase 4: Web UI (Weeks 5-6)
-- [Phase 4 Overview](phase4-00-overview.md)
-- [Web Server](phase4-01-web-server.md)
-- [Voice Interface](phase4-02-voice-ui.md)
-- [Whisper Integration](phase4-03-whisper.md)
-- [Tailscale Deployment](phase4-04-tailscale.md)
-
-### Cross-Cutting Concerns
-- [Context Management](component-context.md) - File-based context & compaction
-- [Platform Compatibility](component-platform.md) - Mac/Linux cross-platform
-- [Dependency Checking](component-init.md) - Pre-flight validation
-- [Configuration](component-config.md) - .pedroceli.json spec
-- [Metrics & Observability](component-metrics.md) - Prometheus metrics
-
-### Reference
-- [Original Brainstorm](00-original-spec.md) - Early design (for context)
-- [MCP Insight](00-mcp-insight.md) - Why MCP architecture
-- [Implementation Timeline](timeline.md) - 6-week schedule
+This directory contains implementation specifications and planning documents for the Pedroceli autonomous coding agent. These are internal planning documents for development reference.
 
 ## 🎯 Implementation Order
 
