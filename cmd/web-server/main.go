@@ -42,6 +42,7 @@ type Server struct {
 func main() {
 	port := flag.String("port", "8080", "HTTP server port")
 	configPath := flag.String("config", ".pedroceli.json", "Config file path")
+	jobsDir := flag.String("jobs-dir", "/tmp/pedroceli-jobs", "Directory for job storage")
 	whisperBin := flag.String("whisper-bin", "", "Path to whisper.cpp binary (optional)")
 	whisperModel := flag.String("whisper-model", "", "Path to whisper model file (optional)")
 	piperBin := flag.String("piper-bin", "", "Path to piper binary (optional)")
@@ -64,7 +65,7 @@ func main() {
 	}
 
 	// Create job manager
-	jobManager, err := jobs.NewManager("/tmp/pedroceli-jobs")
+	jobManager, err := jobs.NewManager(*jobsDir)
 	if err != nil {
 		log.Fatalf("Failed to create job manager: %v", err)
 	}
