@@ -1,0 +1,31 @@
+# Test coverage
+coverage.out
+*.coverprofile
+
+# Build artifacts
+/pedroceli-*
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+
+# Temporary files
+/tmp/
+*.tmp
+*.swp
+*.swo
+*~
+
+# IDE and editor files
+.vscode/
+.idea/
+*.iml
+.DS_Store
+
+# Job state directory
+/tmp/pedroceli-jobs/
+
+# Config files (don't commit actual configs, only examples)
+.pedroceli.json
