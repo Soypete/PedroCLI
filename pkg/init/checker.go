@@ -1,6 +1,7 @@
 package init
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -363,7 +364,7 @@ func (c *Checker) formatErrors(failures []CheckResult) error {
 
 	msg.WriteString("\nPlease install missing dependencies and try again.\n")
 
-	return fmt.Errorf(msg.String())
+	return errors.New(msg.String())
 }
 
 // isExecutable checks if a file is executable
