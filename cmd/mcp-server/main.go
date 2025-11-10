@@ -72,32 +72,52 @@ func main() {
 	bashTool := tools.NewBashTool(cfg, workDir)
 	testTool := tools.NewTestTool(workDir)
 
+	// Register advanced code editing and navigation tools
+	codeEditTool := tools.NewCodeEditTool()
+	searchTool := tools.NewSearchTool(workDir)
+	navigateTool := tools.NewNavigateTool(workDir)
+
 	server.RegisterTool(fileTool)
 	server.RegisterTool(gitTool)
 	server.RegisterTool(bashTool)
 	server.RegisterTool(testTool)
+	server.RegisterTool(codeEditTool)
+	server.RegisterTool(searchTool)
+	server.RegisterTool(navigateTool)
 
-	// Create and register agents
+	// Create and register agents with all tools
 	builderAgent := agents.NewBuilderAgent(cfg, backend, jobManager)
 	builderAgent.RegisterTool(fileTool)
+	builderAgent.RegisterTool(codeEditTool)
+	builderAgent.RegisterTool(searchTool)
+	builderAgent.RegisterTool(navigateTool)
 	builderAgent.RegisterTool(gitTool)
 	builderAgent.RegisterTool(bashTool)
 	builderAgent.RegisterTool(testTool)
 
 	reviewerAgent := agents.NewReviewerAgent(cfg, backend, jobManager)
 	reviewerAgent.RegisterTool(fileTool)
+	reviewerAgent.RegisterTool(codeEditTool)
+	reviewerAgent.RegisterTool(searchTool)
+	reviewerAgent.RegisterTool(navigateTool)
 	reviewerAgent.RegisterTool(gitTool)
 	reviewerAgent.RegisterTool(bashTool)
 	reviewerAgent.RegisterTool(testTool)
 
 	debuggerAgent := agents.NewDebuggerAgent(cfg, backend, jobManager)
 	debuggerAgent.RegisterTool(fileTool)
+	debuggerAgent.RegisterTool(codeEditTool)
+	debuggerAgent.RegisterTool(searchTool)
+	debuggerAgent.RegisterTool(navigateTool)
 	debuggerAgent.RegisterTool(gitTool)
 	debuggerAgent.RegisterTool(bashTool)
 	debuggerAgent.RegisterTool(testTool)
 
 	triagerAgent := agents.NewTriagerAgent(cfg, backend, jobManager)
 	triagerAgent.RegisterTool(fileTool)
+	triagerAgent.RegisterTool(codeEditTool)
+	triagerAgent.RegisterTool(searchTool)
+	triagerAgent.RegisterTool(navigateTool)
 	triagerAgent.RegisterTool(gitTool)
 	triagerAgent.RegisterTool(bashTool)
 	triagerAgent.RegisterTool(testTool)

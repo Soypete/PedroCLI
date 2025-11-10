@@ -16,24 +16,27 @@ Autonomous coding agent with MCP (Model Context Protocol) architecture.
 - [x] Dependency checker with platform-specific validation
 - [x] llama.cpp client with one-shot inference
 - [x] Job management system with disk persistence
-- [x] Cross-platform tool system:
-  - File tool (pure Go, no `sed`)
+- [x] Comprehensive tool system:
+  - File tool (read, write, append, delete)
+  - **CodeEdit tool** (precise line-based editing: edit_lines, insert_at_line, delete_lines)
+  - **Search tool** (grep patterns, find files, find definitions with regex)
+  - **Navigate tool** (code structure, file outlines, imports, directory trees)
   - Git tool (branch, commit, PR via `gh`)
   - Bash tool (restricted safe commands)
   - Test tool (Go/npm/Python)
 - [x] MCP server protocol and stdio handler
-- [x] Base agent architecture
-- [x] Builder agent (initial implementation)
+- [x] Complete agent implementations:
+  - [x] Builder agent (build features autonomously)
+  - [x] Reviewer agent (blind code review)
+  - [x] Debugger agent (debug and fix issues)
+  - [x] Triager agent (diagnose without fixing)
 - [x] Makefile for cross-compilation
+- [x] Comprehensive test suite (45.3% overall coverage)
 
 ### In Progress 🚧
 
-- [ ] Complete agent implementations:
-  - [ ] Debugger agent
-  - [ ] Reviewer agent
-  - [ ] Triager agent
 - [ ] Inference loop with tool execution
-- [ ] End-to-end testing
+- [ ] End-to-end testing with agents
 
 ### Upcoming
 
