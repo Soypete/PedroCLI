@@ -458,7 +458,16 @@ class PedroCLIApp {
                     ${this.escapeHtml(this.truncate(job.description || 'No description', 100))}
                 </div>
                 <div class="job-id">${job.id}</div>
+                <button class="debug-btn" data-job-id="${job.id}" style="margin-top: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                    🐛 Debug
+                </button>
             `;
+
+            const debugBtn = jobCard.querySelector('.debug-btn');
+            debugBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.showJobDebug(job.id);
+            });
 
             jobCard.addEventListener('click', () => {
                 this.loadJobDetails(job.id);
@@ -513,6 +522,97 @@ class PedroCLIApp {
         if (text.length <= maxLength) return text;
         return text.substring(0, maxLength) + '...';
     }
+
+    // ========== Debug Viewer ==========
+
+    async showJobDebug(jobId) {
+        try {
+            const response = await fetch(`/api/debug/${jobId}`);
+
+            if (response.status === 404) {
+                const error = await response.text();
+                if (error.includes('debug context')) {
+                    this.showStatus('No debug data available. Enable debug mode in config.', 'warning');
+                } else {
+                    this.showStatus('Job not found', 'error');
+                }
+                return;
+            }
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch debug history');
+            }
+
+            const data = await response.json();
+            this.renderDebugHistory(data);
+
+            // Show modal
+            document.getElementById('debugModal').style.display = 'flex';
+        } catch (error) {
+            console.error('Error loading debug history:', error);
+            this.showStatus('Failed to load debug history', 'error');
+        }
+    }
+
+    renderDebugHistory(data) {
+        const debugJobInfo = document.getElementById('debugJobInfo');
+        const debugContent = document.getElementById('debugContent');
+
+        // Display job info
+        debugJobInfo.innerHTML = `
+            <strong>Job ID:</strong> ${data.job_id}<br>
+            <strong>Context Directory:</strong> <code>${data.context_dir}</code><br>
+            <strong>Files:</strong> ${data.files.length} debug files
+        `;
+
+        // Group files by step
+        const stepGroups = {};
+        data.files.forEach(file => {
+            if (!stepGroups[file.step]) {
+                stepGroups[file.step] = [];
+            }
+            stepGroups[file.step].push(file);
+        });
+
+        // Render steps
+        debugContent.innerHTML = '';
+        Object.keys(stepGroups).sort((a, b) => a - b).forEach(step => {
+            const files = stepGroups[step];
+
+            files.forEach(file => {
+                const stepDiv = document.createElement('div');
+                stepDiv.className = 'debug-step';
+                stepDiv.dataset.type = file.type;
+
+                const typeLabel = {
+                    'prompt': '📝 Prompt',
+                    'response': '🤖 Response',
+                    'tool-calls': '🔧 Tool Calls',
+                    'tool-results': '✅ Tool Results'
+                }[file.type] || file.type;
+
+                stepDiv.innerHTML = `
+                    <div class="debug-step-header">
+                        <span class="debug-step-type">${typeLabel} (Step ${file.step})</span>
+                        <span style="font-size: 0.875rem; color: var(--text-secondary);">${file.name}</span>
+                    </div>
+                    <div class="debug-step-content" style="display: none;">
+                        <pre>${this.escapeHtml(file.content)}</pre>
+                    </div>
+                `;
+
+                // Toggle content visibility
+                const header = stepDiv.querySelector('.debug-step-header');
+                const content = stepDiv.querySelector('.debug-step-content');
+                header.addEventListener('click', () => {
+                    const isHidden = content.style.display === 'none';
+                    content.style.display = isHidden ? 'block' : 'none';
+                });
+
+                debugContent.appendChild(stepDiv);
+            });
+        });
+    }
 }
 
 // Add animation keyframes
@@ -545,4 +645,19 @@ document.head.appendChild(style);
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     window.pedroCLI = new PedroCLIApp();
+
+    // Setup debug modal close handler
+    const debugModal = document.getElementById('debugModal');
+    const closeDebugBtn = document.getElementById('closeDebugModal');
+
+    closeDebugBtn.addEventListener('click', () => {
+        debugModal.style.display = 'none';
+    });
+
+    // Close on background click
+    debugModal.addEventListener('click', (e) => {
+        if (e.target === debugModal) {
+            debugModal.style.display = 'none';
+        }
+    });
 });

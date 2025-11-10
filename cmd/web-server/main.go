@@ -7,6 +7,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -114,6 +118,7 @@ func main() {
 	http.HandleFunc("/api/agents", server.handleGetAgents)
 	http.HandleFunc("/api/jobs", server.handleJobs)
 	http.HandleFunc("/api/jobs/", server.handleJobDetail)
+	http.HandleFunc("/api/debug/", server.handleJobDebugHistory)
 	http.HandleFunc("/api/transcribe", server.handleTranscribe)
 	http.HandleFunc("/api/speak", server.handleSpeak)
 
@@ -456,4 +461,119 @@ func (s *Server) handleSpeak(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "audio/wav")
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(audioData)))
 	w.Write(audioData)
+}
+
+func (s *Server) handleJobDebugHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract job ID from URL path (/api/debug/{jobID})
+	jobID := strings.TrimPrefix(r.URL.Path, "/api/debug/")
+	if jobID == "" {
+		http.Error(w, "Job ID required", http.StatusBadRequest)
+		return
+	}
+
+	// Get job to find context directory
+	job, err := s.jobManager.Get(jobID)
+	if err != nil || job == nil {
+		http.Error(w, "Job not found", http.StatusNotFound)
+		return
+	}
+
+	// Check if context directory exists
+	if job.ContextDir == "" {
+		http.Error(w, "No debug context available for this job", http.StatusNotFound)
+		return
+	}
+
+	if _, err := os.Stat(job.ContextDir); os.IsNotExist(err) {
+		http.Error(w, "Debug context directory not found (may have been cleaned up)", http.StatusNotFound)
+		return
+	}
+
+	// Read all files from context directory
+	entries, err := os.ReadDir(job.ContextDir)
+	if err != nil {
+		log.Printf("Failed to read context directory: %v", err)
+		http.Error(w, "Failed to read debug context", http.StatusInternalServerError)
+		return
+	}
+
+	// Organize files by type
+	type DebugFile struct {
+		Name    string `json:"name"`
+		Type    string `json:"type"` // "prompt", "response", "tool-calls", "tool-results"
+		Content string `json:"content"`
+		Step    int    `json:"step"`
+	}
+
+	var debugFiles []DebugFile
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		name := entry.Name()
+		path := filepath.Join(job.ContextDir, name)
+
+		// Determine file type and step number
+		var fileType string
+		var step int
+
+		if strings.Contains(name, "-prompt.txt") {
+			fileType = "prompt"
+			fmt.Sscanf(name, "%d-prompt.txt", &step)
+		} else if strings.Contains(name, "-response.txt") {
+			fileType = "response"
+			fmt.Sscanf(name, "%d-response.txt", &step)
+		} else if strings.Contains(name, "-tool-calls.json") {
+			fileType = "tool-calls"
+			fmt.Sscanf(name, "%d-tool-calls.json", &step)
+		} else if strings.Contains(name, "-tool-results.json") {
+			fileType = "tool-results"
+			fmt.Sscanf(name, "%d-tool-results.json", &step)
+		} else {
+			continue // Skip unknown files
+		}
+
+		// Read file content
+		content, err := os.ReadFile(path)
+		if err != nil {
+			log.Printf("Failed to read file %s: %v", name, err)
+			continue
+		}
+
+		debugFiles = append(debugFiles, DebugFile{
+			Name:    name,
+			Type:    fileType,
+			Content: string(content),
+			Step:    step,
+		})
+	}
+
+	// Sort by step number and type
+	sort.Slice(debugFiles, func(i, j int) bool {
+		if debugFiles[i].Step != debugFiles[j].Step {
+			return debugFiles[i].Step < debugFiles[j].Step
+		}
+		// Within same step: prompt < tool-calls < tool-results < response
+		typeOrder := map[string]int{
+			"prompt":       1,
+			"tool-calls":   2,
+			"tool-results": 3,
+			"response":     4,
+		}
+		return typeOrder[debugFiles[i].Type] < typeOrder[debugFiles[j].Type]
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"job_id":      jobID,
+		"context_dir": job.ContextDir,
+		"files":       debugFiles,
+	})
 }

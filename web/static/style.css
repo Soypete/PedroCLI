@@ -332,3 +332,171 @@ header h1 {
     font-size: 0.875rem;
     color: var(--text-secondary);
 }
+
+/* Debug Modal */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.modal-content {
+    background: var(--card-bg);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 1000px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+    animation: slideUp 0.3s ease-out;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 2rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    line-height: 1;
+    transition: color 0.2s;
+}
+
+.close-btn:hover {
+    color: var(--error);
+}
+
+.modal-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* Debug Viewer */
+.debug-job-info {
+    background: var(--bg);
+    padding: 1rem;
+    border-radius: 6px;
+    margin-bottom: 1.5rem;
+    font-size: 0.875rem;
+}
+
+.debug-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.debug-step {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.debug-step-header {
+    background: var(--bg);
+    padding: 0.75rem 1rem;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+}
+
+.debug-step-header:hover {
+    background: #f3f4f6;
+}
+
+.debug-step-type {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.debug-step-type::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.debug-step[data-type="prompt"] .debug-step-type::before {
+    background: #3b82f6;
+}
+
+.debug-step[data-type="response"] .debug-step-type::before {
+    background: #10b981;
+}
+
+.debug-step[data-type="tool-calls"] .debug-step-type::before {
+    background: #f59e0b;
+}
+
+.debug-step[data-type="tool-results"] .debug-step-type::before {
+    background: #8b5cf6;
+}
+
+.debug-step-content {
+    padding: 1rem;
+    background: var(--card-bg);
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.debug-step-content pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+.debug-step-content code {
+    background: var(--bg);
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 0.875rem;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
