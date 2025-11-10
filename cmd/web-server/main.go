@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,11 +40,14 @@ type Server struct {
 	ttsClient   *tts.PiperClient
 	connections map[*websocket.Conn]bool
 	connMutex   sync.Mutex
+	configsDir  string
+	configPath  string
 }
 
 func main() {
 	port := flag.String("port", "8080", "HTTP server port")
 	configPath := flag.String("config", ".pedroceli.json", "Config file path")
+	configsDir := flag.String("configs-dir", "", "Directory containing multiple config files (optional)")
 	jobsDir := flag.String("jobs-dir", "/tmp/pedroceli-jobs", "Directory for job storage")
 	whisperBin := flag.String("whisper-bin", "", "Path to whisper.cpp binary (optional)")
 	whisperModel := flag.String("whisper-model", "", "Path to whisper model file (optional)")
@@ -103,6 +109,8 @@ func main() {
 		sttClient:   sttClient,
 		ttsClient:   ttsClient,
 		connections: make(map[*websocket.Conn]bool),
+		configsDir:  *configsDir,
+		configPath:  *configPath,
 	}
 
 	// Register agents and tools
@@ -116,6 +124,8 @@ func main() {
 	http.HandleFunc("/api/jobs/", server.handleJobDetail)
 	http.HandleFunc("/api/transcribe", server.handleTranscribe)
 	http.HandleFunc("/api/speak", server.handleSpeak)
+	http.HandleFunc("/api/configs", server.handleGetConfigs)
+	http.HandleFunc("/api/config/current", server.handleGetCurrentConfig)
 
 	// Serve static files from disk
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
@@ -125,6 +135,9 @@ func main() {
 	log.Printf("🚀 PedroCLI Web UI starting on http://localhost%s", addr)
 	log.Printf("📝 Using config: %s", *configPath)
 	log.Printf("🤖 Backend: %s", cfg.Model.Type)
+	if *configsDir != "" {
+		log.Printf("📂 Configs directory: %s", *configsDir)
+	}
 
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Fatalf("Server failed: %v", err)
@@ -456,4 +469,90 @@ func (s *Server) handleSpeak(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "audio/wav")
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(audioData)))
 	w.Write(audioData)
+}
+
+func (s *Server) handleGetConfigs(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.configsDir == "" {
+		http.Error(w, "Configs directory not configured. Start server with -configs-dir flag.", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Read config directory
+	entries, err := os.ReadDir(s.configsDir)
+	if err != nil {
+		log.Printf("Failed to read configs directory: %v", err)
+		http.Error(w, "Failed to read configs directory", http.StatusInternalServerError)
+		return
+	}
+
+	// Filter for .json files
+	var configs []map[string]string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".json") {
+			continue
+		}
+
+		// Try to parse config to get metadata
+		configPath := filepath.Join(s.configsDir, name)
+		cfg, err := config.Load(configPath)
+
+		configInfo := map[string]string{
+			"name": name,
+			"path": configPath,
+		}
+
+		if err == nil {
+			// Add metadata if config loaded successfully
+			configInfo["backend"] = cfg.Model.Type
+			configInfo["model"] = getModelName(cfg)
+			configInfo["project"] = cfg.Project.Name
+		}
+
+		configs = append(configs, configInfo)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"configs": configs,
+	})
+}
+
+func (s *Server) handleGetCurrentConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"path":    s.configPath,
+		"backend": s.config.Model.Type,
+		"model":   getModelName(s.config),
+		"project": s.config.Project.Name,
+		"debug":   s.config.Debug.Enabled,
+	})
+}
+
+// getModelName extracts the model name from config
+func getModelName(cfg *config.Config) string {
+	switch cfg.Model.Type {
+	case "ollama":
+		return cfg.Model.ModelName
+	case "anthropic":
+		return cfg.Model.ModelName
+	case "llamacpp":
+		return filepath.Base(cfg.Model.ModelPath)
+	default:
+		return cfg.Model.ModelName
+	}
 }

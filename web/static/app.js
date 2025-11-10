@@ -18,6 +18,8 @@ class PedroCLIApp {
         this.connectWebSocket();
         this.setupEventListeners();
         this.loadRecentJobs();
+        this.loadConfigs();
+        this.loadCurrentConfig();
     }
 
     // ========== WebSocket Connection ==========
@@ -512,6 +514,118 @@ class PedroCLIApp {
     truncate(text, maxLength) {
         if (text.length <= maxLength) return text;
         return text.substring(0, maxLength) + '...';
+    }
+
+    // ========== Configuration Management ==========
+
+    async loadConfigs() {
+        try {
+            const response = await fetch('/api/configs');
+            if (response.status === 503) {
+                // Configs directory not configured, hide selector
+                document.getElementById('configSelector').style.display = 'none';
+                return;
+            }
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch configs');
+            }
+
+            const data = await response.json();
+            this.populateConfigDropdown(data.configs || []);
+        } catch (error) {
+            console.error('Error loading configs:', error);
+            // Hide selector on error
+            document.getElementById('configSelector').style.display = 'none';
+        }
+    }
+
+    async loadCurrentConfig() {
+        try {
+            const response = await fetch('/api/config/current');
+            if (!response.ok) {
+                throw new Error('Failed to fetch current config');
+            }
+
+            const config = await response.json();
+            this.displayCurrentConfig(config);
+        } catch (error) {
+            console.error('Error loading current config:', error);
+        }
+    }
+
+    populateConfigDropdown(configs) {
+        const dropdown = document.getElementById('configDropdown');
+        const selector = document.getElementById('configSelector');
+
+        if (configs.length === 0) {
+            selector.style.display = 'none';
+            return;
+        }
+
+        // Show selector
+        selector.style.display = 'block';
+
+        // Clear and populate dropdown
+        dropdown.innerHTML = '';
+
+        configs.forEach(config => {
+            const option = document.createElement('option');
+            option.value = config.path;
+            option.textContent = `${config.name} (${config.backend || 'unknown'})`;
+            option.dataset.backend = config.backend || '';
+            option.dataset.model = config.model || '';
+            option.dataset.project = config.project || '';
+            dropdown.appendChild(option);
+        });
+
+        // Add change event listener
+        dropdown.addEventListener('change', (e) => {
+            this.handleConfigChange(e.target.value);
+        });
+    }
+
+    displayCurrentConfig(config) {
+        const dropdown = document.getElementById('configDropdown');
+        const configInfo = document.getElementById('configInfo');
+
+        // Set current config in dropdown
+        if (dropdown) {
+            dropdown.value = config.path;
+        }
+
+        // Display config info
+        if (configInfo) {
+            const debugBadge = config.debug ? '<span style="background:#10b981;padding:2px 6px;border-radius:4px;font-size:0.75em;margin-left:4px;">DEBUG</span>' : '';
+            configInfo.innerHTML = `
+                <div style="font-size: 0.875rem; color: #6b7280; margin-top: 0.5rem;">
+                    Backend: <strong>${config.backend}</strong> |
+                    Model: <strong>${config.model}</strong> |
+                    Project: <strong>${config.project}</strong>
+                    ${debugBadge}
+                </div>
+            `;
+        }
+    }
+
+    handleConfigChange(configPath) {
+        if (!configPath) return;
+
+        // Get selected option details
+        const dropdown = document.getElementById('configDropdown');
+        const selectedOption = dropdown.options[dropdown.selectedIndex];
+        const backend = selectedOption.dataset.backend;
+        const model = selectedOption.dataset.model;
+
+        // Show restart required message
+        const message = `To switch to ${selectedOption.textContent}, please restart the server with:\n\nweb-server -config ${configPath}`;
+
+        if (confirm(message + '\n\nNote: This will require a server restart. Continue?')) {
+            this.showStatus('Config change requires server restart', 'warning');
+        } else {
+            // Reset dropdown to current config
+            this.loadCurrentConfig();
+        }
     }
 }
 

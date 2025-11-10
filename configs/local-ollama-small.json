@@ -1,0 +1,26 @@
+{
+  "model": {
+    "type": "ollama",
+    "model_name": "qwen2.5-coder:7b",
+    "ollama_url": "http://localhost:11434",
+    "temperature": 0.2
+  },
+  "project": {
+    "name": "PedroCLI",
+    "workdir": "/home/user/PedroCLI",
+    "tech_stack": ["Go"]
+  },
+  "tools": {
+    "allowed_bash_commands": ["go", "git", "cat", "ls", "head", "tail", "wc", "sort", "uniq"],
+    "forbidden_commands": ["sed", "grep", "find", "xargs", "rm", "mv", "dd", "sudo"]
+  },
+  "limits": {
+    "max_task_duration_minutes": 30,
+    "max_inference_runs": 20
+  },
+  "debug": {
+    "enabled": false,
+    "keep_temp_files": false,
+    "log_level": "info"
+  }
+}
