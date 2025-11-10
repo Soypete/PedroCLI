@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PedroCLI - Autonomous Coding Agent</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 PedroCLI</h1>
+            <p class="subtitle">Self-hosted autonomous coding agent</p>
+        </header>
+
+        <main>
+            <div class="agent-selector">
+                <h2>Select Agent</h2>
+                <div class="agent-grid" id="agentGrid">
+                    <button class="agent-card" data-agent="builder">
+                        <div class="agent-icon">🏗️</div>
+                        <h3>Builder</h3>
+                        <p>Build new features autonomously</p>
+                    </button>
+                    <button class="agent-card" data-agent="debugger">
+                        <div class="agent-icon">🐛</div>
+                        <h3>Debugger</h3>
+                        <p>Debug and fix issues</p>
+                    </button>
+                    <button class="agent-card" data-agent="reviewer">
+                        <div class="agent-icon">👀</div>
+                        <h3>Reviewer</h3>
+                        <p>Review code changes</p>
+                    </button>
+                    <button class="agent-card" data-agent="triager">
+                        <div class="agent-icon">🔍</div>
+                        <h3>Triager</h3>
+                        <p>Diagnose problems</p>
+                    </button>
+                </div>
+            </div>
+
+            <div class="input-section" id="inputSection" style="display: none;">
+                <h2 id="selectedAgentTitle">Agent Input</h2>
+
+                <div class="input-mode">
+                    <button id="textModeBtn" class="mode-btn active">💬 Text</button>
+                    <button id="voiceModeBtn" class="mode-btn">🎤 Voice</button>
+                </div>
+
+                <div id="textInput" class="input-area">
+                    <div class="form-group" id="builderForm" style="display: none;">
+                        <label>Feature Description</label>
+                        <textarea id="buildDescription" placeholder="Describe the feature to build..." rows="4"></textarea>
+                        <label>Issue Number (optional)</label>
+                        <input type="text" id="buildIssue" placeholder="GH-123">
+                    </div>
+
+                    <div class="form-group" id="debuggerForm" style="display: none;">
+                        <label>Symptoms</label>
+                        <textarea id="debugSymptoms" placeholder="Describe the problem..." rows="4"></textarea>
+                        <label>Log File (optional)</label>
+                        <input type="text" id="debugLogs" placeholder="path/to/error.log">
+                    </div>
+
+                    <div class="form-group" id="reviewerForm" style="display: none;">
+                        <label>Branch Name</label>
+                        <input type="text" id="reviewBranch" placeholder="feature/my-feature">
+                        <label>PR Number (optional)</label>
+                        <input type="text" id="reviewPR" placeholder="42">
+                    </div>
+
+                    <div class="form-group" id="triagerForm" style="display: none;">
+                        <label>Issue Description</label>
+                        <textarea id="triageDescription" placeholder="Describe the issue..." rows="4"></textarea>
+                    </div>
+
+                    <button id="submitBtn" class="submit-btn">🚀 Run Agent</button>
+                </div>
+
+                <div id="voiceInput" class="voice-area" style="display: none;">
+                    <div class="voice-controls">
+                        <button id="recordBtn" class="record-btn">
+                            <span class="record-icon">🎤</span>
+                            <span>Click to Record</span>
+                        </button>
+                        <div id="recordingStatus" class="recording-status"></div>
+                    </div>
+                    <div id="voiceTranscript" class="voice-transcript"></div>
+                </div>
+            </div>
+
+            <div class="output-section" id="outputSection" style="display: none;">
+                <h2>Agent Progress</h2>
+                <div class="job-status" id="jobStatus">
+                    <div class="status-badge" id="statusBadge">Initializing...</div>
+                    <div class="job-id" id="jobId"></div>
+                </div>
+                <div class="progress-log" id="progressLog"></div>
+                <div class="job-result" id="jobResult"></div>
+            </div>
+
+            <div class="jobs-list" id="jobsList">
+                <h2>Recent Jobs</h2>
+                <div id="jobsGrid" class="jobs-grid"></div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
