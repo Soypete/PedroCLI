@@ -1,12 +1,17 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"time"
 
 	"github.com/soypete/pedrocli/pkg/config"
 	depcheck "github.com/soypete/pedrocli/pkg/init"
+	"github.com/soypete/pedrocli/pkg/mcp"
 )
 
 const version = "0.2.0-dev"
@@ -126,6 +131,56 @@ Examples:
 For more information: https://github.com/soypete/pedrocli`)
 }
 
+// startMCPClient starts the MCP server and returns a client
+func startMCPClient(cfg *config.Config) (*mcp.Client, context.Context, context.CancelFunc, error) {
+	// Find the MCP server binary
+	serverPath, err := findMCPServer()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	// Create client
+	client := mcp.NewClient(serverPath, []string{})
+
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+
+	// Start server
+	if err := client.Start(ctx); err != nil {
+		cancel()
+		return nil, nil, nil, fmt.Errorf("failed to start MCP server: %w", err)
+	}
+
+	return client, ctx, cancel, nil
+}
+
+// findMCPServer finds the MCP server binary
+func findMCPServer() (string, error) {
+	// Try current directory first
+	localPath := "./pedrocli-server"
+	if _, err := os.Stat(localPath); err == nil {
+		abs, _ := filepath.Abs(localPath)
+		return abs, nil
+	}
+
+	// Try in same directory as the CLI binary
+	exePath, err := os.Executable()
+	if err == nil {
+		serverPath := filepath.Join(filepath.Dir(exePath), "pedrocli-server")
+		if _, err := os.Stat(serverPath); err == nil {
+			return serverPath, nil
+		}
+	}
+
+	// Try $PATH
+	serverPath, err := exec.LookPath("pedrocli-server")
+	if err == nil {
+		return serverPath, nil
+	}
+
+	return "", fmt.Errorf("pedrocli-server not found. Please build it with 'make build-server'")
+}
+
 func buildCommand(cfg *config.Config, args []string) {
 	fs := flag.NewFlagSet("build", flag.ExitOnError)
 	description := fs.String("description", "", "Feature description (required)")
@@ -143,12 +198,77 @@ func buildCommand(cfg *config.Config, args []string) {
 		fmt.Printf("Issue: %s\n", *issue)
 	}
 
-	// TODO: Spawn MCP server and call build_feature tool
-	fmt.Println("\n🚧 MCP integration coming soon...")
-	fmt.Println("This will:")
-	fmt.Println("  1. Start MCP server")
-	fmt.Println("  2. Call build_feature tool")
-	fmt.Println("  3. Return job ID for monitoring")
+	// Start MCP client
+	client, ctx, cancel, err := startMCPClient(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to start MCP client: %v\n", err)
+		os.Exit(1)
+	}
+	defer cancel()
+	defer client.Stop()
+
+	// Build arguments for the tool
+	arguments := map[string]interface{}{
+		"description": *description,
+	}
+	if *issue != "" {
+		arguments["issue"] = *issue
+	}
+
+	// Call build_feature tool
+	fmt.Println("\nStarting build job...")
+	response, err := client.CallTool(ctx, "build_feature", arguments)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to call build_feature: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Display response
+	if response.IsError {
+		fmt.Println("\n❌ Build failed:")
+	} else {
+		fmt.Println("\n✅ Build job started:")
+	}
+
+	for _, block := range response.Content {
+		if block.Type == "text" {
+			fmt.Println(block.Text)
+		}
+	}
+}
+
+// callMCPTool is a helper function to call an MCP tool and display the response
+func callMCPTool(cfg *config.Config, toolName string, arguments map[string]interface{}) {
+	// Start MCP client
+	client, ctx, cancel, err := startMCPClient(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to start MCP client: %v\n", err)
+		os.Exit(1)
+	}
+	defer cancel()
+	defer client.Stop()
+
+	// Call tool
+	fmt.Printf("\nCalling %s...\n", toolName)
+	response, err := client.CallTool(ctx, toolName, arguments)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to call %s: %v\n", toolName, err)
+		os.Exit(1)
+	}
+
+	// Display response
+	fmt.Println()
+	if response.IsError {
+		fmt.Println("❌ Operation failed:")
+	} else {
+		fmt.Println("✅ Operation completed:")
+	}
+
+	for _, block := range response.Content {
+		if block.Type == "text" {
+			fmt.Println(block.Text)
+		}
+	}
 }
 
 func debugCommand(cfg *config.Config, args []string) {
@@ -168,8 +288,15 @@ func debugCommand(cfg *config.Config, args []string) {
 		fmt.Printf("Logs: %s\n", *logs)
 	}
 
-	// TODO: Spawn MCP server and call debug_issue tool
-	fmt.Println("\n🚧 MCP integration coming soon...")
+	// Build arguments
+	arguments := map[string]interface{}{
+		"symptoms": *symptoms,
+	}
+	if *logs != "" {
+		arguments["logs"] = *logs
+	}
+
+	callMCPTool(cfg, "debug_issue", arguments)
 }
 
 func reviewCommand(cfg *config.Config, args []string) {
@@ -189,8 +316,15 @@ func reviewCommand(cfg *config.Config, args []string) {
 		fmt.Printf("PR: %s\n", *prNumber)
 	}
 
-	// TODO: Spawn MCP server and call review_pr tool
-	fmt.Println("\n🚧 MCP integration coming soon...")
+	// Build arguments
+	arguments := map[string]interface{}{
+		"branch": *branch,
+	}
+	if *prNumber != "" {
+		arguments["pr_number"] = *prNumber
+	}
+
+	callMCPTool(cfg, "review_pr", arguments)
 }
 
 func triageCommand(cfg *config.Config, args []string) {
@@ -210,8 +344,15 @@ func triageCommand(cfg *config.Config, args []string) {
 		fmt.Printf("Error logs: %s\n", *errorLogs)
 	}
 
-	// TODO: Spawn MCP server and call triage_issue tool
-	fmt.Println("\n🚧 MCP integration coming soon...")
+	// Build arguments
+	arguments := map[string]interface{}{
+		"description": *description,
+	}
+	if *errorLogs != "" {
+		arguments["error_logs"] = *errorLogs
+	}
+
+	callMCPTool(cfg, "triage_issue", arguments)
 }
 
 func statusCommand(cfg *config.Config, args []string) {
@@ -227,8 +368,12 @@ func statusCommand(cfg *config.Config, args []string) {
 	jobID := fs.Args()[0]
 	fmt.Printf("Getting status for job: %s\n", jobID)
 
-	// TODO: Spawn MCP server and call get_job_status tool
-	fmt.Println("\n🚧 MCP integration coming soon...")
+	// Build arguments
+	arguments := map[string]interface{}{
+		"job_id": jobID,
+	}
+
+	callMCPTool(cfg, "get_job_status", arguments)
 }
 
 func listCommand(cfg *config.Config, args []string) {
@@ -237,8 +382,7 @@ func listCommand(cfg *config.Config, args []string) {
 
 	fmt.Println("Listing all jobs...")
 
-	// TODO: Spawn MCP server and call list_jobs tool
-	fmt.Println("\n🚧 MCP integration coming soon...")
+	callMCPTool(cfg, "list_jobs", map[string]interface{}{})
 }
 
 func cancelCommand(cfg *config.Config, args []string) {
@@ -254,6 +398,10 @@ func cancelCommand(cfg *config.Config, args []string) {
 	jobID := fs.Args()[0]
 	fmt.Printf("Canceling job: %s\n", jobID)
 
-	// TODO: Spawn MCP server and call cancel_job tool
-	fmt.Println("\n🚧 MCP integration coming soon...")
+	// Build arguments
+	arguments := map[string]interface{}{
+		"job_id": jobID,
+	}
+
+	callMCPTool(cfg, "cancel_job", arguments)
 }
