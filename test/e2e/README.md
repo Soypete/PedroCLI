@@ -37,7 +37,13 @@ E2E tests should run only when:
 - `e2e-tests.yml` - E2E test workflow (runs on PR ready for review + manual trigger)
 - `ci.yml` - Regular CI workflow (runs unit tests on every push/PR)
 
-To use these workflows, copy them to `.github/workflows/` in your repository.
+**To activate the workflows, run the setup script:**
+
+```bash
+./scripts/setup-github-workflows.sh
+```
+
+This will copy the workflow files to `.github/workflows/` and provide instructions for committing them.
 
 ## Test Coverage
 
