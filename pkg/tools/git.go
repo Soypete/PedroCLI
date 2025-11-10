@@ -74,18 +74,32 @@ func (g *GitTool) status(ctx context.Context) (*Result, error) {
 
 // diff runs git diff
 func (g *GitTool) diff(ctx context.Context, args map[string]interface{}) (*Result, error) {
+	cmdArgs := []string{"diff"}
+
+	// Optional: compare branch against base
+	if base, ok := args["base"].(string); ok {
+		if branch, ok := args["branch"].(string); ok {
+			// Diff between base and branch: git diff base...branch
+			cmdArgs = append(cmdArgs, fmt.Sprintf("%s...%s", base, branch))
+		} else {
+			// Diff against base: git diff base
+			cmdArgs = append(cmdArgs, base)
+		}
+	}
+
 	// Optional: specific files
-	files := []string{}
 	if fileList, ok := args["files"].([]interface{}); ok {
+		files := []string{}
 		for _, f := range fileList {
 			if file, ok := f.(string); ok {
 				files = append(files, file)
 			}
 		}
+		if len(files) > 0 {
+			cmdArgs = append(cmdArgs, "--")
+			cmdArgs = append(cmdArgs, files...)
+		}
 	}
-
-	cmdArgs := []string{"diff"}
-	cmdArgs = append(cmdArgs, files...)
 
 	cmd := exec.CommandContext(ctx, "git", cmdArgs...)
 	cmd.Dir = g.workDir
@@ -119,7 +133,7 @@ func (g *GitTool) add(ctx context.Context, args map[string]interface{}) (*Result
 	cmd := exec.CommandContext(ctx, "git", cmdArgs...)
 	cmd.Dir = g.workDir
 
-	output, err := cmd.CombinedOutput()
+	_, err := cmd.CombinedOutput()
 	if err != nil {
 		return &Result{Success: false, Error: err.Error()}, nil
 	}

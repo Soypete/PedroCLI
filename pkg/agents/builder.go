@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	"github.com/soypete/pedrocli/pkg/config"
-	"github.com/soypete/pedrocli/pkg/context"
 	"github.com/soypete/pedrocli/pkg/jobs"
 	"github.com/soypete/pedrocli/pkg/llm"
+	"github.com/soypete/pedrocli/pkg/llmcontext"
 )
 
 // BuilderAgent builds new features autonomously
@@ -48,7 +48,7 @@ func (b *BuilderAgent) Execute(ctx context.Context, input map[string]interface{}
 	b.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
 
 	// Create context manager
-	contextMgr, err := context.NewManager(job.ID, b.config.Debug.Enabled)
+	contextMgr, err := llmcontext.NewManager(job.ID, b.config.Debug.Enabled)
 	if err != nil {
 		b.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
 		return job, err

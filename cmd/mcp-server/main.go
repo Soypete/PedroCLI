@@ -6,8 +6,9 @@ import (
 	"log"
 	"os"
 
+	"github.com/soypete/pedrocli/pkg/agents"
 	"github.com/soypete/pedrocli/pkg/config"
-	"github.com/soypete/pedrocli/pkg/init"
+	depcheck "github.com/soypete/pedrocli/pkg/init"
 	"github.com/soypete/pedrocli/pkg/jobs"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/mcp"
@@ -23,7 +24,7 @@ func main() {
 
 	// Check dependencies (unless skipped)
 	if !cfg.Init.SkipChecks {
-		checker := init.NewChecker(cfg)
+		checker := depcheck.NewChecker(cfg)
 		results, err := checker.CheckAll()
 
 		if err != nil {
@@ -65,10 +66,33 @@ func main() {
 		workDir, _ = os.Getwd()
 	}
 
-	server.RegisterTool(tools.NewFileTool())
-	server.RegisterTool(tools.NewGitTool(workDir))
-	server.RegisterTool(tools.NewBashTool(cfg, workDir))
-	server.RegisterTool(tools.NewTestTool(workDir))
+	// Register basic tools
+	fileTool := tools.NewFileTool()
+	gitTool := tools.NewGitTool(workDir)
+	bashTool := tools.NewBashTool(cfg, workDir)
+	testTool := tools.NewTestTool(workDir)
+
+	server.RegisterTool(fileTool)
+	server.RegisterTool(gitTool)
+	server.RegisterTool(bashTool)
+	server.RegisterTool(testTool)
+
+	// Create and register agents
+	builderAgent := agents.NewBuilderAgent(cfg, backend, jobManager)
+	builderAgent.RegisterTool(fileTool)
+	builderAgent.RegisterTool(gitTool)
+	builderAgent.RegisterTool(bashTool)
+	builderAgent.RegisterTool(testTool)
+
+	reviewerAgent := agents.NewReviewerAgent(cfg, backend, jobManager)
+	reviewerAgent.RegisterTool(fileTool)
+	reviewerAgent.RegisterTool(gitTool)
+	reviewerAgent.RegisterTool(bashTool)
+	reviewerAgent.RegisterTool(testTool)
+
+	// Wrap agents as tools for MCP
+	server.RegisterTool(mcp.NewAgentTool(builderAgent))
+	server.RegisterTool(mcp.NewAgentTool(reviewerAgent))
 
 	// Start server
 	log.Println("Pedroceli MCP server starting...")

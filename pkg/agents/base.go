@@ -4,9 +4,9 @@ import (
 	"context"
 
 	"github.com/soypete/pedrocli/pkg/config"
-	"github.com/soypete/pedrocli/pkg/context"
 	"github.com/soypete/pedrocli/pkg/jobs"
 	"github.com/soypete/pedrocli/pkg/llm"
+	"github.com/soypete/pedrocli/pkg/llmcontext"
 	"github.com/soypete/pedrocli/pkg/tools"
 )
 
@@ -73,7 +73,7 @@ Always think step-by-step and verify your changes with tests before committing.`
 }
 
 // executeInference performs one-shot inference
-func (a *BaseAgent) executeInference(ctx context.Context, contextMgr *context.Manager, userPrompt string) (*llm.InferenceResponse, error) {
+func (a *BaseAgent) executeInference(ctx context.Context, contextMgr *llmcontext.Manager, userPrompt string) (*llm.InferenceResponse, error) {
 	// Build system prompt
 	systemPrompt := a.buildSystemPrompt()
 

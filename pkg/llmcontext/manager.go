@@ -1,4 +1,4 @@
-package context
+package llmcontext
 
 import (
 	"encoding/json"
