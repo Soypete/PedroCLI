@@ -82,21 +82,20 @@ func (t *TriagerAgent) Execute(ctx context.Context, input map[string]interface{}
 	// Build triage prompt
 	userPrompt := t.buildTriagePrompt(input)
 
-	// Execute inference
-	response, err := t.executeInference(ctx, contextMgr, userPrompt)
+	// Create inference executor
+	executor := NewInferenceExecutor(t.BaseAgent, contextMgr)
+
+	// Execute the inference loop
+	err = executor.Execute(ctx, userPrompt)
 	if err != nil {
 		t.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
 		return job, err
 	}
 
-	// Parse triage report from response
-	// In a full implementation, this would parse structured data
-	triageReport := response.Text
-
 	// Update job with results
 	output := map[string]interface{}{
-		"triage_report": triageReport,
-		"status":        "completed",
+		"job_dir": contextMgr.GetJobDir(),
+		"status":  "completed",
 	}
 
 	t.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)

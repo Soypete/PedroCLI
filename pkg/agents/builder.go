@@ -58,24 +58,20 @@ func (b *BuilderAgent) Execute(ctx context.Context, input map[string]interface{}
 	// Build initial prompt
 	userPrompt := b.buildInitialPrompt(input)
 
-	// Execute inference loop (simplified - full implementation would be iterative)
-	response, err := b.executeInference(ctx, contextMgr, userPrompt)
+	// Create inference executor
+	executor := NewInferenceExecutor(b.BaseAgent, contextMgr)
+
+	// Execute the inference loop
+	err = executor.Execute(ctx, userPrompt)
 	if err != nil {
 		b.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
 		return job, err
 	}
 
-	// Parse and execute tool calls (simplified)
-	// In full implementation, this would:
-	// 1. Parse tool calls from response
-	// 2. Execute each tool
-	// 3. Feed results back for next inference
-	// 4. Repeat until task is complete
-
 	// Update job with results
 	output := map[string]interface{}{
-		"response": response.Text,
 		"status":   "completed",
+		"job_dir":  contextMgr.GetJobDir(),
 	}
 
 	b.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
@@ -91,16 +87,25 @@ func (b *BuilderAgent) buildInitialPrompt(input map[string]interface{}) string {
 
 Description: %s
 
-Steps:
+Steps to complete:
 1. Understand the requirements
-2. Identify files that need to be created or modified
-3. Write the implementation
-4. Add or update tests
-5. Run tests to verify functionality
-6. Commit changes to a new branch
-7. Create a draft pull request
+2. Search for relevant files using the search tool
+3. Read necessary files to understand the codebase
+4. Write the implementation using code_edit or file tools
+5. Add or update tests
+6. Run tests using the test tool - if they fail, fix the issues and try again
+7. Keep trying until all tests pass
+8. Commit changes to a new branch using git tool
+9. Create a draft pull request using git tool
 
-Begin by analyzing what needs to be done and creating a plan.`, description)
+IMPORTANT INSTRUCTIONS:
+- Use tools by providing JSON objects: {"tool": "tool_name", "args": {"key": "value"}}
+- If a tool fails, analyze the error and try again with corrections
+- Keep iterating until you get it right - don't give up!
+- When ALL steps are complete and tests pass, respond with "TASK_COMPLETE"
+- Only indicate completion when you're confident everything works correctly
+
+Begin by analyzing what needs to be done and using the appropriate tools.`, description)
 
 	// Add optional context
 	if issue, ok := input["issue"].(string); ok {

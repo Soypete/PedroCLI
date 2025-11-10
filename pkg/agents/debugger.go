@@ -58,26 +58,20 @@ func (d *DebuggerAgent) Execute(ctx context.Context, input map[string]interface{
 	// Build debugging prompt
 	userPrompt := d.buildDebugPrompt(input)
 
-	// Execute inference loop (simplified - full implementation would be iterative)
-	response, err := d.executeInference(ctx, contextMgr, userPrompt)
+	// Create inference executor
+	executor := NewInferenceExecutor(d.BaseAgent, contextMgr)
+
+	// Execute the inference loop
+	err = executor.Execute(ctx, userPrompt)
 	if err != nil {
 		d.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
 		return job, err
 	}
 
-	// In a full implementation, this would:
-	// 1. Analyze symptoms and identify root cause
-	// 2. Parse tool calls from response
-	// 3. Execute diagnostic tools (read logs, run failing tests, etc.)
-	// 4. Apply the fix
-	// 5. Run tests to verify the fix
-	// 6. Commit changes if tests pass
-	// 7. Repeat until issue is resolved or max iterations reached
-
 	// Update job with results
 	output := map[string]interface{}{
-		"response": response.Text,
 		"status":   "completed",
+		"job_dir":  contextMgr.GetJobDir(),
 	}
 
 	d.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
@@ -101,13 +95,22 @@ Your goal is to:
 5. **Document the Solution**: Add comments or documentation if needed
 
 Debugging Steps:
-1. Read error messages and stack traces
-2. Examine relevant code files
-3. Run failing tests to reproduce the issue
-4. Identify the root cause
-5. Implement a fix
-6. Run tests to verify
-7. Commit the fix with a clear message
+1. Search for relevant files using the search tool
+2. Read error messages and stack traces
+3. Examine relevant code files
+4. Run failing tests to reproduce the issue using the test tool
+5. Identify the root cause
+6. Implement a fix using code_edit tool
+7. Run tests to verify - if they still fail, analyze and fix again
+8. Keep iterating until all tests pass
+9. Commit the fix with a clear message using git tool
+
+IMPORTANT INSTRUCTIONS:
+- Use tools by providing JSON objects: {"tool": "tool_name", "args": {"key": "value"}}
+- If tests fail, don't give up - analyze the failure and try a different approach
+- Keep trying until you get it right!
+- When the bug is fixed and all tests pass, respond with "TASK_COMPLETE"
+- Only indicate completion when you're confident the fix works
 
 Be systematic and thorough. Always verify your fix with tests before committing.`, description)
 
