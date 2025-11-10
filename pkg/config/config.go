@@ -26,6 +26,7 @@ type ModelConfig struct {
 	ModelPath      string  `json:"model_path,omitempty"`
 	LlamaCppPath   string  `json:"llamacpp_path,omitempty"`
 	ModelName      string  `json:"model_name,omitempty"` // for Ollama
+	OllamaURL      string  `json:"ollama_url,omitempty"` // Ollama API URL
 	ContextSize    int     `json:"context_size"`
 	UsableContext  int     `json:"usable_context,omitempty"`
 	NGpuLayers     int     `json:"n_gpu_layers,omitempty"`
