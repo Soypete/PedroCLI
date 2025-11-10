@@ -29,6 +29,41 @@ func (g *GitTool) Description() string {
 	return "Execute git commands for version control"
 }
 
+// InputSchema returns the JSON Schema for tool arguments
+func (g *GitTool) InputSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"action": map[string]interface{}{
+				"type": "string",
+				"enum": []string{"status", "diff", "add", "commit", "push", "checkout", "create_branch", "log"},
+				"description": "Git action to perform",
+			},
+			"message": map[string]interface{}{
+				"type":        "string",
+				"description": "Commit message (for commit action)",
+			},
+			"branch": map[string]interface{}{
+				"type":        "string",
+				"description": "Branch name (for checkout/create_branch)",
+			},
+			"files": map[string]interface{}{
+				"type": "array",
+				"items": map[string]interface{}{
+					"type": "string",
+				},
+				"description": "Files to add (for add action, defaults to all)",
+			},
+			"staged": map[string]interface{}{
+				"type":        "boolean",
+				"description": "Show staged changes only (for diff)",
+				"default":     false,
+			},
+		},
+		"required": []string{"action"},
+	}
+}
+
 // Execute executes the git tool
 func (g *GitTool) Execute(ctx context.Context, args map[string]interface{}) (*Result, error) {
 	action, ok := args["action"].(string)

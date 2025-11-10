@@ -2,15 +2,11 @@ package main
 
 import (
 	"context"
-	"embed"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
-	"io/fs"
 	"log"
 	"net/http"
-	"os"
 	"sync"
 	"time"
 
@@ -23,9 +19,6 @@ import (
 	"github.com/soypete/pedrocli/pkg/tools"
 	"github.com/soypete/pedrocli/pkg/tts"
 )
-
-//go:embed ../../web/static/*
-var staticFiles embed.FS
 
 var (
 	upgrader = websocket.Upgrader{
@@ -71,7 +64,10 @@ func main() {
 	}
 
 	// Create job manager
-	jobManager := jobs.NewManager()
+	jobManager, err := jobs.NewManager("/tmp/pedroceli-jobs")
+	if err != nil {
+		log.Fatalf("Failed to create job manager: %v", err)
+	}
 
 	// Create STT client (optional)
 	var sttClient *stt.WhisperClient
@@ -120,12 +116,8 @@ func main() {
 	http.HandleFunc("/api/transcribe", server.handleTranscribe)
 	http.HandleFunc("/api/speak", server.handleSpeak)
 
-	// Serve static files
-	staticFS, err := fs.Sub(staticFiles, "../../web/static")
-	if err != nil {
-		log.Fatalf("Failed to setup static files: %v", err)
-	}
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+	// Serve static files from disk
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
 
 	// Start server
 	addr := fmt.Sprintf(":%s", *port)
@@ -144,8 +136,8 @@ func (s *Server) setupAgents() {
 	codeEditTool := tools.NewCodeEditTool()
 	searchTool := tools.NewSearchTool(s.config.Project.Workdir)
 	navigateTool := tools.NewNavigateTool(s.config.Project.Workdir)
-	gitTool := tools.NewGitTool(s.config.Project.Workdir, s.config.Git)
-	bashTool := tools.NewBashTool(s.config.Tools.AllowedBashCommands, s.config.Tools.ForbiddenCommands)
+	gitTool := tools.NewGitTool(s.config.Project.Workdir)
+	bashTool := tools.NewBashTool(s.config, s.config.Project.Workdir)
 	testTool := tools.NewTestTool(s.config.Project.Workdir)
 
 	// Create builder agent
@@ -293,8 +285,8 @@ func (s *Server) handleRunAgent(conn *websocket.Conn, msg map[string]interface{}
 		defer ticker.Stop()
 
 		for range ticker.C {
-			currentJob := s.jobManager.Get(job.ID)
-			if currentJob == nil {
+			currentJob, err := s.jobManager.Get(job.ID)
+			if err != nil || currentJob == nil {
 				break
 			}
 
@@ -317,8 +309,8 @@ func (s *Server) handleGetJobStatus(conn *websocket.Conn, msg map[string]interfa
 		return
 	}
 
-	job := s.jobManager.Get(jobID)
-	if job == nil {
+	job, err := s.jobManager.Get(jobID)
+	if err != nil || job == nil {
 		s.sendWSError(conn, "job not found")
 		return
 	}
@@ -368,9 +360,9 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleJobDetail(w http.ResponseWriter, r *http.Request) {
 	jobID := r.URL.Path[len("/api/jobs/"):]
-	job := s.jobManager.Get(jobID)
+	job, err := s.jobManager.Get(jobID)
 
-	if job == nil {
+	if err != nil || job == nil {
 		http.Error(w, "Job not found", http.StatusNotFound)
 		return
 	}

@@ -29,6 +29,35 @@ func (t *TestTool) Description() string {
 	return "Run tests and parse results"
 }
 
+// InputSchema returns the JSON Schema for tool arguments
+func (t *TestTool) InputSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"type": map[string]interface{}{
+				"type": "string",
+				"enum": []string{"go", "npm", "python"},
+				"description": "Test framework type",
+				"default":     "go",
+			},
+			"path": map[string]interface{}{
+				"type":        "string",
+				"description": "Directory or file to test (defaults to workdir)",
+			},
+			"verbose": map[string]interface{}{
+				"type":        "boolean",
+				"description": "Verbose test output",
+				"default":     false,
+			},
+			"pattern": map[string]interface{}{
+				"type":        "string",
+				"description": "Test name pattern to run specific tests",
+			},
+		},
+		"required": []string{},
+	}
+}
+
 // Execute executes the test tool
 func (t *TestTool) Execute(ctx context.Context, args map[string]interface{}) (*Result, error) {
 	testType, ok := args["type"].(string)
