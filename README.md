@@ -4,17 +4,15 @@ Autonomous coding agent with MCP (Model Context Protocol) architecture.
 
 ## Project Status
 
-**Phase 1 (In Progress)**: Foundation & MCP Server Core
-
 ### Completed ✅
 
+**Phase 1**: Foundation & MCP Server Core
 - [x] Go project structure and module setup
 - [x] Configuration system with `.pedroceli.json`
 - [x] Platform detection utilities (Mac/Linux/Windows)
 - [x] File-based context manager (stores in `/tmp/pedroceli-jobs/`)
 - [x] Token estimation and context budget calculator
 - [x] Dependency checker with platform-specific validation
-- [x] llama.cpp client with one-shot inference
 - [x] Job management system with disk persistence
 - [x] Comprehensive tool system:
   - File tool (read, write, append, delete)
@@ -31,17 +29,29 @@ Autonomous coding agent with MCP (Model Context Protocol) architecture.
   - [x] Debugger agent (debug and fix issues)
   - [x] Triager agent (diagnose without fixing)
 - [x] Makefile for cross-compilation
-- [x] Comprehensive test suite (45.3% overall coverage)
+- [x] Comprehensive test suite
+
+**Phase 2**: CLI Client
+- [x] CLI with stdlib flags (no external dependencies)
+- [x] All 7 commands implemented (build, debug, review, triage, status, list, cancel)
+- [x] Help and version commands
+- [x] Config integration and dependency checking
+
+**Phase 3**: MCP Client Integration & Ollama Backend
+- [x] MCP client library (JSON-RPC 2.0 via stdio)
+- [x] CLI-to-server communication working
+- [x] llama.cpp backend implementation
+- [x] **Ollama backend implementation** ✨
+- [x] Backend factory for easy switching
+- [x] Auto-detected context windows for 20+ Ollama models
 
 ### In Progress 🚧
 
 - [ ] Inference loop with tool execution
-- [ ] End-to-end testing with agents
+- [ ] End-to-end testing with real agents
 
 ### Upcoming
 
-- **Phase 2** (Week 3): CLI Client with Cobra
-- **Phase 3** (Week 4): Ollama Backend
 - **Phase 4** (Weeks 5-6): Web UI with Voice Interface
 
 ## Architecture
@@ -81,7 +91,11 @@ Autonomous coding agent with MCP (Model Context Protocol) architecture.
 
 ## Configuration
 
-Create `.pedroceli.json` (see `.pedroceli.json.example`):
+Pedrocli supports two LLM backends: **llama.cpp** (for local inference) and **Ollama** (for easier setup).
+
+### llama.cpp Backend
+
+Create `.pedroceli.json` (see `.pedroceli.example.llamacpp.json`):
 
 ```json
 {
@@ -91,6 +105,27 @@ Create `.pedroceli.json` (see `.pedroceli.json.example`):
     "llamacpp_path": "/usr/local/bin/llama-cli",
     "context_size": 32768,
     "usable_context": 24576,
+    "n_gpu_layers": -1,
+    "temperature": 0.2,
+    "threads": 32
+  },
+  "project": {
+    "name": "My Project",
+    "workdir": "/path/to/project"
+  }
+}
+```
+
+### Ollama Backend
+
+For easier setup, use Ollama (see `.pedroceli.example.ollama.json`):
+
+```json
+{
+  "model": {
+    "type": "ollama",
+    "model_name": "qwen2.5-coder:32b",
+    "ollama_url": "http://localhost:11434",
     "temperature": 0.2
   },
   "project": {
@@ -99,6 +134,16 @@ Create `.pedroceli.json` (see `.pedroceli.json.example`):
   }
 }
 ```
+
+**Supported Ollama Models:**
+- `qwen2.5-coder:7b/14b/32b` (32k context)
+- `qwen2.5-coder:72b` (128k context)
+- `deepseek-coder:33b` (16k context)
+- `codellama:7b/13b/34b` (16k context)
+- `llama3.1:8b/70b/405b` (128k context)
+- And more...
+
+Context windows are auto-detected for known models.
 
 ## Building
 

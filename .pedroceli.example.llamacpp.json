@@ -1,0 +1,51 @@
+{
+  "model": {
+    "type": "llamacpp",
+    "model_path": "/models/qwen2.5-coder-32b-instruct.gguf",
+    "llamacpp_path": "/usr/local/bin/llama-cli",
+    "context_size": 32768,
+    "usable_context": 24576,
+    "n_gpu_layers": -1,
+    "temperature": 0.2,
+    "threads": 32
+  },
+  "execution": {
+    "run_on_spark": false,
+    "spark_ssh": ""
+  },
+  "git": {
+    "always_draft_pr": true,
+    "branch_prefix": "pedrocli/",
+    "remote": "origin"
+  },
+  "tools": {
+    "allowed_bash_commands": [
+      "go", "git", "cat", "ls", "head", "tail", "wc", "sort", "uniq"
+    ],
+    "forbidden_commands": [
+      "sed", "grep", "find", "xargs", "rm", "mv", "dd", "sudo"
+    ]
+  },
+  "project": {
+    "name": "My Project",
+    "workdir": "/path/to/project",
+    "tech_stack": ["Go"]
+  },
+  "limits": {
+    "max_task_duration_minutes": 30,
+    "max_inference_runs": 20
+  },
+  "debug": {
+    "enabled": false,
+    "keep_temp_files": false,
+    "log_level": "info"
+  },
+  "platform": {
+    "os": "auto",
+    "shell": "/bin/sh"
+  },
+  "init": {
+    "skip_checks": false,
+    "verbose": false
+  }
+}
