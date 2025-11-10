@@ -4,6 +4,8 @@ coverage.out
 
 # Build artifacts
 /pedroceli-*
+/pedrocli
+/pedrocli-*
 *.exe
 *.exe~
 *.dll
