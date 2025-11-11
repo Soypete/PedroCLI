@@ -5,7 +5,9 @@ coverage.out
 # Build artifacts
 /pedroceli-*
 /pedrocli
+/pedroceli
 /pedrocli-server
+/pedroceli-server
 /mcp-server
 /web-server
 *.exe
