@@ -129,7 +129,7 @@ func main() {
 	server.RegisterTool(mcp.NewAgentTool(triagerAgent))
 
 	// Start server
-	log.Println("Pedroceli MCP server starting...")
+	log.Println("PedroCLI MCP server starting...")
 	if err := server.Run(context.Background()); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
