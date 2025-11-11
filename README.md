@@ -9,9 +9,9 @@ Autonomous coding agent with MCP (Model Context Protocol) architecture.
 ### Completed ✅
 
 - [x] Go project structure and module setup
-- [x] Configuration system with `.pedroceli.json`
+- [x] Configuration system with `.pedrocli.json`
 - [x] Platform detection utilities (Mac/Linux/Windows)
-- [x] File-based context manager (stores in `/tmp/pedroceli-jobs/`)
+- [x] File-based context manager (stores in `/tmp/pedrocli-jobs/`)
 - [x] Token estimation and context budget calculator
 - [x] Dependency checker with platform-specific validation
 - [x] llama.cpp client with one-shot inference
@@ -285,8 +285,7 @@ If you need HTTP access, consider wrapping the MCP server in a simple HTTP serve
 See `/docs` for complete implementation specifications:
 
 - `START-HERE.md` - Overview and navigation
-- `pedroceli-implementation-plan.md` - Complete 6-week plan (65KB)
-- `pedroceli-context-guide.md` - Context window management
+- `pedrocli-context-guide.md` - Context window management
 - `00-README.md` - Quick navigation hub
 
 ## Development Timeline
