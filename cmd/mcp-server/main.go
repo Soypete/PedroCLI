@@ -52,7 +52,7 @@ func main() {
 	}
 
 	// Create job manager
-	jobManager, err := jobs.NewManager("/tmp/pedroceli-jobs")
+	jobManager, err := jobs.NewManager("/tmp/pedrocli-jobs")
 	if err != nil {
 		log.Fatalf("Failed to create job manager: %v", err)
 	}

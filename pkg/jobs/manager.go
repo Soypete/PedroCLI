@@ -46,7 +46,7 @@ type Manager struct {
 // NewManager creates a new job manager
 func NewManager(stateDir string) (*Manager, error) {
 	if stateDir == "" {
-		stateDir = "/tmp/pedroceli-jobs"
+		stateDir = "/tmp/pedrocli-jobs"
 	}
 
 	if err := os.MkdirAll(stateDir, 0755); err != nil {

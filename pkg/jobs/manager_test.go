@@ -37,7 +37,7 @@ func TestNewManagerDefaultDir(t *testing.T) {
 		t.Fatalf("NewManager() error = %v", err)
 	}
 
-	expectedDir := "/tmp/pedroceli-jobs"
+	expectedDir := "/tmp/pedrocli-jobs"
 	if mgr.stateDir != expectedDir {
 		t.Errorf("stateDir = %v, want %v", mgr.stateDir, expectedDir)
 	}

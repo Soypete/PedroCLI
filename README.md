@@ -72,8 +72,8 @@ Autonomous coding agent with MCP (Model Context Protocol) architecture.
 
 ## Key Design Decisions
 
-1. **MCP Architecture**: Pedroceli IS an MCP server (not wrapped)
-2. **File-Based Context**: No in-memory context, writes to `/tmp/pedroceli-jobs/`
+1. **MCP Architecture**: PedroCLI IS an MCP server (not wrapped)
+2. **File-Based Context**: No in-memory context, writes to `/tmp/pedrocli-jobs/`
 3. **One-Shot Inference**: Full context per inference, not conversational
 4. **Cross-Platform**: Uses Go stdlib, not shell commands (`sed`/`grep`)
 5. **Context-Aware**: Tracks tokens, loads strategically, compacts history
@@ -81,7 +81,7 @@ Autonomous coding agent with MCP (Model Context Protocol) architecture.
 
 ## Configuration
 
-Create `.pedroceli.json` (see `.pedroceli.json.example`):
+Create `.pedrocli.json` (see `.pedrocli.json.example`):
 
 ```json
 {
@@ -133,13 +133,13 @@ The MCP server uses **stdio protocol** (JSON-RPC over stdin/stdout), not HTTP. T
 ```bash
 # On your development machine (Mac)
 make build-linux
-scp pedroceli-linux-amd64 user@dgx-spark:/home/user/bin/pedroceli-server
+scp pedrocli-linux-amd64 user@dgx-spark:/home/user/bin/pedrocli-server
 
 # SSH into the server
 ssh user@dgx-spark
 
 # Create config file
-cat > ~/.pedroceli.json <<'EOF'
+cat > ~/.pedrocli.json <<'EOF'
 {
   "model": {
     "type": "llamacpp",
@@ -159,7 +159,7 @@ EOF
 
 # Run the MCP server
 cd /home/user/my-project
-~/bin/pedroceli-server
+~/bin/pedrocli-server
 ```
 
 #### 2. Invoking MCP Tools via JSON-RPC
@@ -168,7 +168,7 @@ The server accepts JSON-RPC 2.0 requests via stdin:
 
 **List available tools:**
 ```bash
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | pedroceli-server
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | pedrocli-server
 ```
 
 **Call the reviewer agent to review code:**
@@ -183,7 +183,7 @@ echo '{
       "branch": "feature/my-feature"
     }
   }
-}' | pedroceli-server
+}' | pedrocli-server
 ```
 
 **Call the builder agent to build a feature:**
@@ -199,7 +199,7 @@ echo '{
       "issue": "GH-123"
     }
   }
-}' | pedroceli-server
+}' | pedrocli-server
 ```
 
 **Use basic file tool:**
@@ -215,7 +215,7 @@ echo '{
       "path": "main.go"
     }
   }
-}' | pedroceli-server
+}' | pedrocli-server
 ```
 
 #### 3. MCP Server + Client Architecture
@@ -224,8 +224,8 @@ echo '{
 
 ```bash
 # Future Phase 2 CLI (not yet implemented)
-pedroceli review --branch feature/my-feature
-pedroceli build --description "Add rate limiting"
+pedrocli review --branch feature/my-feature
+pedrocli build --description "Add rate limiting"
 ```
 
 For now, you can:
@@ -247,14 +247,14 @@ shift
 case "$ACTION" in
   review)
     BRANCH=$1
-    echo "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"reviewer\",\"arguments\":{\"branch\":\"$BRANCH\"}}}" | pedroceli-server
+    echo "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"reviewer\",\"arguments\":{\"branch\":\"$BRANCH\"}}}" | pedrocli-server
     ;;
   build)
     DESC=$1
-    echo "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"builder\",\"arguments\":{\"description\":\"$DESC\"}}}" | pedroceli-server
+    echo "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"builder\",\"arguments\":{\"description\":\"$DESC\"}}}" | pedrocli-server
     ;;
   list)
-    echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | pedroceli-server
+    echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | pedrocli-server
     ;;
   *)
     echo "Usage: $0 {review|build|list} [args]"

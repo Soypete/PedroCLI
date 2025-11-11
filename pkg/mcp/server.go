@@ -97,7 +97,7 @@ func (s *Server) handleInitialize(req *Request) {
 	result := map[string]interface{}{
 		"protocolVersion": "1.0",
 		"serverInfo": map[string]interface{}{
-			"name":    "pedroceli",
+			"name":    "pedrocli",
 			"version": "0.1.0",
 		},
 		"capabilities": map[string]interface{}{

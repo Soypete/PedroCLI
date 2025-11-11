@@ -1,6 +1,6 @@
-# Pedroceli Specifications
+# PedroCLI Specifications
 
-Complete implementation specifications for the Pedroceli autonomous coding agent.
+Complete implementation specifications for the PedroCLI autonomous coding agent.
 
 ## 📋 Quick Navigation
 

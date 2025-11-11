@@ -203,8 +203,8 @@ func TestSetDefaults(t *testing.T) {
 				if c.Git.Remote != "origin" {
 					t.Errorf("Git.Remote = %v, want origin", c.Git.Remote)
 				}
-				if c.Git.BranchPrefix != "pedroceli/" {
-					t.Errorf("Git.BranchPrefix = %v, want pedroceli/", c.Git.BranchPrefix)
+				if c.Git.BranchPrefix != "pedrocli/" {
+					t.Errorf("Git.BranchPrefix = %v, want pedrocli/", c.Git.BranchPrefix)
 				}
 				if c.Limits.MaxTaskDurationMinutes != 30 {
 					t.Errorf("Limits.MaxTaskDurationMinutes = %v, want 30", c.Limits.MaxTaskDurationMinutes)
@@ -480,8 +480,8 @@ func TestLoadDefault(t *testing.T) {
 	if err == nil {
 		t.Error("LoadDefault() should error when no config file exists")
 	}
-	if !contains(err.Error(), "no .pedroceli.json found") {
-		t.Errorf("LoadDefault() error = %q, want error containing 'no .pedroceli.json found'", err.Error())
+	if !contains(err.Error(), "no .pedrocli.json found") {
+		t.Errorf("LoadDefault() error = %q, want error containing 'no .pedrocli.json found'", err.Error())
 	}
 
 	// Test 2: Config in current directory
@@ -494,7 +494,7 @@ func TestLoadDefault(t *testing.T) {
 		}
 	}`
 
-	if err := os.WriteFile(".pedroceli.json", []byte(validConfig), 0644); err != nil {
+	if err := os.WriteFile(".pedrocli.json", []byte(validConfig), 0644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
