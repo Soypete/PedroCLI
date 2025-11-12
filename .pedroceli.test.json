@@ -1,0 +1,40 @@
+{
+  "model": {
+    "type": "ollama",
+    "model_name": "qwen2.5-coder:7b",
+    "ollama_url": "http://localhost:11434",
+    "context_size": 32768,
+    "usable_context": 24576,
+    "temperature": 0.2
+  },
+  "execution": {
+    "run_on_spark": false,
+    "spark_ssh": ""
+  },
+  "git": {
+    "always_draft_pr": true,
+    "branch_prefix": "test/",
+    "remote": "origin"
+  },
+  "tools": {
+    "allowed_bash_commands": [
+      "echo", "ls", "cat", "pwd"
+    ],
+    "forbidden_commands": [
+      "rm", "mv", "dd", "sudo"
+    ]
+  },
+  "project": {
+    "name": "TestProject",
+    "workdir": "/tmp/test-project",
+    "tech_stack": ["Go"]
+  },
+  "limits": {
+    "max_task_duration_minutes": 5,
+    "max_inference_runs": 5
+  },
+  "init": {
+    "skip_checks": true,
+    "verbose": false
+  }
+}

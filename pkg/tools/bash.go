@@ -45,6 +45,27 @@ func (b *BashTool) Description() string {
 	return "Execute safe bash commands (no sed/grep/find - use File tool instead)"
 }
 
+// InputSchema returns the JSON Schema for tool arguments
+func (b *BashTool) InputSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"command": map[string]interface{}{
+				"type":        "string",
+				"description": "Command to execute (must be in allowed list)",
+			},
+			"args": map[string]interface{}{
+				"type": "array",
+				"items": map[string]interface{}{
+					"type": "string",
+				},
+				"description": "Command arguments",
+			},
+		},
+		"required": []string{"command"},
+	}
+}
+
 // Execute executes the bash tool
 func (b *BashTool) Execute(ctx context.Context, args map[string]interface{}) (*Result, error) {
 	command, ok := args["command"].(string)

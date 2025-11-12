@@ -116,6 +116,7 @@ func (s *Server) handleToolsList(req *Request) {
 		toolsList = append(toolsList, map[string]interface{}{
 			"name":        tool.Name(),
 			"description": tool.Description(),
+			"inputSchema": tool.InputSchema(),
 		})
 	}
 

@@ -30,6 +30,39 @@ func (c *CodeEditTool) Description() string {
 	return "Precise line-based code editing (edit ranges, insert at line, delete lines)"
 }
 
+// InputSchema returns the JSON Schema for tool arguments
+func (c *CodeEditTool) InputSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"action": map[string]interface{}{
+				"type": "string",
+				"enum": []string{"get_lines", "edit_lines", "insert_at_line", "delete_lines"},
+				"description": "Action to perform: get_lines (read lines), edit_lines (replace line range), insert_at_line (insert before line), delete_lines (delete line range)",
+			},
+			"path": map[string]interface{}{
+				"type":        "string",
+				"description": "File path to edit",
+			},
+			"start_line": map[string]interface{}{
+				"type":        "integer",
+				"description": "Starting line number (1-indexed)",
+				"minimum":     1,
+			},
+			"end_line": map[string]interface{}{
+				"type":        "integer",
+				"description": "Ending line number (1-indexed, inclusive)",
+				"minimum":     1,
+			},
+			"content": map[string]interface{}{
+				"type":        "string",
+				"description": "New content for edit_lines or insert_at_line actions",
+			},
+		},
+		"required": []string{"action", "path"},
+	}
+}
+
 // Execute executes the code edit tool
 func (c *CodeEditTool) Execute(ctx context.Context, args map[string]interface{}) (*Result, error) {
 	action, ok := args["action"].(string)

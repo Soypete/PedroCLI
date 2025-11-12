@@ -10,6 +10,9 @@ type Tool interface {
 	// Description returns the tool description
 	Description() string
 
+	// InputSchema returns the JSON Schema for tool arguments
+	InputSchema() map[string]interface{}
+
 	// Execute executes the tool with given arguments
 	Execute(ctx context.Context, args map[string]interface{}) (*Result, error)
 }

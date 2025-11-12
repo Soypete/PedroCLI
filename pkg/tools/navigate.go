@@ -32,6 +32,32 @@ func (n *NavigateTool) Description() string {
 	return "Navigate code structure: list files, get file outline, find imports"
 }
 
+// InputSchema returns the JSON Schema for tool arguments
+func (n *NavigateTool) InputSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"action": map[string]interface{}{
+				"type": "string",
+				"enum": []string{"list_directory", "get_file_outline", "find_imports", "get_tree"},
+				"description": "Action: list_directory (list files/dirs), get_file_outline (functions/classes in file), find_imports (show imports/dependencies), get_tree (directory tree)",
+			},
+			"path": map[string]interface{}{
+				"type":        "string",
+				"description": "File or directory path",
+			},
+			"depth": map[string]interface{}{
+				"type":        "integer",
+				"description": "Max depth for tree traversal (default: 3)",
+				"default":     3,
+				"minimum":     1,
+				"maximum":     10,
+			},
+		},
+		"required": []string{"action"},
+	}
+}
+
 // Execute executes the navigate tool
 func (n *NavigateTool) Execute(ctx context.Context, args map[string]interface{}) (*Result, error) {
 	action, ok := args["action"].(string)

@@ -68,7 +68,7 @@ The agent will autonomously:
 - [x] **Automatic retry on failures**
 - [x] **Completion detection**
 
-**Phase 5**: Distribution & Release ✨ **NEW**
+**Phase 5**: Distribution & Release
 - [x] **GoReleaser configuration for automated releases**
 - [x] **Homebrew tap support**
 - [x] **One-line install script**
@@ -76,6 +76,15 @@ The agent will autonomously:
 - [x] **Docker Compose with Ollama integration**
 - [x] **GitHub Actions release workflow**
 - [x] **Cross-platform binaries (Linux, Mac, Windows)**
+
+**Phase 6**: Web UI & Voice Interface ✨ **NEW**
+- [x] **Browser-based web UI with real-time updates**
+- [x] **Text and voice input modes**
+- [x] **WebSocket for live agent progress**
+- [x] **Self-hosted speech-to-text (whisper.cpp)**
+- [x] **Self-hosted text-to-speech (Piper)**
+- [x] **MCP server standalone integration docs**
+- [x] **Complete deployment guide**
 
 ### What Works Right Now
 
@@ -299,6 +308,62 @@ The agent will:
 # Cancel a running job
 ./pedrocli cancel job-1234567890
 ```
+
+### 6. Web UI (Alternative Interface)
+
+PedroCLI also includes a browser-based web UI with voice support:
+
+```bash
+# Start the web server
+./web-server -port 8080 -config .pedroceli.json
+
+# With voice input (requires whisper.cpp)
+./web-server \
+  -port 8080 \
+  -config .pedroceli.json \
+  -whisper-bin /path/to/whisper.cpp/main \
+  -whisper-model /path/to/models/ggml-base.en.bin
+
+# Open in browser
+open http://localhost:8080
+```
+
+Features:
+- **Visual agent selection**: Click to choose Builder, Debugger, Reviewer, or Triager
+- **Text or voice input**: Type or speak your requests
+- **Real-time progress**: Watch agents work with live updates via WebSocket
+- **Job management**: View recent jobs and their results
+- **Self-hosted STT/TTS**: Complete privacy with local whisper.cpp and Piper
+
+See [Web UI Documentation](docs/WEB_UI.md) for full deployment guide.
+
+### 7. MCP Server Integration
+
+Run the MCP server standalone to integrate with Claude Desktop, Cline, or other MCP clients:
+
+```bash
+# Add to Claude Desktop config (~/Library/Application Support/Claude/claude_desktop_config.json)
+{
+  "mcpServers": {
+    "pedrocli": {
+      "command": "/usr/local/bin/pedrocli-server",
+      "args": [],
+      "env": {
+        "PEDROCLI_CONFIG": "/path/to/.pedroceli.json"
+      }
+    }
+  }
+}
+```
+
+This allows Claude Desktop or Cline to use all PedroCLI tools directly:
+- Read and edit files
+- Search codebases
+- Run tests
+- Create git branches
+- Execute controlled bash commands
+
+See [MCP Server Documentation](docs/MCP_SERVER.md) for full integration guide.
 
 ## How It Works
 

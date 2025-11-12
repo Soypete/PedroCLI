@@ -32,6 +32,34 @@ func (s *SearchTool) Description() string {
 	return "Search code: grep in files, find files by pattern, find definitions"
 }
 
+// InputSchema returns the JSON Schema for tool arguments
+func (s *SearchTool) InputSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"action": map[string]interface{}{
+				"type": "string",
+				"enum": []string{"grep", "find_files", "find_in_file", "find_definition"},
+				"description": "Action: grep (search text in files), find_files (find by filename pattern), find_in_file (search within one file), find_definition (find function/class/type)",
+			},
+			"pattern": map[string]interface{}{
+				"type":        "string",
+				"description": "Search pattern (regex for grep, glob for find_files, name for find_definition)",
+			},
+			"path": map[string]interface{}{
+				"type":        "string",
+				"description": "File or directory path to search (defaults to workdir)",
+			},
+			"case_sensitive": map[string]interface{}{
+				"type":        "boolean",
+				"description": "Case sensitive search (default: false)",
+				"default":     false,
+			},
+		},
+		"required": []string{"action", "pattern"},
+	}
+}
+
 // Execute executes the search tool
 func (s *SearchTool) Execute(ctx context.Context, args map[string]interface{}) (*Result, error) {
 	action, ok := args["action"].(string)

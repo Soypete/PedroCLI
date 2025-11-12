@@ -6,6 +6,8 @@ coverage.out
 /pedroceli-*
 /pedrocli
 /pedrocli-*
+/mcp-server
+/web-server
 *.exe
 *.exe~
 *.dll

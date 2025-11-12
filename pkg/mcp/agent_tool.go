@@ -30,6 +30,83 @@ func (at *AgentTool) Description() string {
 	return at.agent.Description()
 }
 
+// InputSchema returns the JSON Schema for agent arguments
+func (at *AgentTool) InputSchema() map[string]interface{} {
+	// Agent-specific schemas based on agent name
+	agentName := at.agent.Name()
+
+	switch agentName {
+	case "builder":
+		return map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"description": map[string]interface{}{
+					"type":        "string",
+					"description": "Detailed description of the feature to build",
+				},
+				"issue_reference": map[string]interface{}{
+					"type":        "string",
+					"description": "Optional GitHub issue reference (e.g., #123)",
+				},
+			},
+			"required": []string{"description"},
+		}
+	case "debugger":
+		return map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"symptoms": map[string]interface{}{
+					"type":        "string",
+					"description": "Description of the bug symptoms and behavior",
+				},
+				"log_files": map[string]interface{}{
+					"type":        "string",
+					"description": "Optional paths to relevant log files",
+				},
+			},
+			"required": []string{"symptoms"},
+		}
+	case "reviewer":
+		return map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"branch": map[string]interface{}{
+					"type":        "string",
+					"description": "Git branch name to review",
+				},
+				"pr_number": map[string]interface{}{
+					"type":        "string",
+					"description": "Optional PR number for context",
+				},
+			},
+			"required": []string{"branch"},
+		}
+	case "triager":
+		return map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"description": map[string]interface{}{
+					"type":        "string",
+					"description": "Description of the issue to triage and diagnose",
+				},
+			},
+			"required": []string{"description"},
+		}
+	default:
+		// Generic agent schema
+		return map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"input": map[string]interface{}{
+					"type":        "string",
+					"description": "Input for the agent",
+				},
+			},
+			"required": []string{"input"},
+		}
+	}
+}
+
 // Execute executes the agent and returns the result
 func (at *AgentTool) Execute(ctx context.Context, args map[string]interface{}) (*tools.Result, error) {
 	// Execute the agent

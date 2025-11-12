@@ -30,6 +30,37 @@ func (f *FileTool) Description() string {
 	return "Read, write, and modify files using pure Go (cross-platform)"
 }
 
+// InputSchema returns the JSON Schema for tool arguments
+func (f *FileTool) InputSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"action": map[string]interface{}{
+				"type": "string",
+				"enum": []string{"read", "write", "replace", "append", "delete"},
+				"description": "Action: read (read file), write (overwrite), replace (find/replace text), append (add to end), delete (remove file)",
+			},
+			"path": map[string]interface{}{
+				"type":        "string",
+				"description": "File path (relative or absolute)",
+			},
+			"content": map[string]interface{}{
+				"type":        "string",
+				"description": "Content for write/append actions",
+			},
+			"find": map[string]interface{}{
+				"type":        "string",
+				"description": "Text to find (for replace action)",
+			},
+			"replace_with": map[string]interface{}{
+				"type":        "string",
+				"description": "Replacement text (for replace action)",
+			},
+		},
+		"required": []string{"action", "path"},
+	}
+}
+
 // Execute executes the file tool
 func (f *FileTool) Execute(ctx context.Context, args map[string]interface{}) (*Result, error) {
 	action, ok := args["action"].(string)
