@@ -1,0 +1,35 @@
+# Test coverage
+coverage.out
+*.coverprofile
+
+# Build artifacts
+/pedrocli-*
+/pedrocli
+/pedrocli-server
+/mcp-server
+/web-server
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+
+# Temporary files
+/tmp/
+*.tmp
+*.swp
+*.swo
+*~
+
+# IDE and editor files
+.vscode/
+.idea/
+*.iml
+.DS_Store
+
+# Job state directory
+/tmp/pedrocli-jobs/
+
+# Config files (don't commit actual configs, only examples)
+.pedrocli.json
