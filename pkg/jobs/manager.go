@@ -205,7 +205,7 @@ func (m *Manager) CleanupOldJobs(olderThan time.Duration) error {
 
 				// Remove from disk
 				filename := filepath.Join(m.stateDir, fmt.Sprintf("%s.json", id))
-				os.Remove(filename)
+				_ = os.Remove(filename) // Ignore error on cleanup
 			}
 		}
 	}
