@@ -331,8 +331,12 @@ func TestGetHistoryWithinBudget(t *testing.T) {
 	for i := 1; i <= 5; i++ {
 		prompt := strings.Repeat("a", 100) // 100 chars ≈ 25 tokens
 		response := strings.Repeat("b", 100)
-		mgr.SavePrompt(prompt)
-		mgr.SaveResponse(response)
+		if err := mgr.SavePrompt(prompt); err != nil {
+			t.Fatalf("SavePrompt() error = %v", err)
+		}
+		if err := mgr.SaveResponse(response); err != nil {
+			t.Fatalf("SaveResponse() error = %v", err)
+		}
 	}
 
 	tests := []struct {
@@ -390,14 +394,20 @@ func TestCompactHistory(t *testing.T) {
 
 	// Save multiple prompts with tool calls
 	for i := 1; i <= 5; i++ {
-		mgr.SavePrompt(strings.Repeat("prompt", 10))
-		mgr.SaveResponse(strings.Repeat("response", 10))
+		if err := mgr.SavePrompt(strings.Repeat("prompt", 10)); err != nil {
+			t.Fatalf("SavePrompt() error = %v", err)
+		}
+		if err := mgr.SaveResponse(strings.Repeat("response", 10)); err != nil {
+			t.Fatalf("SaveResponse() error = %v", err)
+		}
 
 		// Save tool calls and results for summarization
 		calls := []ToolCall{
 			{Name: "file", Args: map[string]interface{}{"action": "read"}},
 		}
-		mgr.SaveToolCalls(calls)
+		if err := mgr.SaveToolCalls(calls); err != nil {
+			t.Fatalf("SaveToolCalls() error = %v", err)
+		}
 
 		results := []ToolResult{
 			{
@@ -406,7 +416,9 @@ func TestCompactHistory(t *testing.T) {
 				ModifiedFiles: []string{"/tmp/test.txt"},
 			},
 		}
-		mgr.SaveToolResults(results)
+		if err := mgr.SaveToolResults(results); err != nil {
+			t.Fatalf("SaveToolResults() error = %v", err)
+		}
 	}
 
 	compact, err := mgr.CompactHistory(2)
@@ -442,8 +454,12 @@ func TestCompactHistoryFewFiles(t *testing.T) {
 	}()
 
 	// Save only 2 prompts
-	mgr.SavePrompt("First prompt")
-	mgr.SaveResponse("First response")
+	if err := mgr.SavePrompt("First prompt"); err != nil {
+		t.Fatalf("SavePrompt() error = %v", err)
+	}
+	if err := mgr.SaveResponse("First response"); err != nil {
+		t.Fatalf("SaveResponse() error = %v", err)
+	}
 
 	// Request keeping 2 recent files - should just return full history
 	compact, err := mgr.CompactHistory(2)
@@ -506,7 +522,7 @@ func TestCleanupDebugMode(t *testing.T) {
 	}
 
 	// Manual cleanup
-	os.RemoveAll(jobDir)
+	_ = os.RemoveAll(jobDir)
 }
 
 func TestCounterIncrement(t *testing.T) {
@@ -529,17 +545,23 @@ func TestCounterIncrement(t *testing.T) {
 		t.Errorf("Counter after SavePrompt = %d, want 1", mgr.counter)
 	}
 
-	mgr.SaveResponse("test")
+	if err := mgr.SaveResponse("test"); err != nil {
+		t.Fatalf("SaveResponse() error = %v", err)
+	}
 	if mgr.counter != 2 {
 		t.Errorf("Counter after SaveResponse = %d, want 2", mgr.counter)
 	}
 
-	mgr.SaveToolCalls([]ToolCall{})
+	if err := mgr.SaveToolCalls([]ToolCall{}); err != nil {
+		t.Fatalf("SaveToolCalls() error = %v", err)
+	}
 	if mgr.counter != 3 {
 		t.Errorf("Counter after SaveToolCalls = %d, want 3", mgr.counter)
 	}
 
-	mgr.SaveToolResults([]ToolResult{})
+	if err := mgr.SaveToolResults([]ToolResult{}); err != nil {
+		t.Fatalf("SaveToolResults() error = %v", err)
+	}
 	if mgr.counter != 4 {
 		t.Errorf("Counter after SaveToolResults = %d, want 4", mgr.counter)
 	}
