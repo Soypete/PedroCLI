@@ -45,15 +45,19 @@ func (d *DebuggerAgent) Execute(ctx context.Context, input map[string]interface{
 	}
 
 	// Update status to running
-	d.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
+	if err := d.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil); err != nil {
+		return job, err
+	}
 
 	// Create context manager
 	contextMgr, err := llmcontext.NewManager(job.ID, d.config.Debug.Enabled)
 	if err != nil {
-		d.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+		_ = d.jobManager.Update(job.ID, jobs.StatusFailed, nil, err) // Ignore error during error handling
 		return job, err
 	}
-	defer contextMgr.Cleanup()
+	defer func() {
+		_ = contextMgr.Cleanup()
+	}()
 
 	// Build debugging prompt
 	userPrompt := d.buildDebugPrompt(input)
@@ -61,7 +65,7 @@ func (d *DebuggerAgent) Execute(ctx context.Context, input map[string]interface{
 	// Execute inference loop (simplified - full implementation would be iterative)
 	response, err := d.executeInference(ctx, contextMgr, userPrompt)
 	if err != nil {
-		d.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+		_ = d.jobManager.Update(job.ID, jobs.StatusFailed, nil, err) // Ignore error during error handling
 		return job, err
 	}
 
@@ -80,7 +84,9 @@ func (d *DebuggerAgent) Execute(ctx context.Context, input map[string]interface{
 		"status":   "completed",
 	}
 
-	d.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
+	if err := d.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil); err != nil {
+		return job, err
+	}
 
 	return job, nil
 }

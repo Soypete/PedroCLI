@@ -175,7 +175,7 @@ func (s *Server) sendResponse(id interface{}, result interface{}) {
 	}
 
 	data, _ := json.Marshal(resp)
-	fmt.Fprintln(s.stdout, string(data))
+	_, _ = fmt.Fprintln(s.stdout, string(data)) // Ignore write errors in response
 }
 
 // sendError sends an error response
@@ -190,5 +190,5 @@ func (s *Server) sendError(id interface{}, code int, message string) {
 	}
 
 	data, _ := json.Marshal(resp)
-	fmt.Fprintln(s.stdout, string(data))
+	_, _ = fmt.Fprintln(s.stdout, string(data)) // Ignore write errors in response
 }

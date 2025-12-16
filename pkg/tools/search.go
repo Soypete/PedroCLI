@@ -125,7 +125,7 @@ func (s *SearchTool) grep(args map[string]interface{}) (*Result, error) {
 		if err != nil {
 			return nil
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 
 		scanner := bufio.NewScanner(file)
 		lineNum := 1
@@ -274,7 +274,7 @@ func (s *SearchTool) findInFile(args map[string]interface{}) (*Result, error) {
 	if err != nil {
 		return &Result{Success: false, Error: err.Error()}, nil
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	var matches []string
 	scanner := bufio.NewScanner(file)
@@ -356,7 +356,7 @@ func (s *SearchTool) findDefinition(args map[string]interface{}) (*Result, error
 			if err != nil {
 				return nil
 			}
-			defer file.Close()
+			defer func() { _ = file.Close() }()
 
 			scanner := bufio.NewScanner(file)
 			lineNum := 1

@@ -57,7 +57,9 @@ func TestNewManagerLoadExisting(t *testing.T) {
 	}
 
 	data, _ := json.MarshalIndent(job, "", "  ")
-	os.WriteFile(filepath.Join(tmpDir, "job-12345.json"), data, 0644)
+	if err := os.WriteFile(filepath.Join(tmpDir, "job-12345.json"), data, 0644); err != nil {
+		t.Fatalf("Failed to write test file: %v", err)
+	}
 
 	// Create manager - should load existing job
 	mgr, err := NewManager(tmpDir)
@@ -163,11 +165,17 @@ func TestList(t *testing.T) {
 	}
 
 	// Create multiple jobs with sufficient time between them
-	mgr.Create("build", "Job 1", map[string]interface{}{})
+	if _, err := mgr.Create("build", "Job 1", map[string]interface{}{}); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
 	time.Sleep(1 * time.Second) // Ensure different Unix timestamps
-	mgr.Create("review", "Job 2", map[string]interface{}{})
+	if _, err := mgr.Create("review", "Job 2", map[string]interface{}{}); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
 	time.Sleep(1 * time.Second)
-	mgr.Create("debug", "Job 3", map[string]interface{}{})
+	if _, err := mgr.Create("debug", "Job 3", map[string]interface{}{}); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
 
 	// List all jobs
 	jobs := mgr.List()
@@ -302,8 +310,13 @@ func TestCancel(t *testing.T) {
 	}
 
 	// Create a running job
-	job, _ := mgr.Create("build", "Test job", map[string]interface{}{})
-	mgr.Update(job.ID, StatusRunning, nil, nil)
+	job, err := mgr.Create("build", "Test job", map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if err := mgr.Update(job.ID, StatusRunning, nil, nil); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
 
 	// Cancel the job
 	err = mgr.Cancel(job.ID)
@@ -330,20 +343,33 @@ func TestCleanupOldJobs(t *testing.T) {
 	}
 
 	// Create old completed job
-	oldJob, _ := mgr.Create("build", "Old job", map[string]interface{}{})
+	oldJob, err := mgr.Create("build", "Old job", map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
 	time.Sleep(1 * time.Second) // Ensure different timestamp
 	oldTime := time.Now().Add(-2 * time.Hour)
-	mgr.Update(oldJob.ID, StatusCompleted, nil, nil)
+	if err := mgr.Update(oldJob.ID, StatusCompleted, nil, nil); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
 	// Manually set old completion time and save
 	mgr.mu.Lock()
 	mgr.jobs[oldJob.ID].CompletedAt = &oldTime
-	mgr.saveJob(mgr.jobs[oldJob.ID])
+	if err := mgr.saveJob(mgr.jobs[oldJob.ID]); err != nil {
+		mgr.mu.Unlock()
+		t.Fatalf("saveJob() error = %v", err)
+	}
 	mgr.mu.Unlock()
 
 	// Create recent completed job
 	time.Sleep(1 * time.Second)
-	recentJob, _ := mgr.Create("review", "Recent job", map[string]interface{}{})
-	mgr.Update(recentJob.ID, StatusCompleted, nil, nil)
+	recentJob, err := mgr.Create("review", "Recent job", map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if err := mgr.Update(recentJob.ID, StatusCompleted, nil, nil); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
 
 	// Create pending job
 	time.Sleep(1 * time.Second)
@@ -399,11 +425,11 @@ func TestConcurrentAccess(t *testing.T) {
 		go func() {
 			// Concurrent reads
 			jobID := jobIDs[idx%5]
-			mgr.Get(jobID)
+			_, _ = mgr.Get(jobID)  // Ignore errors in concurrent test
 			mgr.List()
 
 			// Concurrent updates
-			mgr.Update(jobID, StatusRunning, map[string]interface{}{"iteration": idx}, nil)
+			_ = mgr.Update(jobID, StatusRunning, map[string]interface{}{"iteration": idx}, nil) // Ignore errors in concurrent test
 			done <- true
 		}()
 	}
@@ -424,11 +450,19 @@ func TestJobPersistence(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create manager and add job
-	mgr1, _ := NewManager(tmpDir)
-	job, _ := mgr1.Create("build", "Persistent job", map[string]interface{}{
+	mgr1, err := NewManager(tmpDir)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+	job, err := mgr1.Create("build", "Persistent job", map[string]interface{}{
 		"test": "value",
 	})
-	mgr1.Update(job.ID, StatusRunning, map[string]interface{}{"progress": 50}, nil)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if err := mgr1.Update(job.ID, StatusRunning, map[string]interface{}{"progress": 50}, nil); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
 
 	// Create new manager instance - should load persisted job
 	mgr2, _ := NewManager(tmpDir)
