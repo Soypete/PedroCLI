@@ -33,7 +33,11 @@ func TestNewManager(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewManager() error = %v", err)
 			}
-			defer mgr.Cleanup()
+			defer func() {
+		if err := mgr.Cleanup(); err != nil {
+			t.Errorf("Cleanup() error = %v", err)
+		}
+	}()
 
 			if mgr.jobID != tt.jobID {
 				t.Errorf("jobID = %v, want %v", mgr.jobID, tt.jobID)
@@ -61,7 +65,11 @@ func TestGetJobDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
-	defer mgr.Cleanup()
+	defer func() {
+		if err := mgr.Cleanup(); err != nil {
+			t.Errorf("Cleanup() error = %v", err)
+		}
+	}()
 
 	jobDir := mgr.GetJobDir()
 	if jobDir == "" {
@@ -78,7 +86,11 @@ func TestSavePrompt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
-	defer mgr.Cleanup()
+	defer func() {
+		if err := mgr.Cleanup(); err != nil {
+			t.Errorf("Cleanup() error = %v", err)
+		}
+	}()
 
 	tests := []struct {
 		name   string
@@ -129,7 +141,11 @@ func TestSaveResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
-	defer mgr.Cleanup()
+	defer func() {
+		if err := mgr.Cleanup(); err != nil {
+			t.Errorf("Cleanup() error = %v", err)
+		}
+	}()
 
 	response := "This is a test response"
 	err = mgr.SaveResponse(response)
@@ -154,7 +170,11 @@ func TestSaveToolCalls(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
-	defer mgr.Cleanup()
+	defer func() {
+		if err := mgr.Cleanup(); err != nil {
+			t.Errorf("Cleanup() error = %v", err)
+		}
+	}()
 
 	calls := []ToolCall{
 		{
@@ -204,7 +224,11 @@ func TestSaveToolResults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
-	defer mgr.Cleanup()
+	defer func() {
+		if err := mgr.Cleanup(); err != nil {
+			t.Errorf("Cleanup() error = %v", err)
+		}
+	}()
 
 	results := []ToolResult{
 		{
@@ -247,13 +271,25 @@ func TestGetHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
-	defer mgr.Cleanup()
+	defer func() {
+		if err := mgr.Cleanup(); err != nil {
+			t.Errorf("Cleanup() error = %v", err)
+		}
+	}()
 
 	// Save some prompts and responses
-	mgr.SavePrompt("First prompt")
-	mgr.SaveResponse("First response")
-	mgr.SavePrompt("Second prompt")
-	mgr.SaveResponse("Second response")
+	if err := mgr.SavePrompt("First prompt"); err != nil {
+		t.Fatalf("SavePrompt() error = %v", err)
+	}
+	if err := mgr.SaveResponse("First response"); err != nil {
+		t.Fatalf("SaveResponse() error = %v", err)
+	}
+	if err := mgr.SavePrompt("Second prompt"); err != nil {
+		t.Fatalf("SavePrompt() error = %v", err)
+	}
+	if err := mgr.SaveResponse("Second response"); err != nil {
+		t.Fatalf("SaveResponse() error = %v", err)
+	}
 
 	history, err := mgr.GetHistory()
 	if err != nil {
@@ -285,7 +321,11 @@ func TestGetHistoryWithinBudget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
-	defer mgr.Cleanup()
+	defer func() {
+		if err := mgr.Cleanup(); err != nil {
+			t.Errorf("Cleanup() error = %v", err)
+		}
+	}()
 
 	// Save multiple prompts and responses
 	for i := 1; i <= 5; i++ {
@@ -342,7 +382,11 @@ func TestCompactHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
-	defer mgr.Cleanup()
+	defer func() {
+		if err := mgr.Cleanup(); err != nil {
+			t.Errorf("Cleanup() error = %v", err)
+		}
+	}()
 
 	// Save multiple prompts with tool calls
 	for i := 1; i <= 5; i++ {
@@ -391,7 +435,11 @@ func TestCompactHistoryFewFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
-	defer mgr.Cleanup()
+	defer func() {
+		if err := mgr.Cleanup(); err != nil {
+			t.Errorf("Cleanup() error = %v", err)
+		}
+	}()
 
 	// Save only 2 prompts
 	mgr.SavePrompt("First prompt")
@@ -466,7 +514,11 @@ func TestCounterIncrement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
-	defer mgr.Cleanup()
+	defer func() {
+		if err := mgr.Cleanup(); err != nil {
+			t.Errorf("Cleanup() error = %v", err)
+		}
+	}()
 
 	if mgr.counter != 0 {
 		t.Errorf("Initial counter = %d, want 0", mgr.counter)

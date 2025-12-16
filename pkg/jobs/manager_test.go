@@ -425,11 +425,11 @@ func TestConcurrentAccess(t *testing.T) {
 		go func() {
 			// Concurrent reads
 			jobID := jobIDs[idx%5]
-			mgr.Get(jobID)
+			_, _ = mgr.Get(jobID)  // Ignore errors in concurrent test
 			mgr.List()
 
 			// Concurrent updates
-			mgr.Update(jobID, StatusRunning, map[string]interface{}{"iteration": idx}, nil)
+			_ = mgr.Update(jobID, StatusRunning, map[string]interface{}{"iteration": idx}, nil) // Ignore errors in concurrent test
 			done <- true
 		}()
 	}
@@ -450,11 +450,19 @@ func TestJobPersistence(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create manager and add job
-	mgr1, _ := NewManager(tmpDir)
-	job, _ := mgr1.Create("build", "Persistent job", map[string]interface{}{
+	mgr1, err := NewManager(tmpDir)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+	job, err := mgr1.Create("build", "Persistent job", map[string]interface{}{
 		"test": "value",
 	})
-	mgr1.Update(job.ID, StatusRunning, map[string]interface{}{"progress": 50}, nil)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if err := mgr1.Update(job.ID, StatusRunning, map[string]interface{}{"progress": 50}, nil); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
 
 	// Create new manager instance - should load persisted job
 	mgr2, _ := NewManager(tmpDir)
