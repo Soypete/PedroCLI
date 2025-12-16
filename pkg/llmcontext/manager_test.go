@@ -508,7 +508,9 @@ func TestCleanupDebugMode(t *testing.T) {
 	jobDir := mgr.jobDir
 
 	// Save something
-	mgr.SavePrompt("test")
+	if err := mgr.SavePrompt("test"); err != nil {
+		t.Fatalf("SavePrompt() error = %v", err)
+	}
 
 	// Cleanup (should keep files in debug mode)
 	err = mgr.Cleanup()
@@ -540,7 +542,9 @@ func TestCounterIncrement(t *testing.T) {
 		t.Errorf("Initial counter = %d, want 0", mgr.counter)
 	}
 
-	mgr.SavePrompt("test")
+	if err := mgr.SavePrompt("test"); err != nil {
+		t.Fatalf("SavePrompt() error = %v", err)
+	}
 	if mgr.counter != 1 {
 		t.Errorf("Counter after SavePrompt = %d, want 1", mgr.counter)
 	}

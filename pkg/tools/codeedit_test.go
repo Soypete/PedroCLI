@@ -38,7 +38,9 @@ func main() {
 	fmt.Println("Hello, World!")
 }
 `
-	os.WriteFile(testFile, []byte(content), 0644)
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write test file: %v", err)
+	}
 
 	tests := []struct {
 		name      string
@@ -188,7 +190,9 @@ line 3`,
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			testFile := filepath.Join(tmpDir, "edit_test.txt")
-			os.WriteFile(testFile, []byte(tt.initialContent), 0644)
+			if err := os.WriteFile(testFile, []byte(tt.initialContent), 0644); err != nil {
+				t.Fatalf("Failed to write test file: %v", err)
+			}
 
 			tt.args["path"] = testFile
 
@@ -259,7 +263,9 @@ APPENDED`,
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			testFile := filepath.Join(tmpDir, "insert_test.txt")
-			os.WriteFile(testFile, []byte(tt.initialContent), 0644)
+			if err := os.WriteFile(testFile, []byte(tt.initialContent), 0644); err != nil {
+				t.Fatalf("Failed to write test file: %v", err)
+			}
 
 			args := map[string]interface{}{
 				"action":      "insert_at_line",
