@@ -69,15 +69,19 @@ func (t *TriagerAgent) Execute(ctx context.Context, input map[string]interface{}
 	}
 
 	// Update status to running
-	t.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
+	if err := t.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil); err != nil {
+		return job, err
+	}
 
 	// Create context manager
 	contextMgr, err := llmcontext.NewManager(job.ID, t.config.Debug.Enabled)
 	if err != nil {
-		t.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+		_ = t.jobManager.Update(job.ID, jobs.StatusFailed, nil, err) // Ignore error during error handling
 		return job, err
 	}
-	defer contextMgr.Cleanup()
+	defer func() {
+		_ = contextMgr.Cleanup()
+	}()
 
 	// Build triage prompt
 	userPrompt := t.buildTriagePrompt(input)
@@ -85,7 +89,7 @@ func (t *TriagerAgent) Execute(ctx context.Context, input map[string]interface{}
 	// Execute inference
 	response, err := t.executeInference(ctx, contextMgr, userPrompt)
 	if err != nil {
-		t.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+		_ = t.jobManager.Update(job.ID, jobs.StatusFailed, nil, err) // Ignore error during error handling
 		return job, err
 	}
 
@@ -99,7 +103,9 @@ func (t *TriagerAgent) Execute(ctx context.Context, input map[string]interface{}
 		"status":        "completed",
 	}
 
-	t.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
+	if err := t.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil); err != nil {
+		return job, err
+	}
 
 	return job, nil
 }

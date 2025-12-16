@@ -67,20 +67,24 @@ func (r *ReviewerAgent) Execute(ctx context.Context, input map[string]interface{
 	}
 
 	// Update status to running
-	r.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
+	if err := r.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil); err != nil {
+		return job, err
+	}
 
 	// Create context manager
 	contextMgr, err := llmcontext.NewManager(job.ID, r.config.Debug.Enabled)
 	if err != nil {
-		r.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+		_ = r.jobManager.Update(job.ID, jobs.StatusFailed, nil, err) // Ignore error during error handling
 		return job, err
 	}
-	defer contextMgr.Cleanup()
+	defer func() {
+		_ = contextMgr.Cleanup()
+	}()
 
 	// Get git diff for the branch
 	diff, err := r.getGitDiff(ctx, branch)
 	if err != nil {
-		r.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+		_ = r.jobManager.Update(job.ID, jobs.StatusFailed, nil, err) // Ignore error during error handling
 		return job, err
 	}
 
@@ -90,7 +94,7 @@ func (r *ReviewerAgent) Execute(ctx context.Context, input map[string]interface{
 	// Execute inference
 	response, err := r.executeInference(ctx, contextMgr, userPrompt)
 	if err != nil {
-		r.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+		_ = r.jobManager.Update(job.ID, jobs.StatusFailed, nil, err) // Ignore error during error handling
 		return job, err
 	}
 
@@ -113,7 +117,9 @@ func (r *ReviewerAgent) Execute(ctx context.Context, input map[string]interface{
 		"status":       "completed",
 	}
 
-	r.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
+	if err := r.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil); err != nil {
+		return job, err
+	}
 
 	return job, nil
 }
