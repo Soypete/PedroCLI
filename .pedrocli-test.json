@@ -1,0 +1,27 @@
+{
+  "model": {
+    "type": "ollama",
+    "model_name": "qwen3-coder:30b",
+    "context_size": 32768,
+    "temperature": 0.2
+  },
+  "project": {
+    "name": "Taikai",
+    "workdir": "/Users/miriahpeterson/Code/go-projects/taikai",
+    "tech_stack": ["Go"]
+  },
+  "git": {
+    "always_draft_pr": true,
+    "branch_prefix": "pedrocli/",
+    "remote": "origin"
+  },
+  "limits": {
+    "max_task_duration_minutes": 10,
+    "max_inference_runs": 5
+  },
+  "debug": {
+    "enabled": true,
+    "keep_temp_files": true,
+    "log_level": "info"
+  }
+}
