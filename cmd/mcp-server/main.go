@@ -44,15 +44,13 @@ func main() {
 	}
 
 	// Create LLM backend
-	var backend llm.Backend
-	if cfg.Model.Type == "llamacpp" {
-		backend = llm.NewLlamaCppClient(cfg)
-	} else {
-		log.Fatalf("Unsupported model type: %s", cfg.Model.Type)
+	backend, err := llm.NewBackend(cfg)
+	if err != nil {
+		log.Fatalf("Failed to create LLM backend: %v", err)
 	}
 
 	// Create job manager
-	jobManager, err := jobs.NewManager("/tmp/pedroceli-jobs")
+	jobManager, err := jobs.NewManager("/tmp/pedrocli-jobs")
 	if err != nil {
 		log.Fatalf("Failed to create job manager: %v", err)
 	}
@@ -128,8 +126,7 @@ func main() {
 	server.RegisterTool(mcp.NewAgentTool(debuggerAgent))
 	server.RegisterTool(mcp.NewAgentTool(triagerAgent))
 
-	// Start server
-	log.Println("Pedroceli MCP server starting...")
+	// Start server (no logging to avoid corrupting JSON-RPC on stdout)
 	if err := server.Run(context.Background()); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}

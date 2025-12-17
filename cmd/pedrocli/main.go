@@ -215,11 +215,11 @@ func buildCommand(cfg *config.Config, args []string) {
 		arguments["issue"] = *issue
 	}
 
-	// Call build_feature tool
+	// Call builder agent
 	fmt.Println("\nStarting build job...")
-	response, err := client.CallTool(ctx, "build_feature", arguments)
+	response, err := client.CallTool(ctx, "builder", arguments)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to call build_feature: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Failed to call builder: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -296,7 +296,7 @@ func debugCommand(cfg *config.Config, args []string) {
 		arguments["logs"] = *logs
 	}
 
-	callMCPTool(cfg, "debug_issue", arguments)
+	callMCPTool(cfg, "debugger", arguments)
 }
 
 func reviewCommand(cfg *config.Config, args []string) {
@@ -324,7 +324,7 @@ func reviewCommand(cfg *config.Config, args []string) {
 		arguments["pr_number"] = *prNumber
 	}
 
-	callMCPTool(cfg, "review_pr", arguments)
+	callMCPTool(cfg, "reviewer", arguments)
 }
 
 func triageCommand(cfg *config.Config, args []string) {
@@ -352,7 +352,7 @@ func triageCommand(cfg *config.Config, args []string) {
 		arguments["error_logs"] = *errorLogs
 	}
 
-	callMCPTool(cfg, "triage_issue", arguments)
+	callMCPTool(cfg, "triager", arguments)
 }
 
 func statusCommand(cfg *config.Config, args []string) {
