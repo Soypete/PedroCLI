@@ -84,7 +84,7 @@ func (c *CodeEditTool) getLines(args map[string]interface{}) (*Result, error) {
 	if err != nil {
 		return &Result{Success: false, Error: fmt.Sprintf("failed to open file: %s", err)}, nil
 	}
-	defer func() { _ = file.Close() }()
+	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
 	var lines []string

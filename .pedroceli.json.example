@@ -15,7 +15,7 @@
   },
   "git": {
     "always_draft_pr": true,
-    "branch_prefix": "pedrocli/",
+    "branch_prefix": "pedroceli/",
     "remote": "origin"
   },
   "tools": {

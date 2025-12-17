@@ -146,7 +146,7 @@ func (n *NavigateTool) getFileOutline(args map[string]interface{}) (*Result, err
 	if err != nil {
 		return &Result{Success: false, Error: err.Error()}, nil
 	}
-	defer func() { _ = file.Close() }()
+	defer file.Close()
 
 	var outline []string
 	scanner := bufio.NewScanner(file)
@@ -200,7 +200,7 @@ func (n *NavigateTool) findImports(args map[string]interface{}) (*Result, error)
 	if err != nil {
 		return &Result{Success: false, Error: err.Error()}, nil
 	}
-	defer func() { _ = file.Close() }()
+	defer file.Close()
 
 	var imports []string
 	scanner := bufio.NewScanner(file)

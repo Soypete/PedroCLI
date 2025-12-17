@@ -7,13 +7,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/soypete/pedrocli/pkg/config"
-	"github.com/soypete/pedrocli/pkg/executor"
 	depcheck "github.com/soypete/pedrocli/pkg/init"
-	"github.com/soypete/pedrocli/pkg/jobs"
 	"github.com/soypete/pedrocli/pkg/mcp"
 )
 
@@ -36,20 +33,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Commands that don't need config
-	if subcommand == "status" || subcommand == "list" || subcommand == "cancel" {
-		switch subcommand {
-		case "status":
-			statusCommand(nil, os.Args[2:])
-		case "list":
-			listCommand(nil, os.Args[2:])
-		case "cancel":
-			cancelCommand(nil, os.Args[2:])
-		}
-		return
-	}
-
-	// Global flags (for commands that need config)
+	// Global flags
 	verbosePtr := flag.Bool("verbose", false, "Enable verbose output")
 	skipChecksPtr := flag.Bool("skip-checks", false, "Skip dependency checks")
 
@@ -92,7 +76,7 @@ func main() {
 		}
 	}
 
-	// Handle subcommands that need config
+	// Handle subcommands
 	switch subcommand {
 	case "build":
 		buildCommand(cfg, os.Args[2:])
@@ -102,6 +86,12 @@ func main() {
 		reviewCommand(cfg, os.Args[2:])
 	case "triage":
 		triageCommand(cfg, os.Args[2:])
+	case "status":
+		statusCommand(cfg, os.Args[2:])
+	case "list":
+		listCommand(cfg, os.Args[2:])
+	case "cancel":
+		cancelCommand(cfg, os.Args[2:])
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", subcommand)
 		printUsage()
@@ -191,80 +181,11 @@ func findMCPServer() (string, error) {
 	return "", fmt.Errorf("pedrocli-server not found. Please build it with 'make build-server'")
 }
 
-// Global executor cache (lazily initialized)
-var (
-	directExecutor     *executor.DirectExecutor
-	directExecutorOnce sync.Once
-	directExecutorErr  error
-)
-
-// newDirectExecutor creates or returns cached direct executor
-func newDirectExecutor(cfg *config.Config) (*executor.DirectExecutor, error) {
-	directExecutorOnce.Do(func() {
-		directExecutor, directExecutorErr = executor.NewDirectExecutor(cfg)
-	})
-	return directExecutor, directExecutorErr
-}
-
-// executeDirectMode executes an agent directly without MCP
-func executeDirectMode(cfg *config.Config, agentName string, arguments map[string]interface{}, verbose bool) error {
-	exec, err := newDirectExecutor(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to create direct executor: %w", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-
-	if err := exec.ExecuteWithProgress(ctx, agentName, arguments, verbose); err != nil {
-		return fmt.Errorf("execution failed: %w", err)
-	}
-
-	return nil
-}
-
-// executeMCPMode executes an agent via MCP client
-func executeMCPMode(cfg *config.Config, agentName string, arguments map[string]interface{}) {
-	// Start MCP client
-	client, ctx, cancel, err := startMCPClient(cfg)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to start MCP client: %v\n", err)
-		os.Exit(1)
-	}
-	defer cancel()
-	defer func() {
-		_ = client.Stop() // Ignore stop errors in defer
-	}()
-
-	// Call agent tool
-	fmt.Printf("\nStarting %s job via MCP...\n", agentName)
-	response, err := client.CallTool(ctx, agentName, arguments)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to call %s: %v\n", agentName, err)
-		os.Exit(1)
-	}
-
-	// Display response
-	if response.IsError {
-		fmt.Printf("\n❌ %s failed:\n", agentName)
-	} else {
-		fmt.Printf("\n✅ %s job started:\n", agentName)
-	}
-
-	for _, block := range response.Content {
-		if block.Type == "text" {
-			fmt.Println(block.Text)
-		}
-	}
-}
-
 func buildCommand(cfg *config.Config, args []string) {
 	fs := flag.NewFlagSet("build", flag.ExitOnError)
 	description := fs.String("description", "", "Feature description (required)")
 	issue := fs.String("issue", "", "GitHub issue number (optional)")
-	direct := fs.Bool("direct", false, "Execute directly without MCP (faster, shows progress)")
-	verbose := fs.Bool("verbose", false, "Show verbose output in direct mode")
-	_ = fs.Parse(args) // Error handling done by flag.ExitOnError
+	fs.Parse(args)
 
 	if *description == "" {
 		fmt.Fprintln(os.Stderr, "Error: -description is required")
@@ -277,7 +198,16 @@ func buildCommand(cfg *config.Config, args []string) {
 		fmt.Printf("Issue: %s\n", *issue)
 	}
 
-	// Build arguments
+	// Start MCP client
+	client, ctx, cancel, err := startMCPClient(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to start MCP client: %v\n", err)
+		os.Exit(1)
+	}
+	defer cancel()
+	defer client.Stop()
+
+	// Build arguments for the tool
 	arguments := map[string]interface{}{
 		"description": *description,
 	}
@@ -285,16 +215,25 @@ func buildCommand(cfg *config.Config, args []string) {
 		arguments["issue"] = *issue
 	}
 
-	// Execute based on mode
-	if *direct {
-		// Direct execution mode
-		if err := executeDirectMode(cfg, "builder", arguments, *verbose); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to execute builder: %v\n", err)
-			os.Exit(1)
-		}
+	// Call build_feature tool
+	fmt.Println("\nStarting build job...")
+	response, err := client.CallTool(ctx, "build_feature", arguments)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to call build_feature: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Display response
+	if response.IsError {
+		fmt.Println("\n❌ Build failed:")
 	} else {
-		// MCP mode
-		executeMCPMode(cfg, "builder", arguments)
+		fmt.Println("\n✅ Build job started:")
+	}
+
+	for _, block := range response.Content {
+		if block.Type == "text" {
+			fmt.Println(block.Text)
+		}
 	}
 }
 
@@ -307,9 +246,7 @@ func callMCPTool(cfg *config.Config, toolName string, arguments map[string]inter
 		os.Exit(1)
 	}
 	defer cancel()
-	defer func() {
-		_ = client.Stop() // Ignore stop errors in defer
-	}()
+	defer client.Stop()
 
 	// Call tool
 	fmt.Printf("\nCalling %s...\n", toolName)
@@ -338,7 +275,7 @@ func debugCommand(cfg *config.Config, args []string) {
 	fs := flag.NewFlagSet("debug", flag.ExitOnError)
 	symptoms := fs.String("symptoms", "", "Problem symptoms (required)")
 	logs := fs.String("logs", "", "Path to log file (optional)")
-	_ = fs.Parse(args) // Error handling done by flag.ExitOnError
+	fs.Parse(args)
 
 	if *symptoms == "" {
 		fmt.Fprintln(os.Stderr, "Error: -symptoms is required")
@@ -359,14 +296,14 @@ func debugCommand(cfg *config.Config, args []string) {
 		arguments["logs"] = *logs
 	}
 
-	callMCPTool(cfg, "debugger", arguments)
+	callMCPTool(cfg, "debug_issue", arguments)
 }
 
 func reviewCommand(cfg *config.Config, args []string) {
 	fs := flag.NewFlagSet("review", flag.ExitOnError)
 	branch := fs.String("branch", "", "Branch name (required)")
 	prNumber := fs.String("pr", "", "PR number (optional)")
-	_ = fs.Parse(args) // Error handling done by flag.ExitOnError
+	fs.Parse(args)
 
 	if *branch == "" {
 		fmt.Fprintln(os.Stderr, "Error: -branch is required")
@@ -387,14 +324,14 @@ func reviewCommand(cfg *config.Config, args []string) {
 		arguments["pr_number"] = *prNumber
 	}
 
-	callMCPTool(cfg, "reviewer", arguments)
+	callMCPTool(cfg, "review_pr", arguments)
 }
 
 func triageCommand(cfg *config.Config, args []string) {
 	fs := flag.NewFlagSet("triage", flag.ExitOnError)
 	description := fs.String("description", "", "Issue description (required)")
 	errorLogs := fs.String("error-logs", "", "Error logs (optional)")
-	_ = fs.Parse(args) // Error handling done by flag.ExitOnError
+	fs.Parse(args)
 
 	if *description == "" {
 		fmt.Fprintln(os.Stderr, "Error: -description is required")
@@ -415,12 +352,12 @@ func triageCommand(cfg *config.Config, args []string) {
 		arguments["error_logs"] = *errorLogs
 	}
 
-	callMCPTool(cfg, "triager", arguments)
+	callMCPTool(cfg, "triage_issue", arguments)
 }
 
 func statusCommand(cfg *config.Config, args []string) {
 	fs := flag.NewFlagSet("status", flag.ExitOnError)
-	_ = fs.Parse(args) // Error handling done by flag.ExitOnError
+	fs.Parse(args)
 
 	if len(fs.Args()) == 0 {
 		fmt.Fprintln(os.Stderr, "Error: job ID required")
@@ -429,67 +366,28 @@ func statusCommand(cfg *config.Config, args []string) {
 	}
 
 	jobID := fs.Args()[0]
+	fmt.Printf("Getting status for job: %s\n", jobID)
 
-	// Access job manager directly
-	jobManager, err := jobs.NewManager("/tmp/pedrocli-jobs")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: failed to create job manager: %v\n", err)
-		os.Exit(1)
-	}
-
-	job, err := jobManager.Get(jobID)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: job not found: %v\n", err)
-		os.Exit(1)
+	// Build arguments
+	arguments := map[string]interface{}{
+		"job_id": jobID,
 	}
 
-	// Display job status
-	fmt.Printf("Job ID: %s\n", job.ID)
-	fmt.Printf("Type: %s\n", job.Type)
-	fmt.Printf("Status: %s\n", job.Status)
-	fmt.Printf("Description: %s\n", job.Description)
-	fmt.Printf("Created: %s\n", job.CreatedAt.Format("2006-01-02 15:04:05"))
-	if job.StartedAt != nil {
-		fmt.Printf("Started: %s\n", job.StartedAt.Format("2006-01-02 15:04:05"))
-	}
-	if job.CompletedAt != nil {
-		fmt.Printf("Completed: %s\n", job.CompletedAt.Format("2006-01-02 15:04:05"))
-	}
-	if job.Error != "" {
-		fmt.Printf("Error: %s\n", job.Error)
-	}
+	callMCPTool(cfg, "get_job_status", arguments)
 }
 
 func listCommand(cfg *config.Config, args []string) {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
-	_ = fs.Parse(args) // Error handling done by flag.ExitOnError
+	fs.Parse(args)
 
-	// Access job manager directly
-	jobManager, err := jobs.NewManager("/tmp/pedrocli-jobs")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: failed to create job manager: %v\n", err)
-		os.Exit(1)
-	}
+	fmt.Println("Listing all jobs...")
 
-	jobList := jobManager.List()
-	if len(jobList) == 0 {
-		fmt.Println("No jobs found")
-		return
-	}
-
-	fmt.Printf("Found %d job(s):\n\n", len(jobList))
-	for _, job := range jobList {
-		fmt.Printf("  %s  %-10s  %-12s  %s\n",
-			job.ID,
-			job.Type,
-			job.Status,
-			job.Description)
-	}
+	callMCPTool(cfg, "list_jobs", map[string]interface{}{})
 }
 
 func cancelCommand(cfg *config.Config, args []string) {
 	fs := flag.NewFlagSet("cancel", flag.ExitOnError)
-	_ = fs.Parse(args) // Error handling done by flag.ExitOnError
+	fs.Parse(args)
 
 	if len(fs.Args()) == 0 {
 		fmt.Fprintln(os.Stderr, "Error: job ID required")
@@ -498,20 +396,12 @@ func cancelCommand(cfg *config.Config, args []string) {
 	}
 
 	jobID := fs.Args()[0]
+	fmt.Printf("Canceling job: %s\n", jobID)
 
-	// Access job manager directly
-	jobManager, err := jobs.NewManager("/tmp/pedrocli-jobs")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: failed to create job manager: %v\n", err)
-		os.Exit(1)
+	// Build arguments
+	arguments := map[string]interface{}{
+		"job_id": jobID,
 	}
 
-	// Update job to cancelled status
-	err = jobManager.Update(jobID, jobs.StatusCancelled, nil, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: failed to cancel job: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Printf("Job %s cancelled\n", jobID)
+	callMCPTool(cfg, "cancel_job", arguments)
 }

@@ -67,59 +67,44 @@ func (r *ReviewerAgent) Execute(ctx context.Context, input map[string]interface{
 	}
 
 	// Update status to running
-	if err := r.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil); err != nil {
-		return job, err
-	}
+	r.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
 
 	// Create context manager
 	contextMgr, err := llmcontext.NewManager(job.ID, r.config.Debug.Enabled)
 	if err != nil {
-		_ = r.jobManager.Update(job.ID, jobs.StatusFailed, nil, err) // Ignore error during error handling
+		r.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
 		return job, err
 	}
-	defer func() {
-		_ = contextMgr.Cleanup()
-	}()
+	defer contextMgr.Cleanup()
 
 	// Get git diff for the branch
 	diff, err := r.getGitDiff(ctx, branch)
 	if err != nil {
-		_ = r.jobManager.Update(job.ID, jobs.StatusFailed, nil, err) // Ignore error during error handling
+		r.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
 		return job, err
 	}
 
 	// Build review prompt
 	userPrompt := r.buildReviewPrompt(branch, diff, input)
 
-	// Execute inference
-	response, err := r.executeInference(ctx, contextMgr, userPrompt)
+	// Create inference executor
+	executor := NewInferenceExecutor(r.BaseAgent, contextMgr)
+
+	// Execute the inference loop
+	err = executor.Execute(ctx, userPrompt)
 	if err != nil {
-		_ = r.jobManager.Update(job.ID, jobs.StatusFailed, nil, err) // Ignore error during error handling
+		r.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
 		return job, err
-	}
-
-	// Parse review from response
-	review := r.parseReview(response.Text)
-
-	// Optionally post to GitHub
-	if postToGH, ok := input["post_to_github"].(bool); ok && postToGH {
-		if err := r.postReviewToGitHub(ctx, branch, review); err != nil {
-			// Log error but don't fail the job
-			fmt.Printf("Warning: failed to post review to GitHub: %v\n", err)
-		}
 	}
 
 	// Update job with results
 	output := map[string]interface{}{
-		"review_text":  review,
-		"branch":       branch,
-		"issues_found": r.extractIssueCount(review),
-		"status":       "completed",
+		"job_dir": contextMgr.GetJobDir(),
+		"branch":  branch,
+		"status":  "completed",
 	}
 
-	if err := r.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil); err != nil {
-		return job, err
-	}
+	r.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
 
 	return job, nil
 }

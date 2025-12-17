@@ -166,7 +166,7 @@ func (f *FileTool) append(args map[string]interface{}) (*Result, error) {
 	if err != nil {
 		return &Result{Success: false, Error: err.Error()}, nil
 	}
-	defer func() { _ = f_ptr.Close() }()
+	defer f_ptr.Close()
 
 	// Append content
 	if _, err := f_ptr.WriteString(content); err != nil {

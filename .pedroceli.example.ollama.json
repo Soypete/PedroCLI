@@ -1,0 +1,47 @@
+{
+  "model": {
+    "type": "ollama",
+    "model_name": "qwen2.5-coder:32b",
+    "ollama_url": "http://localhost:11434",
+    "temperature": 0.2
+  },
+  "execution": {
+    "run_on_spark": false,
+    "spark_ssh": ""
+  },
+  "git": {
+    "always_draft_pr": true,
+    "branch_prefix": "pedrocli/",
+    "remote": "origin"
+  },
+  "tools": {
+    "allowed_bash_commands": [
+      "go", "git", "cat", "ls", "head", "tail", "wc", "sort", "uniq"
+    ],
+    "forbidden_commands": [
+      "sed", "grep", "find", "xargs", "rm", "mv", "dd", "sudo"
+    ]
+  },
+  "project": {
+    "name": "My Project",
+    "workdir": "/path/to/project",
+    "tech_stack": ["Go"]
+  },
+  "limits": {
+    "max_task_duration_minutes": 30,
+    "max_inference_runs": 20
+  },
+  "debug": {
+    "enabled": false,
+    "keep_temp_files": false,
+    "log_level": "info"
+  },
+  "platform": {
+    "os": "auto",
+    "shell": "/bin/sh"
+  },
+  "init": {
+    "skip_checks": false,
+    "verbose": false
+  }
+}

@@ -69,43 +69,36 @@ func (t *TriagerAgent) Execute(ctx context.Context, input map[string]interface{}
 	}
 
 	// Update status to running
-	if err := t.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil); err != nil {
-		return job, err
-	}
+	t.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
 
 	// Create context manager
 	contextMgr, err := llmcontext.NewManager(job.ID, t.config.Debug.Enabled)
 	if err != nil {
-		_ = t.jobManager.Update(job.ID, jobs.StatusFailed, nil, err) // Ignore error during error handling
+		t.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
 		return job, err
 	}
-	defer func() {
-		_ = contextMgr.Cleanup()
-	}()
+	defer contextMgr.Cleanup()
 
 	// Build triage prompt
 	userPrompt := t.buildTriagePrompt(input)
 
-	// Execute inference
-	response, err := t.executeInference(ctx, contextMgr, userPrompt)
+	// Create inference executor
+	executor := NewInferenceExecutor(t.BaseAgent, contextMgr)
+
+	// Execute the inference loop
+	err = executor.Execute(ctx, userPrompt)
 	if err != nil {
-		_ = t.jobManager.Update(job.ID, jobs.StatusFailed, nil, err) // Ignore error during error handling
+		t.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
 		return job, err
 	}
-
-	// Parse triage report from response
-	// In a full implementation, this would parse structured data
-	triageReport := response.Text
 
 	// Update job with results
 	output := map[string]interface{}{
-		"triage_report": triageReport,
-		"status":        "completed",
+		"job_dir": contextMgr.GetJobDir(),
+		"status":  "completed",
 	}
 
-	if err := t.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil); err != nil {
-		return job, err
-	}
+	t.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
 
 	return job, nil
 }

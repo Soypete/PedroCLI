@@ -52,7 +52,7 @@ func main() {
 	}
 
 	// Create job manager
-	jobManager, err := jobs.NewManager("/tmp/pedrocli-jobs")
+	jobManager, err := jobs.NewManager("/tmp/pedroceli-jobs")
 	if err != nil {
 		log.Fatalf("Failed to create job manager: %v", err)
 	}
@@ -129,7 +129,7 @@ func main() {
 	server.RegisterTool(mcp.NewAgentTool(triagerAgent))
 
 	// Start server
-	log.Println("PedroCLI MCP server starting...")
+	log.Println("Pedroceli MCP server starting...")
 	if err := server.Run(context.Background()); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}

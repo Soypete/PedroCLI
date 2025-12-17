@@ -97,7 +97,7 @@ func (s *Server) handleInitialize(req *Request) {
 	result := map[string]interface{}{
 		"protocolVersion": "1.0",
 		"serverInfo": map[string]interface{}{
-			"name":    "pedrocli",
+			"name":    "pedroceli",
 			"version": "0.1.0",
 		},
 		"capabilities": map[string]interface{}{
@@ -175,7 +175,7 @@ func (s *Server) sendResponse(id interface{}, result interface{}) {
 	}
 
 	data, _ := json.Marshal(resp)
-	_, _ = fmt.Fprintln(s.stdout, string(data)) // Ignore write errors in response
+	fmt.Fprintln(s.stdout, string(data))
 }
 
 // sendError sends an error response
@@ -190,5 +190,5 @@ func (s *Server) sendError(id interface{}, code int, message string) {
 	}
 
 	data, _ := json.Marshal(resp)
-	_, _ = fmt.Fprintln(s.stdout, string(data)) // Ignore write errors in response
+	fmt.Fprintln(s.stdout, string(data))
 }

@@ -46,7 +46,7 @@ type Manager struct {
 // NewManager creates a new job manager
 func NewManager(stateDir string) (*Manager, error) {
 	if stateDir == "" {
-		stateDir = "/tmp/pedrocli-jobs"
+		stateDir = "/tmp/pedroceli-jobs"
 	}
 
 	if err := os.MkdirAll(stateDir, 0755); err != nil {
@@ -205,7 +205,7 @@ func (m *Manager) CleanupOldJobs(olderThan time.Duration) error {
 
 				// Remove from disk
 				filename := filepath.Join(m.stateDir, fmt.Sprintf("%s.json", id))
-				_ = os.Remove(filename) // Ignore error on cleanup
+				os.Remove(filename)
 			}
 		}
 	}
