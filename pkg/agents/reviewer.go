@@ -51,7 +51,7 @@ func NewReviewerAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Mana
 	}
 }
 
-// Execute executes the reviewer agent asynchronously
+// Execute executes the reviewer agent
 func (r *ReviewerAgent) Execute(ctx context.Context, input map[string]interface{}) (*jobs.Job, error) {
 	// Get branch name
 	branch, ok := input["branch"].(string)
@@ -69,50 +69,43 @@ func (r *ReviewerAgent) Execute(ctx context.Context, input map[string]interface{
 	// Update status to running
 	r.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
 
-	// Run the inference loop in background with its own context
-	go func() {
-		// Use background context so it doesn't get cancelled when Execute() returns
-		bgCtx := context.Background()
+	// Create context manager
+	contextMgr, err := llmcontext.NewManager(job.ID, r.config.Debug.Enabled)
+	if err != nil {
+		r.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+		return job, err
+	}
+	defer contextMgr.Cleanup()
 
-		// Create context manager
-		contextMgr, err := llmcontext.NewManager(job.ID, r.config.Debug.Enabled)
-		if err != nil {
-			r.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
-			return
-		}
-		defer contextMgr.Cleanup()
+	// Get git diff for the branch
+	diff, err := r.getGitDiff(ctx, branch)
+	if err != nil {
+		r.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+		return job, err
+	}
 
-		// Get git diff for the branch
-		diff, err := r.getGitDiff(bgCtx, branch)
-		if err != nil {
-			r.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
-			return
-		}
+	// Build review prompt
+	userPrompt := r.buildReviewPrompt(branch, diff, input)
 
-		// Build review prompt
-		userPrompt := r.buildReviewPrompt(branch, diff, input)
+	// Create inference executor
+	executor := NewInferenceExecutor(r.BaseAgent, contextMgr)
 
-		// Create inference executor
-		executor := NewInferenceExecutor(r.BaseAgent, contextMgr)
+	// Execute the inference loop
+	err = executor.Execute(ctx, userPrompt)
+	if err != nil {
+		r.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+		return job, err
+	}
 
-		// Execute the inference loop
-		err = executor.Execute(bgCtx, userPrompt)
-		if err != nil {
-			r.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
-			return
-		}
+	// Update job with results
+	output := map[string]interface{}{
+		"job_dir": contextMgr.GetJobDir(),
+		"branch":  branch,
+		"status":  "completed",
+	}
 
-		// Update job with results
-		output := map[string]interface{}{
-			"job_dir": contextMgr.GetJobDir(),
-			"branch":  branch,
-			"status":  "completed",
-		}
+	r.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
 
-		r.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
-	}()
-
-	// Return immediately with the running job
 	return job, nil
 }
 

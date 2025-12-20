@@ -30,7 +30,7 @@ func NewDebuggerAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Mana
 	}
 }
 
-// Execute executes the debugger agent asynchronously
+// Execute executes the debugger agent
 func (d *DebuggerAgent) Execute(ctx context.Context, input map[string]interface{}) (*jobs.Job, error) {
 	// Get issue description
 	description, ok := input["description"].(string)
@@ -47,42 +47,35 @@ func (d *DebuggerAgent) Execute(ctx context.Context, input map[string]interface{
 	// Update status to running
 	d.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
 
-	// Run the inference loop in background with its own context
-	go func() {
-		// Use background context so it doesn't get cancelled when Execute() returns
-		bgCtx := context.Background()
+	// Create context manager
+	contextMgr, err := llmcontext.NewManager(job.ID, d.config.Debug.Enabled)
+	if err != nil {
+		d.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+		return job, err
+	}
+	defer contextMgr.Cleanup()
 
-		// Create context manager
-		contextMgr, err := llmcontext.NewManager(job.ID, d.config.Debug.Enabled)
-		if err != nil {
-			d.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
-			return
-		}
-		defer contextMgr.Cleanup()
+	// Build debugging prompt
+	userPrompt := d.buildDebugPrompt(input)
 
-		// Build debugging prompt
-		userPrompt := d.buildDebugPrompt(input)
+	// Create inference executor
+	executor := NewInferenceExecutor(d.BaseAgent, contextMgr)
 
-		// Create inference executor
-		executor := NewInferenceExecutor(d.BaseAgent, contextMgr)
+	// Execute the inference loop
+	err = executor.Execute(ctx, userPrompt)
+	if err != nil {
+		d.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+		return job, err
+	}
 
-		// Execute the inference loop
-		err = executor.Execute(bgCtx, userPrompt)
-		if err != nil {
-			d.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
-			return
-		}
+	// Update job with results
+	output := map[string]interface{}{
+		"status":   "completed",
+		"job_dir":  contextMgr.GetJobDir(),
+	}
 
-		// Update job with results
-		output := map[string]interface{}{
-			"status":   "completed",
-			"job_dir":  contextMgr.GetJobDir(),
-		}
+	d.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
 
-		d.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
-	}()
-
-	// Return immediately with the running job
 	return job, nil
 }
 

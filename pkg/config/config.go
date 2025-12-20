@@ -108,23 +108,23 @@ func Load(path string) (*Config, error) {
 	return &config, nil
 }
 
-// LoadDefault attempts to load .pedrocli.json from current directory or home
+// LoadDefault attempts to load .pedroceli.json from current directory or home
 func LoadDefault() (*Config, error) {
 	// Try current directory
-	if _, err := os.Stat(".pedrocli.json"); err == nil {
-		return Load(".pedrocli.json")
+	if _, err := os.Stat(".pedroceli.json"); err == nil {
+		return Load(".pedroceli.json")
 	}
 
 	// Try home directory
 	home, err := os.UserHomeDir()
 	if err == nil {
-		homePath := filepath.Join(home, ".pedrocli.json")
+		homePath := filepath.Join(home, ".pedroceli.json")
 		if _, err := os.Stat(homePath); err == nil {
 			return Load(homePath)
 		}
 	}
 
-	return nil, fmt.Errorf("no .pedrocli.json found in current directory or home")
+	return nil, fmt.Errorf("no .pedroceli.json found in current directory or home")
 }
 
 // setDefaults sets default values for configuration

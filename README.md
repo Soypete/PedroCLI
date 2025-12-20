@@ -17,19 +17,19 @@ All powered by **your own self-hosted LLMs** - no API calls, no subscriptions, c
 ## Quick Start
 
 ```bash
-# 1. Install Ollama (easiest option)
+# 1. Install PedroCLI
+curl -fsSL https://raw.githubusercontent.com/Soypete/PedroCLI/main/install.sh | sh
+
+# 2. Install Ollama
 curl -fsSL https://ollama.com/install.sh | sh
 ollama pull qwen2.5-coder:32b
 
-# 2. Build PedroCLI
-make build
-
 # 3. Create config file
-cp .pedroceli.example.ollama.json .pedroceli.json
-# Edit .pedroceli.json to set your project path
+cp ~/.pedrocli/.pedroceli.example.ollama.json ~/.pedroceli.json
+# Edit ~/.pedroceli.json to set your project path
 
 # 4. Run your first agent
-./pedrocli build -description "Add a health check endpoint to the API"
+pedrocli build -description "Add a health check endpoint to the API"
 ```
 
 The agent will autonomously:
@@ -61,12 +61,21 @@ The agent will autonomously:
 - [x] Ollama backend (maximum convenience)
 - [x] Auto-detected context windows for 20+ models
 
-**Phase 4**: Inference Loop ✨ **NEW**
+**Phase 4**: Inference Loop
 - [x] **Complete iterative inference loop**
 - [x] **Tool call parsing and execution**
 - [x] **Result feedback to LLM**
 - [x] **Automatic retry on failures**
 - [x] **Completion detection**
+
+**Phase 5**: Distribution & Release ✨ **NEW**
+- [x] **GoReleaser configuration for automated releases**
+- [x] **Homebrew tap support**
+- [x] **One-line install script**
+- [x] **Docker support with multi-stage builds**
+- [x] **Docker Compose with Ollama integration**
+- [x] **GitHub Actions release workflow**
+- [x] **Cross-platform binaries (Linux, Mac, Windows)**
 
 ### What Works Right Now
 
@@ -86,24 +95,76 @@ The system is **fully functional** for autonomous coding tasks. Agents can:
 
 ⚠️ **Tool Call Format**: Agents must output JSON in the correct format. Some models do this better than others.
 
-## Installation & Setup
+## Installation
+
+### Quick Install (Recommended)
+
+```bash
+# Install PedroCLI
+curl -fsSL https://raw.githubusercontent.com/Soypete/PedroCLI/main/install.sh | sh
+
+# Install Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Pull a coding model
+ollama pull qwen2.5-coder:32b
+
+# Create config
+cp ~/.pedrocli/.pedroceli.example.ollama.json ~/.pedroceli.json
+# Edit ~/.pedroceli.json to set your project path
+
+# Start coding!
+pedrocli build -description "your feature"
+```
+
+### Homebrew (Mac/Linux)
+
+```bash
+brew install Soypete/tap/pedrocli
+
+# Then install Ollama and configure
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull qwen2.5-coder:32b
+```
+
+### Docker
+
+```bash
+# Pull the image
+docker pull ghcr.io/soypete/pedrocli:latest
+
+# Run with Ollama (via docker-compose)
+curl -fsSL https://raw.githubusercontent.com/Soypete/PedroCLI/main/docker-compose.yml -o docker-compose.yml
+docker-compose up -d
+
+# Or run directly
+docker run -v $(pwd):/workspace -v ~/.pedroceli.json:/root/.pedroceli.json ghcr.io/soypete/pedrocli:latest help
+```
+
+### From Source
+
+```bash
+git clone https://github.com/Soypete/PedroCLI
+cd PedroCLI
+make build
+
+# Binaries will be in current directory
+./pedrocli help
+```
+
+## Setup
 
 ### Option 1: Ollama (Recommended for Beginners)
 
 ```bash
-# Install Ollama
+# Install Ollama (if not already done)
 curl -fsSL https://ollama.com/install.sh | sh
 
 # Pull a coding model
 ollama pull qwen2.5-coder:32b  # or :14b, :7b for smaller hardware
 
-# Build PedroCLI
-git clone https://github.com/Soypete/PedroCLI
-cd PedroCLI
-make build
-
 # Create config
-cp .pedroceli.example.ollama.json .pedroceli.json
+cp .pedroceli.example.ollama.json ~/.pedroceli.json
 ```
 
 Edit `.pedroceli.json`:

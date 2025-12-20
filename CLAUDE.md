@@ -4,216 +4,320 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PedroCLI is a self-hosted autonomous coding agent - an open-source alternative to Cursor's background jobs using your own LLMs. It runs coding agents via llama.cpp or Ollama to build features, debug issues, review code, and triage problems completely autonomously.
+PedroCLI is a self-hosted autonomous coding agent system - an open-source alternative to Cursor's background jobs using your own LLMs. It runs autonomous agents powered by self-hosted models (via llama.cpp or Ollama) that can build features, debug issues, review code, and triage problems.
 
-**Tech Stack**: Go 1.24.7, JSON-RPC 2.0, Model Context Protocol (MCP)
+**Key Concept**: This is a **two-binary system** - `pedrocli` (CLI client) communicates with `pedrocli-server` (MCP server) via JSON-RPC over stdio. The server manages agents, tools, and LLM backends.
 
-## Architecture
-
-### Core Components
-
-1. **MCP Server** (`pkg/mcp/server.go`): JSON-RPC 2.0 server that exposes tools via stdio transport
-2. **Agents** (`pkg/agents/`): Autonomous agents that use tools to complete tasks
-   - Builder: Builds new features from descriptions
-   - Debugger: Fixes bugs and issues
-   - Reviewer: Performs code reviews on PRs
-   - Triager: Diagnoses problems without fixing
-3. **Inference Loop** (`pkg/agents/executor.go`): The core autonomous loop that:
-   - Sends prompts to LLM
-   - Parses JSON tool calls from responses
-   - Executes tools
-   - Feeds results back to LLM
-   - Repeats until task completion or max iterations
-4. **Tools** (`pkg/tools/`): Seven specialized tools for code interaction
-5. **Context Manager** (`pkg/llmcontext/manager.go`): File-based context in `/tmp/pedroceli-jobs/`
-6. **LLM Backends** (`pkg/llm/`): Support for llama.cpp and Ollama
-
-### Tool System
-
-Seven tools available to agents (all implement `tools.Tool` interface):
-
-- **file**: Read, write, and modify entire files
-- **code_edit**: Precise line-based editing (edit/insert/delete specific lines)
-- **search**: Search code (grep patterns, find files, find definitions)
-- **navigate**: Navigate code structure (list directories, get file outlines, find imports)
-- **git**: Execute git commands (status, diff, commit, push, etc.)
-- **bash**: Run safe shell commands (limited to allowed commands in config)
-- **test**: Run tests and parse results (Go, npm, Python)
-
-### Key Design Decisions
-
-1. **File-Based Context**: All context is written to `/tmp/pedroceli-jobs/<job-id>/` for crash resilience and debugging
-2. **One-Shot Inference Loop**: Each inference includes full context (not conversational)
-3. **JSON Tool Calls**: LLM outputs JSON objects with `{"tool": "name", "args": {...}}` format
-4. **Context Budget Management**: Keeps recent history, summarizes old history to fit context window
-5. **Cross-Platform**: Uses Go stdlib instead of shell commands (sed/grep/find) for portability
-
-## Common Development Commands
+## Build & Test Commands
 
 ### Build
 ```bash
-make build              # Build both CLI and server for current platform
+make build              # Build both CLI and server (current platform)
 make build-cli          # Build CLI only
-make build-server       # Build MCP server only
+make build-server       # Build server only
 make build-mac          # Build for macOS (arm64 + amd64)
 make build-linux        # Build for Linux (amd64)
 ```
 
-### Testing
+The build produces two binaries:
+- `pedrocli` - CLI client (cmd/pedrocli/main.go)
+- `pedrocli-server` - MCP server (cmd/mcp-server/main.go)
+
+### Test
 ```bash
 make test               # Run all tests
-make test-coverage      # Run tests with coverage report
-go test -v ./pkg/tools  # Run tests for specific package
+make test-coverage      # Run with coverage report
+go test ./pkg/tools/... # Test specific package
+go test -run TestName   # Run specific test
 ```
 
-### Code Quality
+### Format & Lint
 ```bash
-make fmt                # Format code
+make fmt                # Format all code
 make lint               # Run golangci-lint
 make tidy               # Tidy dependencies
 ```
 
-### Running
-```bash
-make run-server         # Run MCP server (stdio mode)
-make run-cli            # Run CLI directly
-./pedrocli build -description "Add feature X"    # Execute a build agent
-./pedrocli debug -symptoms "Bug description"     # Execute a debugger agent
-./pedrocli review -branch feature/xyz            # Execute a code review
-```
+## Core Architecture
 
-## Configuration
+### Two-Binary System
 
-Config file: `.pedrocli.json` (in project root or home directory)
-
-Key settings:
-- `model.type`: "llamacpp" or "ollama"
-- `model.context_size`: Total context window (auto-detected for Ollama models)
-- `project.workdir`: Path to target project for agents to work on
-- `limits.max_inference_runs`: Max iterations before timeout (default: 20)
-- `tools.allowed_bash_commands`: Whitelist of safe bash commands
-- `tools.forbidden_commands`: Blacklist (overrides whitelist)
-
-See `.pedroceli.example.ollama.json` or `.pedroceli.example.llamacpp.json` for templates.
-
-## Inference Loop Architecture
-
-The autonomous operation happens in `pkg/agents/executor.go`:
-
-1. **Agent receives task** → creates job and context manager
-2. **Execute inference** → LLM analyzes task with system prompt + user prompt + history
-3. **Parse tool calls** → Regex extracts JSON from response (code blocks or inline)
-4. **Execute tools** → Each tool runs and returns success/failure + output
-5. **Save results** → Context manager writes to files in job directory
-6. **Build feedback** → Results formatted into next prompt
-7. **Check completion** → Look for "TASK_COMPLETE" signal or PR creation
-8. **Repeat** → Loop until done or max iterations reached
-
-Context files in `/tmp/pedroceli-jobs/<job-id>/`:
-- `001-prompt.txt`, `002-response.txt` (alternating)
-- `003-tool-calls.json`, `004-tool-results.json`
-- Numbered sequentially for full audit trail
-
-## Code Organization
+**CLI (`pedrocli`)** → JSON-RPC stdio → **MCP Server (`pedrocli-server`)**
 
 ```
-cmd/
-├── pedrocli/       # Main CLI entrypoint
-├── mcp-server/     # MCP server entrypoint (not typically run directly)
-└── cli/            # Alternative CLI (legacy)
+cmd/pedrocli/main.go          → User-facing commands (build, debug, review, triage)
+                              → Loads .pedroceli.json config
+                              → Spawns pedrocli-server as subprocess
+                              → Communicates via JSON-RPC (stdio)
 
+cmd/mcp-server/main.go        → MCP server (Model Context Protocol)
+                              → Manages agents, tools, LLM backends
+                              → Executes autonomous inference loops
+                              → Runs in subprocess, communicates via stdio
+```
+
+### Package Structure
+
+```
 pkg/
-├── agents/         # Agent implementations and inference executor
-├── config/         # Configuration parsing and validation
-├── jobs/           # Job state management
-├── llm/            # LLM backends (llamacpp, ollama, factory)
-├── llmcontext/     # File-based context manager with compaction
-├── mcp/            # MCP protocol (JSON-RPC 2.0 server/client)
-├── platform/       # OS detection for cross-platform support
-├── tools/          # Seven tool implementations
-└── init/           # Dependency checking
-
-docs/               # Detailed phase-by-phase specifications
+├── agents/          # Autonomous agents (Builder, Debugger, Reviewer, Triager)
+│   ├── base.go      # BaseAgent - common agent functionality
+│   ├── executor.go  # InferenceExecutor - THE INFERENCE LOOP (critical!)
+│   ├── builder.go   # Build new features
+│   ├── debugger.go  # Debug and fix issues
+│   ├── reviewer.go  # Code review
+│   └── triager.go   # Diagnose issues without fixing
+│
+├── tools/           # 7 tools that agents use (MCP protocol)
+│   ├── file.go      # Read/write entire files
+│   ├── codeedit.go  # Precise line-based editing (edit/insert/delete)
+│   ├── search.go    # Search code (grep, find files, find definitions)
+│   ├── navigate.go  # Navigate code structure (list dirs, outlines, imports)
+│   ├── git.go       # Git operations
+│   ├── bash.go      # Safe shell commands (with allow/deny lists)
+│   └── test.go      # Run tests (Go, npm, Python)
+│
+├── llm/             # LLM backend abstraction
+│   ├── interface.go # Backend interface
+│   ├── llamacpp.go  # llama.cpp integration
+│   ├── ollama.go    # Ollama integration
+│   ├── tokens.go    # Token estimation and context window detection
+│   └── factory.go   # Backend factory
+│
+├── llmcontext/      # File-based context management
+│   └── manager.go   # Manages /tmp/pedroceli-jobs/<job-id>/ files
+│
+├── mcp/             # Model Context Protocol implementation
+│   ├── server.go    # MCP server (JSON-RPC 2.0)
+│   ├── client.go    # MCP client
+│   └── agent_tool.go # Agent tool abstraction
+│
+├── config/          # Configuration management
+│   └── config.go    # Load/validate .pedroceli.json
+│
+├── jobs/            # Job management
+│   └── manager.go   # Job lifecycle, status tracking
+│
+├── init/            # Dependency checking
+│   └── checker.go   # Verify git, Ollama, llama.cpp, etc.
+│
+└── platform/        # Platform-specific utilities
+    └── shell.go     # Shell command execution
 ```
 
-## Testing Patterns
+## Critical Architecture Details
 
-1. **Tool Tests**: Mock context, test Execute() with various args
-2. **Agent Tests**: Mock LLM backend, verify tool calls
-3. **Context Tests**: File operations, token budget calculations
-4. **Integration Tests**: End-to-end with real LLM (expensive, manual)
+### 1. The Inference Loop (pkg/agents/executor.go)
 
-Test files follow `*_test.go` convention and are located alongside source files.
+**This is the heart of autonomous operation.** The `InferenceExecutor` runs an iterative loop:
 
-## Important Implementation Notes
+```
+1. Send prompt to LLM
+2. Parse tool calls from response (JSON format)
+3. Execute tools (search, read, edit, test, git, bash)
+4. Feed results back to LLM
+5. Repeat until task complete or max iterations (default: 20)
+```
 
-### Tool Call Parsing
-- LLM must output JSON in specific format: `{"tool": "name", "args": {...}}`
-- Parser looks for JSON code blocks first: ` ```json\n{...}\n``` `
-- Falls back to inline JSON if no code blocks found
-- Some models do this better than others (Qwen 2.5 Coder recommended)
+**Key files**:
+- `pkg/agents/executor.go` - `InferenceExecutor.Execute()` method
+- `pkg/agents/base.go` - `BaseAgent.executeInference()` for single round
+- Tool calls are parsed from LLM JSON output: `{"tool": "tool_name", "args": {...}}`
 
-### Context Management
-- Context manager creates numbered files for full history
-- `GetHistoryWithinBudget()` keeps recent 3 inference rounds
-- Older rounds are summarized (list of tool calls + modified files)
-- Token estimation uses 1 token ≈ 4 characters heuristic
+### 2. File-Based Context (pkg/llmcontext/manager.go)
 
-### Tool Execution
-- All tools run in target project's `workdir` (from config)
-- Bash tool enforces whitelist/blacklist for safety
-- Git tool automatically creates branches with `pedroceli/` prefix
-- Test tool detects framework and parses output for pass/fail
+Unlike in-memory systems, PedroCLI writes all context to `/tmp/pedroceli-jobs/<job-id>/`:
 
-### Agent Prompts
-- System prompt defines available tools and best practices (in `base.go`)
-- User prompt is task-specific (build description, debug symptoms, etc.)
-- Each agent type can override system prompt for specialized behavior
-- Prompts are designed for tool use, not conversation
+```
+/tmp/pedroceli-jobs/job-1234567890-20231215-143022/
+├── 001-prompt.txt         # Initial prompt
+├── 002-response.txt       # LLM response
+├── 003-tool-calls.json    # Parsed tool calls
+├── 004-tool-results.json  # Tool execution results
+├── 005-prompt.txt         # Next prompt with feedback
+└── ...
+```
 
-## LLM Backend Details
+**Benefits**:
+- Survives process crashes
+- Easy to debug (inspect files)
+- Natural context window management
+- Clear audit trail
 
-### llama.cpp Backend
-- Executes `llama-cli` binary via subprocess
-- Streams output, no chat API needed
-- Full control over context size, GPU layers, threads
-- Best for: Maximum performance, GPU utilization
+### 3. Context Window Management
 
-### Ollama Backend
-- HTTP API client to local Ollama server (default: `http://localhost:11434`)
-- Auto-detects context windows for 20+ models
-- Model names like `qwen2.5-coder:32b`, `deepseek-coder:33b`
-- Best for: Convenience, easy model switching
+**Critical**: Different models have different context limits. The system auto-detects for Ollama models and respects user-configured limits for llama.cpp.
 
-Both backends implement `llm.Backend` interface with `Infer()` method.
+- **Ollama**: Auto-detected in `pkg/llm/tokens.go` (Qwen 32B = 32k, Qwen 72B = 128k, etc.)
+- **llama.cpp**: User specifies in `.pedroceli.json` (`context_size`, `usable_context`)
+- **Rule**: Use 75% of stated context (leave room for response)
+- See `docs/pedroceli-context-guide.md` for full details
+
+Token estimation (rough): `tokens ≈ text_length / 4`
+
+### 4. Tool Architecture
+
+All tools implement `pkg/tools/interface.go`:
+
+```go
+type Tool interface {
+    Name() string
+    Description() string
+    Execute(ctx context.Context, args map[string]interface{}) (*Result, error)
+}
+```
+
+**Tool execution flow**:
+1. Agent calls tool via JSON: `{"tool": "code_edit", "args": {"file": "main.go", ...}}`
+2. Executor parses and dispatches to appropriate tool
+3. Tool executes and returns `Result{Success, Output, Error, ModifiedFiles}`
+4. Result fed back to LLM in next prompt
+
+### 5. Agent Types
+
+Each agent has specialized prompts but shares the same BaseAgent + InferenceExecutor:
+
+- **Builder** (`pkg/agents/builder.go`) - Build new features from descriptions
+- **Debugger** (`pkg/agents/debugger.go`) - Debug and fix issues (accepts symptoms, logs)
+- **Reviewer** (`pkg/agents/reviewer.go`) - Code review on branches/PRs
+- **Triager** (`pkg/agents/triager.go`) - Diagnose without fixing
+
+All agents use the same 7 tools but with different system prompts.
+
+### 6. Configuration (.pedroceli.json)
+
+Config structure in `pkg/config/config.go`:
+
+```json
+{
+  "model": {
+    "type": "ollama",              // or "llamacpp"
+    "model_name": "qwen2.5-coder:32b",
+    "temperature": 0.2
+  },
+  "project": {
+    "name": "ProjectName",
+    "workdir": "/path/to/project"
+  },
+  "limits": {
+    "max_task_duration_minutes": 30,
+    "max_inference_runs": 20       // Max iterations in inference loop
+  },
+  "tools": {
+    "allowed_bash_commands": ["go", "git", "ls", ...],
+    "forbidden_commands": ["rm", "sudo", ...]
+  }
+}
+```
+
+Config files can be in:
+1. `./.pedroceli.json` (current directory)
+2. `~/.pedroceli.json` (home directory)
+
+## Development Workflow
+
+### Adding a New Tool
+
+1. Create `pkg/tools/newtool.go` implementing `tools.Tool` interface
+2. Add tests in `pkg/tools/newtool_test.go`
+3. Register in `cmd/mcp-server/main.go`: `server.RegisterTool(newTool)`
+4. Add to agent registration: `agent.RegisterTool(newTool)`
+5. Update system prompt in `pkg/agents/base.go` to describe new tool
+
+### Modifying Agent Behavior
+
+1. **Prompt changes**: Edit system prompts in `pkg/agents/*.go` (builder.go, debugger.go, etc.)
+2. **Inference loop changes**: Modify `pkg/agents/executor.go` (careful - this is critical)
+3. **Tool selection**: Agents share tools; register/unregister in `cmd/mcp-server/main.go`
+
+### Testing Changes
+
+```bash
+# Test specific package
+go test ./pkg/tools/...
+go test ./pkg/agents/...
+
+# Test with coverage
+make test-coverage
+
+# Manual integration test
+make build
+./pedrocli build -description "Add a test function"
+```
+
+Check job output in `/tmp/pedroceli-jobs/` to debug issues.
+
+## Key Design Principles
+
+### 1. File-Based Everything
+All context, prompts, responses, tool calls/results are written to files. This enables crash recovery and easy debugging.
+
+### 2. Tool Safety
+- Bash commands are restricted via allow/deny lists in config
+- Tools validate inputs and return structured errors
+- No tool should perform destructive operations without explicit confirmation
+
+### 3. Iterative Refinement
+Agents don't need to succeed on first try. The inference loop allows them to:
+- Try, fail, learn from error
+- Run tests, see failures, fix them
+- Keep iterating until success (up to `max_inference_runs`)
+
+### 4. Model Agnostic
+The system works with any model that can:
+- Understand tool-use instructions
+- Output JSON in the correct format
+- Fit the code context in its context window
+
+Better models (Qwen 2.5 Coder 32B+) = better results.
 
 ## Common Gotchas
 
-1. **Tool calls must be JSON**: If LLM outputs natural language instead of JSON, it fails silently
-2. **Context overflow**: If context exceeds window, inference fails - context manager should prevent this
-3. **Forbidden bash commands**: Using `sed`, `grep`, `find` in bash tool will fail - use dedicated tools instead
-4. **Branch conflicts**: Agents create branches with timestamp suffix to avoid collisions
-5. **File paths**: All file operations use absolute paths from `project.workdir`
+### When Tests Fail
+- Check `/tmp/pedroceli-jobs/<job-id>/` for full execution history
+- Set `debug.keep_temp_files: true` in config to preserve job directories
+- Look at `*-tool-results.json` files to see what actually happened
 
-## Debugging Tips
+### Context Window Issues
+- If agent seems confused or forgets context, check token usage
+- Larger repos may need larger models (32B+ recommended)
+- See `docs/pedroceli-context-guide.md` for strategies
 
-- Set `debug.enabled: true` and `debug.keep_temp_files: true` in config
-- Check `/tmp/pedroceli-jobs/` for full inference history
-- Look at numbered files to see exact LLM inputs/outputs
-- Use `debug.log_level: "debug"` for verbose logging
-- Test individual tools via MCP server's JSON-RPC interface
+### Tool Call Parsing Failures
+- LLM must output exact JSON format: `{"tool": "name", "args": {...}}`
+- Some models do this better than others
+- Check `*-response.txt` to see what LLM actually generated
 
-## Model Recommendations
+### Inference Loop Not Stopping
+- Agent should output "TASK_COMPLETE" when done
+- Check `max_inference_runs` in config
+- Look at final response to see if completion signal was detected
 
-**Best results**: Qwen 2.5 Coder 32B or 72B
-**Good balance**: Qwen 2.5 Coder 14B
-**Lightweight**: Qwen 2.5 Coder 7B (less reliable)
+## Important Files to Understand
 
-Temperature 0.2 works well for deterministic output. Lower (0.0-0.1) for more consistent JSON formatting.
+1. **pkg/agents/executor.go** - The inference loop (most critical)
+2. **pkg/agents/base.go** - Agent foundation and system prompts
+3. **pkg/llmcontext/manager.go** - File-based context management
+4. **pkg/tools/*.go** - Tool implementations (all 7 tools)
+5. **pkg/mcp/server.go** - JSON-RPC server handling
+6. **cmd/pedrocli/main.go** - CLI entry point
+7. **cmd/mcp-server/main.go** - Server entry point and registration
 
-## Related Documentation
+## MCP Protocol Notes
 
-- `README.md`: User-facing documentation and quick start
-- `docs/`: Detailed phase-by-phase implementation specs
-- `.pedroceli.example.*.json`: Configuration templates
-- `pkg/*/`: Inline godoc comments for API details
+The system uses Model Context Protocol (JSON-RPC 2.0) for CLI-server communication:
+
+- **stdio transport**: Server runs as subprocess, communicates via stdin/stdout
+- **Tool-based**: Agents use tools (like OpenAI function calling)
+- **Stateful**: Each job has persistent file-based state
+- See `pkg/mcp/` for implementation details
+
+## Release & Distribution
+
+- GoReleaser config: `.goreleaser.yml`
+- Install script: `install.sh` (one-line install)
+- Docker: `Dockerfile` + `docker-compose.yml`
+- GitHub Actions: `.github/workflows/release.yml` (not visible in this snapshot but exists)
+- Homebrew tap: Built into GoReleaser config
+
+To cut a release: Tag a commit (`v1.2.3`) and push - GoReleaser handles the rest.

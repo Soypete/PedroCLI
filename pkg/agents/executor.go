@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 
@@ -38,7 +37,7 @@ func (e *InferenceExecutor) Execute(ctx context.Context, initialPrompt string) e
 	for e.currentRound < e.maxRounds {
 		e.currentRound++
 
-		fmt.Fprintf(os.Stderr, "🔄 Inference round %d/%d\n", e.currentRound, e.maxRounds)
+		fmt.Printf("🔄 Inference round %d/%d\n", e.currentRound, e.maxRounds)
 
 		// Execute one inference round
 		response, err := e.agent.executeInference(ctx, e.contextMgr, currentPrompt)
@@ -52,7 +51,7 @@ func (e *InferenceExecutor) Execute(ctx context.Context, initialPrompt string) e
 		// Check if we're done (no more tool calls)
 		if len(toolCalls) == 0 {
 			if e.isDone(response.Text) {
-				fmt.Fprintln(os.Stderr, "✅ Task completed!")
+				fmt.Println("✅ Task completed!")
 				return nil
 			}
 
@@ -99,7 +98,7 @@ func (e *InferenceExecutor) Execute(ctx context.Context, initialPrompt string) e
 
 		// Check if any tool indicated completion
 		if e.hasCompletionSignal(results) {
-			fmt.Fprintln(os.Stderr, "✅ Task completed (indicated by tool result)")
+			fmt.Println("✅ Task completed (indicated by tool result)")
 			return nil
 		}
 	}
@@ -151,7 +150,7 @@ func (e *InferenceExecutor) executeTools(ctx context.Context, calls []llm.ToolCa
 	results := make([]*tools.Result, len(calls))
 
 	for i, call := range calls {
-		fmt.Fprintf(os.Stderr, "  🔧 Executing tool: %s\n", call.Name)
+		fmt.Printf("  🔧 Executing tool: %s\n", call.Name)
 
 		result, err := e.agent.executeTool(ctx, call.Name, call.Args)
 		if err != nil {
@@ -164,9 +163,9 @@ func (e *InferenceExecutor) executeTools(ctx context.Context, calls []llm.ToolCa
 		results[i] = result
 
 		if result.Success {
-			fmt.Fprintf(os.Stderr, "  ✅ Tool %s succeeded\n", call.Name)
+			fmt.Printf("  ✅ Tool %s succeeded\n", call.Name)
 		} else {
-			fmt.Fprintf(os.Stderr, "  ❌ Tool %s failed: %s\n", call.Name, result.Error)
+			fmt.Printf("  ❌ Tool %s failed: %s\n", call.Name, result.Error)
 		}
 	}
 
