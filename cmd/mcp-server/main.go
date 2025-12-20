@@ -75,6 +75,11 @@ func main() {
 	searchTool := tools.NewSearchTool(workDir)
 	navigateTool := tools.NewNavigateTool(workDir)
 
+	// Register job management tools
+	getJobStatusTool := tools.NewGetJobStatusTool(jobManager)
+	listJobsTool := tools.NewListJobsTool(jobManager)
+	cancelJobTool := tools.NewCancelJobTool(jobManager)
+
 	server.RegisterTool(fileTool)
 	server.RegisterTool(gitTool)
 	server.RegisterTool(bashTool)
@@ -82,6 +87,9 @@ func main() {
 	server.RegisterTool(codeEditTool)
 	server.RegisterTool(searchTool)
 	server.RegisterTool(navigateTool)
+	server.RegisterTool(getJobStatusTool)
+	server.RegisterTool(listJobsTool)
+	server.RegisterTool(cancelJobTool)
 
 	// Create and register agents with all tools
 	builderAgent := agents.NewBuilderAgent(cfg, backend, jobManager)

@@ -155,11 +155,21 @@ func (s *Server) handleToolCall(ctx context.Context, req *Request) {
 	}
 
 	// Send result
+	text := result.Output
+	if !result.Success && result.Error != "" {
+		// Include error message in text when operation fails
+		if text == "" {
+			text = result.Error
+		} else {
+			text = fmt.Sprintf("%s\nError: %s", text, result.Error)
+		}
+	}
+
 	s.sendResponse(req.ID, map[string]interface{}{
 		"content": []map[string]interface{}{
 			{
 				"type": "text",
-				"text": result.Output,
+				"text": text,
 			},
 		},
 		"isError": !result.Success,

@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/soypete/pedrocli/pkg/agents"
-	"github.com/soypete/pedrocli/pkg/jobs"
 	"github.com/soypete/pedrocli/pkg/tools"
 )
 
@@ -30,9 +29,9 @@ func (at *AgentTool) Description() string {
 	return at.agent.Description()
 }
 
-// Execute executes the agent and returns the result
+// Execute executes the agent and returns the job ID immediately (agent runs async)
 func (at *AgentTool) Execute(ctx context.Context, args map[string]interface{}) (*tools.Result, error) {
-	// Execute the agent
+	// Execute the agent (now runs asynchronously)
 	job, err := at.agent.Execute(ctx, args)
 	if err != nil {
 		return &tools.Result{
@@ -41,23 +40,12 @@ func (at *AgentTool) Execute(ctx context.Context, args map[string]interface{}) (
 		}, nil
 	}
 
-	// Convert job to tool result
-	output := ""
-	if job.Output != nil {
-		if reviewText, ok := job.Output["review_text"].(string); ok {
-			output = reviewText
-		} else if response, ok := job.Output["response"].(string); ok {
-			output = response
-		} else if diagnosis, ok := job.Output["diagnosis"].(string); ok {
-			output = diagnosis
-		}
-	}
-
-	success := job.Status == jobs.StatusCompleted
+	// Return job ID immediately so client can poll for status
+	output := "Job " + job.ID + " started and running in background. Use get_job_status to check progress."
 
 	return &tools.Result{
-		Success: success,
+		Success: true,
 		Output:  output,
-		Error:   job.Error,
+		Error:   "",
 	}, nil
 }

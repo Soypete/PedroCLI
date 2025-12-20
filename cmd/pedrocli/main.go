@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/soypete/pedrocli/pkg/config"
@@ -181,6 +183,64 @@ func findMCPServer() (string, error) {
 	return "", fmt.Errorf("pedrocli-server not found. Please build it with 'make build-server'")
 }
 
+// extractJobID extracts job ID from agent response text
+func extractJobID(text string) (string, error) {
+	// Look for "Job job-XXXXX started"
+	re := regexp.MustCompile(`Job (job-\d+)`)
+	matches := re.FindStringSubmatch(text)
+	if len(matches) < 2 {
+		return "", fmt.Errorf("could not extract job ID from response: %s", text)
+	}
+	return matches[1], nil
+}
+
+// pollJobStatus polls for job status until completion
+func pollJobStatus(ctx context.Context, client *mcp.Client, jobID string) error {
+	fmt.Printf("\n⏳ Job %s is running...\n", jobID)
+	fmt.Println("Checking status every 5 seconds. Press Ctrl+C to stop watching (job will continue in background).\n")
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	lastStatus := ""
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			// Call get_job_status
+			response, err := client.CallTool(ctx, "get_job_status", map[string]interface{}{
+				"job_id": jobID,
+			})
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Failed to check status: %v\n", err)
+				continue
+			}
+
+			// Extract status from response
+			if len(response.Content) > 0 && response.Content[0].Type == "text" {
+				status := response.Content[0].Text
+
+				// Only print if status changed
+				if status != lastStatus {
+					fmt.Println(status)
+					lastStatus = status
+				}
+
+				// Check if job is complete
+				if strings.Contains(strings.ToLower(status), "completed") {
+					fmt.Println("\n✅ Job completed successfully!")
+					return nil
+				}
+				if strings.Contains(strings.ToLower(status), "failed") {
+					fmt.Println("\n❌ Job failed!")
+					return fmt.Errorf("job failed")
+				}
+			}
+		}
+	}
+}
+
 func buildCommand(cfg *config.Config, args []string) {
 	fs := flag.NewFlagSet("build", flag.ExitOnError)
 	description := fs.String("description", "", "Feature description (required)")
@@ -198,6 +258,20 @@ func buildCommand(cfg *config.Config, args []string) {
 		fmt.Printf("Issue: %s\n", *issue)
 	}
 
+	// Build arguments for the tool
+	arguments := map[string]interface{}{
+		"description": *description,
+	}
+	if *issue != "" {
+		arguments["issue"] = *issue
+	}
+
+	// Call builder agent and poll for completion
+	callAgent(cfg, "builder", arguments)
+}
+
+// callAgent is a helper function to call an agent and poll for completion
+func callAgent(cfg *config.Config, agentName string, arguments map[string]interface{}) {
 	// Start MCP client
 	client, ctx, cancel, err := startMCPClient(cfg)
 	if err != nil {
@@ -207,32 +281,46 @@ func buildCommand(cfg *config.Config, args []string) {
 	defer cancel()
 	defer client.Stop()
 
-	// Build arguments for the tool
-	arguments := map[string]interface{}{
-		"description": *description,
-	}
-	if *issue != "" {
-		arguments["issue"] = *issue
-	}
-
-	// Call builder agent
-	fmt.Println("\nStarting build job...")
-	response, err := client.CallTool(ctx, "builder", arguments)
+	// Call agent
+	fmt.Printf("\nStarting %s job...\n", agentName)
+	response, err := client.CallTool(ctx, agentName, arguments)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to call builder: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Failed to call %s: %v\n", agentName, err)
 		os.Exit(1)
 	}
 
-	// Display response
+	// Extract job ID from response
 	if response.IsError {
-		fmt.Println("\n❌ Build failed:")
-	} else {
-		fmt.Println("\n✅ Build job started:")
+		fmt.Printf("\n❌ Failed to start %s job:\n", agentName)
+		for _, block := range response.Content {
+			if block.Type == "text" {
+				fmt.Println(block.Text)
+			}
+		}
+		os.Exit(1)
 	}
 
+	var jobID string
 	for _, block := range response.Content {
 		if block.Type == "text" {
 			fmt.Println(block.Text)
+			jobID, err = extractJobID(block.Text)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+			}
+		}
+	}
+
+	if jobID == "" {
+		fmt.Println("\n⚠️  Job started but couldn't extract job ID. Check 'pedrocli list' for status.")
+		return
+	}
+
+	// Poll for status
+	if err := pollJobStatus(ctx, client, jobID); err != nil {
+		if err == context.Canceled || err == context.DeadlineExceeded {
+			fmt.Println("\n⚠️  Stopped watching job. Job continues in background.")
+			fmt.Printf("Use 'pedrocli status %s' to check progress.\n", jobID)
 		}
 	}
 }
@@ -290,13 +378,13 @@ func debugCommand(cfg *config.Config, args []string) {
 
 	// Build arguments
 	arguments := map[string]interface{}{
-		"symptoms": *symptoms,
+		"description": *symptoms,  // Agent expects "description"
 	}
 	if *logs != "" {
-		arguments["logs"] = *logs
+		arguments["error_log"] = *logs  // Agent expects "error_log"
 	}
 
-	callMCPTool(cfg, "debugger", arguments)
+	callAgent(cfg, "debugger", arguments)
 }
 
 func reviewCommand(cfg *config.Config, args []string) {
@@ -324,7 +412,7 @@ func reviewCommand(cfg *config.Config, args []string) {
 		arguments["pr_number"] = *prNumber
 	}
 
-	callMCPTool(cfg, "reviewer", arguments)
+	callAgent(cfg, "reviewer", arguments)
 }
 
 func triageCommand(cfg *config.Config, args []string) {
@@ -349,10 +437,10 @@ func triageCommand(cfg *config.Config, args []string) {
 		"description": *description,
 	}
 	if *errorLogs != "" {
-		arguments["error_logs"] = *errorLogs
+		arguments["error_log"] = *errorLogs  // Agent expects "error_log"
 	}
 
-	callMCPTool(cfg, "triager", arguments)
+	callAgent(cfg, "triager", arguments)
 }
 
 func statusCommand(cfg *config.Config, args []string) {
