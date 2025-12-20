@@ -1,0 +1,175 @@
+# GoReleaser configuration for PedroCLI
+# https://goreleaser.com
+
+version: 2
+
+before:
+  hooks:
+    # You can remove this if you don't need go generate
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: pedrocli
+    binary: pedrocli
+    main: ./cmd/pedrocli
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+  - id: pedrocli-server
+    binary: pedrocli-server
+    main: ./cmd/mcp-server
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: pedrocli
+    format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE
+      - README.md
+      - .pedroceli.example.ollama.json
+      - .pedroceli.example.llamacpp.json
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - '^chore:'
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: 'Bug fixes'
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: 'Performance improvements'
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Others
+      order: 999
+
+brews:
+  - name: pedrocli
+    repository:
+      owner: Soypete
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    folder: Formula
+    homepage: https://github.com/Soypete/PedroCLI
+    description: Self-hosted autonomous coding agent - open-source Cursor alternative
+    license: MIT
+    test: |
+      system "#{bin}/pedrocli", "version"
+    install: |
+      bin.install "pedrocli"
+      bin.install "pedrocli-server"
+
+      # Install example configs
+      pkgshare.install ".pedroceli.example.ollama.json"
+      pkgshare.install ".pedroceli.example.llamacpp.json"
+
+nfpms:
+  - id: pedrocli
+    package_name: pedrocli
+    homepage: https://github.com/Soypete/PedroCLI
+    maintainer: Pete Engelbert <soypete@example.com>
+    description: Self-hosted autonomous coding agent
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+    contents:
+      - src: .pedroceli.example.ollama.json
+        dst: /usr/share/pedrocli/pedroceli.example.ollama.json
+      - src: .pedroceli.example.llamacpp.json
+        dst: /usr/share/pedrocli/pedroceli.example.llamacpp.json
+
+dockers:
+  - image_templates:
+      - "ghcr.io/soypete/pedrocli:{{ .Tag }}"
+      - "ghcr.io/soypete/pedrocli:v{{ .Major }}"
+      - "ghcr.io/soypete/pedrocli:v{{ .Major }}.{{ .Minor }}"
+      - "ghcr.io/soypete/pedrocli:latest"
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--platform=linux/amd64"
+
+release:
+  github:
+    owner: Soypete
+    name: PedroCLI
+  draft: false
+  prerelease: auto
+  name_template: "{{.ProjectName}} v{{.Version}}"
+  footer: |
+    ## Installation
+
+    ### Homebrew (Mac/Linux)
+    ```bash
+    brew install Soypete/tap/pedrocli
+    ```
+
+    ### Direct Download
+    Download the appropriate binary for your platform from the assets below.
+
+    ### Docker
+    ```bash
+    docker pull ghcr.io/soypete/pedrocli:{{ .Tag }}
+    ```
+
+    ---
+
+    **Full Changelog**: https://github.com/Soypete/PedroCLI/compare/{{ .PreviousTag }}...{{ .Tag }}
