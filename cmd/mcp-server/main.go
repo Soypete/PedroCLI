@@ -44,11 +44,9 @@ func main() {
 	}
 
 	// Create LLM backend
-	var backend llm.Backend
-	if cfg.Model.Type == "llamacpp" {
-		backend = llm.NewLlamaCppClient(cfg)
-	} else {
-		log.Fatalf("Unsupported model type: %s", cfg.Model.Type)
+	backend, err := llm.NewBackend(cfg)
+	if err != nil {
+		log.Fatalf("Failed to create LLM backend: %v", err)
 	}
 
 	// Create job manager
@@ -77,6 +75,11 @@ func main() {
 	searchTool := tools.NewSearchTool(workDir)
 	navigateTool := tools.NewNavigateTool(workDir)
 
+	// Register job management tools
+	getJobStatusTool := tools.NewGetJobStatusTool(jobManager)
+	listJobsTool := tools.NewListJobsTool(jobManager)
+	cancelJobTool := tools.NewCancelJobTool(jobManager)
+
 	server.RegisterTool(fileTool)
 	server.RegisterTool(gitTool)
 	server.RegisterTool(bashTool)
@@ -84,6 +87,9 @@ func main() {
 	server.RegisterTool(codeEditTool)
 	server.RegisterTool(searchTool)
 	server.RegisterTool(navigateTool)
+	server.RegisterTool(getJobStatusTool)
+	server.RegisterTool(listJobsTool)
+	server.RegisterTool(cancelJobTool)
 
 	// Create and register agents with all tools
 	builderAgent := agents.NewBuilderAgent(cfg, backend, jobManager)
@@ -128,8 +134,7 @@ func main() {
 	server.RegisterTool(mcp.NewAgentTool(debuggerAgent))
 	server.RegisterTool(mcp.NewAgentTool(triagerAgent))
 
-	// Start server
-	log.Println("PedroCLI MCP server starting...")
+	// Start server (no logging to avoid corrupting JSON-RPC on stdout)
 	if err := server.Run(context.Background()); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}

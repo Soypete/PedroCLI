@@ -1,136 +1,150 @@
 package llm
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
-	"os/exec"
+	"io"
+	"net/http"
 	"strings"
 
 	"github.com/soypete/pedrocli/pkg/config"
 )
 
-// OllamaBackend implements the Backend interface for Ollama
-type OllamaBackend struct {
+// OllamaClient implements the Backend interface for Ollama
+type OllamaClient struct {
+	baseURL     string
 	modelName   string
-	contextSize int
-	usableSize  int
 	temperature float64
 }
 
-// NewOllamaBackend creates a new Ollama backend
-func NewOllamaBackend(cfg *config.Config) *OllamaBackend {
-	usableSize := cfg.Model.UsableContext
-	if usableSize == 0 {
-		usableSize = int(float64(cfg.Model.ContextSize) * 0.75)
+// NewOllamaClient creates a new Ollama client
+func NewOllamaClient(cfg *config.Config) *OllamaClient {
+	baseURL := cfg.Model.OllamaURL
+	if baseURL == "" {
+		baseURL = "http://localhost:11434"
 	}
 
-	return &OllamaBackend{
+	return &OllamaClient{
+		baseURL:     baseURL,
 		modelName:   cfg.Model.ModelName,
-		contextSize: cfg.Model.ContextSize,
-		usableSize:  usableSize,
 		temperature: cfg.Model.Temperature,
 	}
 }
 
-// Infer performs one-shot inference using Ollama CLI
-func (o *OllamaBackend) Infer(ctx context.Context, req *InferenceRequest) (*InferenceResponse, error) {
+// Infer performs one-shot inference using Ollama
+func (o *OllamaClient) Infer(ctx context.Context, req *InferenceRequest) (*InferenceResponse, error) {
 	// Build the full prompt
 	fullPrompt := o.buildPrompt(req)
 
-	// Build ollama command
-	// Note: ollama run doesn't support all flags, so we keep it simple
-	args := []string{
-		"run",
-		o.modelName,
-		fullPrompt,
+	// Build Ollama API request
+	ollamaReq := map[string]interface{}{
+		"model":  o.modelName,
+		"prompt": fullPrompt,
+		"stream": false,
+		"options": map[string]interface{}{
+			"temperature": req.Temperature,
+		},
 	}
 
-	// Execute ollama
-	cmd := exec.CommandContext(ctx, "ollama", args...)
-	output, err := cmd.CombinedOutput()
+	// Marshal request
+	reqBody, err := json.Marshal(ollamaReq)
 	if err != nil {
-		return nil, fmt.Errorf("ollama execution failed: %w (output: %s)", err, string(output))
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Strip ANSI escape codes from output (ollama cli adds progress spinner)
-	cleanOutput := stripANSI(string(output))
+	// Create HTTP request
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", o.baseURL+"/api/generate", bytes.NewReader(reqBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
 
-	// Parse the output
+	// Execute request
+	client := &http.Client{}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("ollama API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check status code
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("ollama API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var ollamaResp struct {
+		Model     string `json:"model"`
+		Response  string `json:"response"`
+		Done      bool   `json:"done"`
+		Context   []int  `json:"context"`
+		TotalDuration int64  `json:"total_duration"`
+		LoadDuration  int64  `json:"load_duration"`
+		PromptEvalCount int `json:"prompt_eval_count"`
+		EvalCount     int `json:"eval_count"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&ollamaResp); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// Build response
 	response := &InferenceResponse{
-		Text:       strings.TrimSpace(cleanOutput),
+		Text:       strings.TrimSpace(ollamaResp.Response),
 		ToolCalls:  []ToolCall{}, // TODO: Parse tool calls from response
 		NextAction: "COMPLETE",    // TODO: Determine based on response
-		TokensUsed: EstimateTokens(cleanOutput),
+		TokensUsed: ollamaResp.PromptEvalCount + ollamaResp.EvalCount,
 	}
 
 	return response, nil
 }
 
-// stripANSI removes ANSI escape sequences from a string
-func stripANSI(str string) string {
-	// Simple ANSI strip - removes CSI sequences and other control codes
-	var result strings.Builder
-	inEscape := false
-	inCSI := false
-
-	for i := 0; i < len(str); i++ {
-		ch := str[i]
-
-		// Check for ESC character
-		if ch == '\x1b' || ch == '\x9b' {
-			inEscape = true
-			inCSI = false
-			continue
-		}
-
-		if inEscape {
-			// Check for CSI sequence start (ESC [)
-			if ch == '[' {
-				inCSI = true
-				continue
-			}
-
-			// End of escape sequence
-			if (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') {
-				inEscape = false
-				inCSI = false
-				continue
-			}
-
-			// Continue skipping escape sequence characters
-			if inCSI && (ch >= '0' && ch <= '9' || ch == ';' || ch == '?') {
-				continue
-			}
-
-			// Unknown escape sequence, end it
-			inEscape = false
-			inCSI = false
-			continue
-		}
-
-		// Skip other control characters except newlines, tabs
-		if ch < 32 && ch != '\n' && ch != '\t' && ch != '\r' {
-			continue
-		}
-
-		result.WriteByte(ch)
+// GetContextWindow returns the context window size for the model
+func (o *OllamaClient) GetContextWindow() int {
+	// Known model context windows
+	modelContexts := map[string]int{
+		"qwen2.5-coder:7b":      32768,
+		"qwen2.5-coder:14b":     32768,
+		"qwen2.5-coder:32b":     32768,
+		"qwen2.5-coder:72b":     131072,
+		"deepseek-coder:33b":    16384,
+		"codellama:7b":          16384,
+		"codellama:13b":         16384,
+		"codellama:34b":         16384,
+		"llama3.1:8b":           131072,
+		"llama3.1:70b":          131072,
+		"llama3.1:405b":         131072,
+		"llama3.2:1b":           131072,
+		"llama3.2:3b":           131072,
+		"mistral:7b":            32768,
+		"mixtral:8x7b":          32768,
+		"mixtral:8x22b":         65536,
+		"phi3:mini":             131072,
+		"phi3:medium":           131072,
+		"gemma:2b":              8192,
+		"gemma:7b":              8192,
+		"gemma2:9b":             8192,
+		"gemma2:27b":            8192,
 	}
 
-	return result.String()
+	if ctx, ok := modelContexts[o.modelName]; ok {
+		return ctx
+	}
+
+	// Default conservative estimate
+	return 8192
 }
 
-// GetContextWindow returns the context window size
-func (o *OllamaBackend) GetContextWindow() int {
-	return o.contextSize
-}
-
-// GetUsableContext returns the usable context size
-func (o *OllamaBackend) GetUsableContext() int {
-	return o.usableSize
+// GetUsableContext returns the usable context size (75% of total)
+func (o *OllamaClient) GetUsableContext() int {
+	return o.GetContextWindow() * 3 / 4
 }
 
 // buildPrompt builds the full prompt from system and user prompts
-func (o *OllamaBackend) buildPrompt(req *InferenceRequest) string {
+func (o *OllamaClient) buildPrompt(req *InferenceRequest) string {
 	var prompt strings.Builder
 
 	// System prompt

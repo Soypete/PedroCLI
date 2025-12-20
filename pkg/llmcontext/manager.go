@@ -38,7 +38,7 @@ type ToolResult struct {
 // NewManager creates a new context manager for a job
 func NewManager(jobID string, debugMode bool) (*Manager, error) {
 	timestamp := time.Now().Format("20060102-150405")
-	jobDir := filepath.Join("/tmp/pedrocli-jobs", fmt.Sprintf("%s-%s", jobID, timestamp))
+	jobDir := filepath.Join("/tmp/pedroceli-jobs", fmt.Sprintf("%s-%s", jobID, timestamp))
 
 	if err := os.MkdirAll(jobDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create job directory: %w", err)

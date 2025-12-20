@@ -20,9 +20,6 @@ type Agent interface {
 
 	// Execute executes the agent's task
 	Execute(ctx context.Context, input map[string]interface{}) (*jobs.Job, error)
-
-	// RegisterTool registers a tool with the agent
-	RegisterTool(tool tools.Tool)
 }
 
 // BaseAgent provides common functionality for all agents

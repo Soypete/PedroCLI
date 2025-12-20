@@ -1,17 +1,22 @@
-.PHONY: build build-mac build-linux build-all test install clean run-server
+.PHONY: build build-mac build-linux build-all test install clean run-server run-cli
 
-# Default build for current platform
+# Default build for current platform (CLI and server)
 build:
-	go build -o pedrocli cmd/cli/main.go
+	go build -o pedrocli cmd/pedrocli/main.go
+	go build -o pedrocli-server cmd/mcp-server/main.go
+
+# Build CLI only
+build-cli:
+	go build -o pedrocli cmd/pedrocli/main.go
 
 # Build for macOS
 build-mac:
-	GOOS=darwin GOARCH=arm64 go build -o pedrocli-mac-arm64 cmd/cli/main.go
-	GOOS=darwin GOARCH=amd64 go build -o pedrocli-mac-amd64 cmd/cli/main.go
+	GOOS=darwin GOARCH=arm64 go build -o pedrocli-mac-arm64 cmd/pedrocli/main.go
+	GOOS=darwin GOARCH=amd64 go build -o pedrocli-mac-amd64 cmd/pedrocli/main.go
 
 # Build for Linux (Ubuntu on Spark)
 build-linux:
-	GOOS=linux GOARCH=amd64 go build -o pedrocli-linux-amd64 cmd/cli/main.go
+	GOOS=linux GOARCH=amd64 go build -o pedrocli-linux-amd64 cmd/pedrocli/main.go
 
 # Build MCP server
 build-server:
@@ -31,7 +36,7 @@ test-coverage:
 
 # Install locally
 install:
-	go build -o pedrocli cmd/cli/main.go
+	go build -o pedrocli cmd/pedrocli/main.go
 	sudo mv pedrocli /usr/local/bin/
 
 # Clean build artifacts
@@ -43,8 +48,8 @@ run-server:
 	go run cmd/mcp-server/main.go
 
 # Run CLI
-run:
-	go run cmd/cli/main.go
+run-cli:
+	go run cmd/pedrocli/main.go
 
 # Format code
 fmt:

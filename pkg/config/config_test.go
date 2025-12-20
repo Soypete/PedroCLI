@@ -203,8 +203,8 @@ func TestSetDefaults(t *testing.T) {
 				if c.Git.Remote != "origin" {
 					t.Errorf("Git.Remote = %v, want origin", c.Git.Remote)
 				}
-				if c.Git.BranchPrefix != "pedrocli/" {
-					t.Errorf("Git.BranchPrefix = %v, want pedrocli/", c.Git.BranchPrefix)
+				if c.Git.BranchPrefix != "pedroceli/" {
+					t.Errorf("Git.BranchPrefix = %v, want pedroceli/", c.Git.BranchPrefix)
 				}
 				if c.Limits.MaxTaskDurationMinutes != 30 {
 					t.Errorf("Limits.MaxTaskDurationMinutes = %v, want 30", c.Limits.MaxTaskDurationMinutes)
@@ -468,9 +468,7 @@ func TestLoadDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get current directory: %v", err)
 	}
-	defer func() {
-		_ = os.Chdir(origDir)
-	}()
+	defer os.Chdir(origDir)
 
 	// Test 1: No config file exists
 	tmpDir := t.TempDir()

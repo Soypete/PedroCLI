@@ -54,7 +54,7 @@ func NewTriagerAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manag
 	}
 }
 
-// Execute executes the triager agent
+// Execute executes the triager agent asynchronously
 func (t *TriagerAgent) Execute(ctx context.Context, input map[string]interface{}) (*jobs.Job, error) {
 	// Get issue description
 	description, ok := input["description"].(string)
@@ -69,44 +69,44 @@ func (t *TriagerAgent) Execute(ctx context.Context, input map[string]interface{}
 	}
 
 	// Update status to running
-	if err := t.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil); err != nil {
-		return job, err
-	}
+	t.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
 
-	// Create context manager
-	contextMgr, err := llmcontext.NewManager(job.ID, t.config.Debug.Enabled)
-	if err != nil {
-		_ = t.jobManager.Update(job.ID, jobs.StatusFailed, nil, err) // Ignore error during error handling
-		return job, err
-	}
-	defer func() {
-		_ = contextMgr.Cleanup()
+	// Run the inference loop in background with its own context
+	go func() {
+		// Use background context so it doesn't get cancelled when Execute() returns
+		bgCtx := context.Background()
+
+		// Create context manager
+		contextMgr, err := llmcontext.NewManager(job.ID, t.config.Debug.Enabled)
+		if err != nil {
+			t.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			return
+		}
+		defer contextMgr.Cleanup()
+
+		// Build triage prompt
+		userPrompt := t.buildTriagePrompt(input)
+
+		// Create inference executor
+		executor := NewInferenceExecutor(t.BaseAgent, contextMgr)
+
+		// Execute the inference loop
+		err = executor.Execute(bgCtx, userPrompt)
+		if err != nil {
+			t.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			return
+		}
+
+		// Update job with results
+		output := map[string]interface{}{
+			"job_dir": contextMgr.GetJobDir(),
+			"status":  "completed",
+		}
+
+		t.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
 	}()
 
-	// Build triage prompt
-	userPrompt := t.buildTriagePrompt(input)
-
-	// Execute inference
-	response, err := t.executeInference(ctx, contextMgr, userPrompt)
-	if err != nil {
-		_ = t.jobManager.Update(job.ID, jobs.StatusFailed, nil, err) // Ignore error during error handling
-		return job, err
-	}
-
-	// Parse triage report from response
-	// In a full implementation, this would parse structured data
-	triageReport := response.Text
-
-	// Update job with results
-	output := map[string]interface{}{
-		"triage_report": triageReport,
-		"status":        "completed",
-	}
-
-	if err := t.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil); err != nil {
-		return job, err
-	}
-
+	// Return immediately with the running job
 	return job, nil
 }
 

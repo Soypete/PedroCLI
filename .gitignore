@@ -3,11 +3,9 @@ coverage.out
 *.coverprofile
 
 # Build artifacts
-/pedrocli-*
+/pedroceli-*
 /pedrocli
-/pedrocli-server
-/mcp-server
-/web-server
+/pedrocli-*
 *.exe
 *.exe~
 *.dll
@@ -29,7 +27,7 @@ coverage.out
 .DS_Store
 
 # Job state directory
-/tmp/pedrocli-jobs/
+/tmp/pedroceli-jobs/
 
 # Config files (don't commit actual configs, only examples)
-.pedrocli.json
+.pedroceli.json

@@ -33,11 +33,7 @@ func TestNewManager(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewManager() error = %v", err)
 			}
-			defer func() {
-		if err := mgr.Cleanup(); err != nil {
-			t.Errorf("Cleanup() error = %v", err)
-		}
-	}()
+			defer mgr.Cleanup()
 
 			if mgr.jobID != tt.jobID {
 				t.Errorf("jobID = %v, want %v", mgr.jobID, tt.jobID)
@@ -65,11 +61,7 @@ func TestGetJobDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
-	defer func() {
-		if err := mgr.Cleanup(); err != nil {
-			t.Errorf("Cleanup() error = %v", err)
-		}
-	}()
+	defer mgr.Cleanup()
 
 	jobDir := mgr.GetJobDir()
 	if jobDir == "" {
@@ -86,11 +78,7 @@ func TestSavePrompt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
-	defer func() {
-		if err := mgr.Cleanup(); err != nil {
-			t.Errorf("Cleanup() error = %v", err)
-		}
-	}()
+	defer mgr.Cleanup()
 
 	tests := []struct {
 		name   string
@@ -141,11 +129,7 @@ func TestSaveResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
-	defer func() {
-		if err := mgr.Cleanup(); err != nil {
-			t.Errorf("Cleanup() error = %v", err)
-		}
-	}()
+	defer mgr.Cleanup()
 
 	response := "This is a test response"
 	err = mgr.SaveResponse(response)
@@ -170,11 +154,7 @@ func TestSaveToolCalls(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
-	defer func() {
-		if err := mgr.Cleanup(); err != nil {
-			t.Errorf("Cleanup() error = %v", err)
-		}
-	}()
+	defer mgr.Cleanup()
 
 	calls := []ToolCall{
 		{
@@ -224,11 +204,7 @@ func TestSaveToolResults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
-	defer func() {
-		if err := mgr.Cleanup(); err != nil {
-			t.Errorf("Cleanup() error = %v", err)
-		}
-	}()
+	defer mgr.Cleanup()
 
 	results := []ToolResult{
 		{
@@ -271,25 +247,13 @@ func TestGetHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
-	defer func() {
-		if err := mgr.Cleanup(); err != nil {
-			t.Errorf("Cleanup() error = %v", err)
-		}
-	}()
+	defer mgr.Cleanup()
 
 	// Save some prompts and responses
-	if err := mgr.SavePrompt("First prompt"); err != nil {
-		t.Fatalf("SavePrompt() error = %v", err)
-	}
-	if err := mgr.SaveResponse("First response"); err != nil {
-		t.Fatalf("SaveResponse() error = %v", err)
-	}
-	if err := mgr.SavePrompt("Second prompt"); err != nil {
-		t.Fatalf("SavePrompt() error = %v", err)
-	}
-	if err := mgr.SaveResponse("Second response"); err != nil {
-		t.Fatalf("SaveResponse() error = %v", err)
-	}
+	mgr.SavePrompt("First prompt")
+	mgr.SaveResponse("First response")
+	mgr.SavePrompt("Second prompt")
+	mgr.SaveResponse("Second response")
 
 	history, err := mgr.GetHistory()
 	if err != nil {
@@ -321,22 +285,14 @@ func TestGetHistoryWithinBudget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
-	defer func() {
-		if err := mgr.Cleanup(); err != nil {
-			t.Errorf("Cleanup() error = %v", err)
-		}
-	}()
+	defer mgr.Cleanup()
 
 	// Save multiple prompts and responses
 	for i := 1; i <= 5; i++ {
 		prompt := strings.Repeat("a", 100) // 100 chars ≈ 25 tokens
 		response := strings.Repeat("b", 100)
-		if err := mgr.SavePrompt(prompt); err != nil {
-			t.Fatalf("SavePrompt() error = %v", err)
-		}
-		if err := mgr.SaveResponse(response); err != nil {
-			t.Fatalf("SaveResponse() error = %v", err)
-		}
+		mgr.SavePrompt(prompt)
+		mgr.SaveResponse(response)
 	}
 
 	tests := []struct {
@@ -386,28 +342,18 @@ func TestCompactHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
-	defer func() {
-		if err := mgr.Cleanup(); err != nil {
-			t.Errorf("Cleanup() error = %v", err)
-		}
-	}()
+	defer mgr.Cleanup()
 
 	// Save multiple prompts with tool calls
 	for i := 1; i <= 5; i++ {
-		if err := mgr.SavePrompt(strings.Repeat("prompt", 10)); err != nil {
-			t.Fatalf("SavePrompt() error = %v", err)
-		}
-		if err := mgr.SaveResponse(strings.Repeat("response", 10)); err != nil {
-			t.Fatalf("SaveResponse() error = %v", err)
-		}
+		mgr.SavePrompt(strings.Repeat("prompt", 10))
+		mgr.SaveResponse(strings.Repeat("response", 10))
 
 		// Save tool calls and results for summarization
 		calls := []ToolCall{
 			{Name: "file", Args: map[string]interface{}{"action": "read"}},
 		}
-		if err := mgr.SaveToolCalls(calls); err != nil {
-			t.Fatalf("SaveToolCalls() error = %v", err)
-		}
+		mgr.SaveToolCalls(calls)
 
 		results := []ToolResult{
 			{
@@ -416,9 +362,7 @@ func TestCompactHistory(t *testing.T) {
 				ModifiedFiles: []string{"/tmp/test.txt"},
 			},
 		}
-		if err := mgr.SaveToolResults(results); err != nil {
-			t.Fatalf("SaveToolResults() error = %v", err)
-		}
+		mgr.SaveToolResults(results)
 	}
 
 	compact, err := mgr.CompactHistory(2)
@@ -447,19 +391,11 @@ func TestCompactHistoryFewFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
-	defer func() {
-		if err := mgr.Cleanup(); err != nil {
-			t.Errorf("Cleanup() error = %v", err)
-		}
-	}()
+	defer mgr.Cleanup()
 
 	// Save only 2 prompts
-	if err := mgr.SavePrompt("First prompt"); err != nil {
-		t.Fatalf("SavePrompt() error = %v", err)
-	}
-	if err := mgr.SaveResponse("First response"); err != nil {
-		t.Fatalf("SaveResponse() error = %v", err)
-	}
+	mgr.SavePrompt("First prompt")
+	mgr.SaveResponse("First response")
 
 	// Request keeping 2 recent files - should just return full history
 	compact, err := mgr.CompactHistory(2)
@@ -508,9 +444,7 @@ func TestCleanupDebugMode(t *testing.T) {
 	jobDir := mgr.jobDir
 
 	// Save something
-	if err := mgr.SavePrompt("test"); err != nil {
-		t.Fatalf("SavePrompt() error = %v", err)
-	}
+	mgr.SavePrompt("test")
 
 	// Cleanup (should keep files in debug mode)
 	err = mgr.Cleanup()
@@ -524,7 +458,7 @@ func TestCleanupDebugMode(t *testing.T) {
 	}
 
 	// Manual cleanup
-	_ = os.RemoveAll(jobDir)
+	os.RemoveAll(jobDir)
 }
 
 func TestCounterIncrement(t *testing.T) {
@@ -532,40 +466,28 @@ func TestCounterIncrement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
-	defer func() {
-		if err := mgr.Cleanup(); err != nil {
-			t.Errorf("Cleanup() error = %v", err)
-		}
-	}()
+	defer mgr.Cleanup()
 
 	if mgr.counter != 0 {
 		t.Errorf("Initial counter = %d, want 0", mgr.counter)
 	}
 
-	if err := mgr.SavePrompt("test"); err != nil {
-		t.Fatalf("SavePrompt() error = %v", err)
-	}
+	mgr.SavePrompt("test")
 	if mgr.counter != 1 {
 		t.Errorf("Counter after SavePrompt = %d, want 1", mgr.counter)
 	}
 
-	if err := mgr.SaveResponse("test"); err != nil {
-		t.Fatalf("SaveResponse() error = %v", err)
-	}
+	mgr.SaveResponse("test")
 	if mgr.counter != 2 {
 		t.Errorf("Counter after SaveResponse = %d, want 2", mgr.counter)
 	}
 
-	if err := mgr.SaveToolCalls([]ToolCall{}); err != nil {
-		t.Fatalf("SaveToolCalls() error = %v", err)
-	}
+	mgr.SaveToolCalls([]ToolCall{})
 	if mgr.counter != 3 {
 		t.Errorf("Counter after SaveToolCalls = %d, want 3", mgr.counter)
 	}
 
-	if err := mgr.SaveToolResults([]ToolResult{}); err != nil {
-		t.Fatalf("SaveToolResults() error = %v", err)
-	}
+	mgr.SaveToolResults([]ToolResult{})
 	if mgr.counter != 4 {
 		t.Errorf("Counter after SaveToolResults = %d, want 4", mgr.counter)
 	}

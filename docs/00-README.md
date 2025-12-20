@@ -1,6 +1,6 @@
-# PedroCLI Specifications
+# Pedroceli Specifications
 
-Complete implementation specifications for the PedroCLI autonomous coding agent.
+Complete implementation specifications for the Pedroceli autonomous coding agent.
 
 ## 📋 Quick Navigation
 
@@ -40,7 +40,7 @@ Complete implementation specifications for the PedroCLI autonomous coding agent.
 - [Context Management](component-context.md) - File-based context & compaction
 - [Platform Compatibility](component-platform.md) - Mac/Linux cross-platform
 - [Dependency Checking](component-init.md) - Pre-flight validation
-- [Configuration](component-config.md) - .pedrocli.json spec
+- [Configuration](component-config.md) - .pedroceli.json spec
 - [Metrics & Observability](component-metrics.md) - Prometheus metrics
 
 ### Reference
@@ -91,11 +91,11 @@ Complete implementation specifications for the PedroCLI autonomous coding agent.
 ## 📦 Project Structure
 
 ```
-pedrocli/
+pedroceli/
 ├── cmd/
-│   ├── mcp-server/        # MCP server (Phase 1)
-│   ├── cli/               # CLI client (Phase 2)
-│   └── web-server/        # Web server (Phase 4)
+│   ├── mcp-server.go      # MCP server (Phase 1)
+│   ├── cli.go             # CLI client (Phase 2)
+│   └── web.go             # Web server (Phase 4)
 ├── pkg/
 │   ├── mcp/               # MCP protocol
 │   ├── agents/            # 4 agents
@@ -112,7 +112,7 @@ pedrocli/
 │   ├── static/
 │   └── api/
 ├── docs/                  # THIS FOLDER (all specs)
-├── .pedrocli.json
+├── .pedroceli.json
 ├── Makefile
 └── README.md
 ```
@@ -152,7 +152,7 @@ For Claude Code implementing this:
   },
   "git": {
     "always_draft_pr": true,
-    "branch_prefix": "pedrocli/"
+    "branch_prefix": "pedroceli/"
   },
   "debug": {
     "enabled": false,
@@ -166,16 +166,16 @@ For Claude Code implementing this:
 ### CLI
 ```bash
 # Build feature
-pedrocli build --description "Add rate limiting"
+pedroceli build --description "Add rate limiting"
 
 # Debug issue
-pedrocli debug --symptoms "Bot crashes on startup"
+pedroceli debug --symptoms "Bot crashes on startup"
 
 # Review PR
-pedrocli review --branch feature/rate-limiting
+pedroceli review --branch feature/rate-limiting
 
 # Check status
-pedrocli status
+pedroceli status
 ```
 
 ### Web UI

@@ -79,7 +79,7 @@ func (c *Client) Stop() error {
 
 	// Close stdin to signal shutdown
 	if c.stdin != nil {
-		_ = c.stdin.Close() // Ignore error on stop
+		c.stdin.Close()
 	}
 
 	// Wait for process to exit
