@@ -197,7 +197,7 @@ func extractJobID(text string) (string, error) {
 // pollJobStatus polls for job status until completion
 func pollJobStatus(ctx context.Context, client *mcp.Client, jobID string) error {
 	fmt.Printf("\n⏳ Job %s is running...\n", jobID)
-	fmt.Println("Checking status every 5 seconds. Press Ctrl+C to stop watching (job will continue in background).\n")
+	fmt.Println("Checking status every 5 seconds. Press Ctrl+C to stop watching (job will continue in background).")
 
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
