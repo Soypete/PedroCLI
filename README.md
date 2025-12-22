@@ -1,5 +1,10 @@
 # PedroCLI
 
+[![CI](https://github.com/Soypete/PedroCLI/actions/workflows/ci.yml/badge.svg)](https://github.com/Soypete/PedroCLI/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/Soypete/PedroCLI/branch/main/graph/badge.svg)](https://codecov.io/gh/Soypete/PedroCLI)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Soypete/PedroCLI)](https://goreportcard.com/report/github.com/Soypete/PedroCLI)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 **Self-hosted autonomous coding agent - an open-source alternative to Cursor's background jobs using your own models**
 
 PedroCLI is a command-line tool that runs autonomous coding agents using self-hosted LLMs (via llama.cpp or Ollama). Think of it as Cursor's background job system, but fully open-source and running on your own hardware with your own models.
