@@ -127,11 +127,11 @@ func TestEditLines(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	tests := []struct {
-		name         string
-		initialContent string
-		args         map[string]interface{}
+		name            string
+		initialContent  string
+		args            map[string]interface{}
 		expectedContent string
-		wantError    bool
+		wantError       bool
 	}{
 		{
 			name: "edit single line",
@@ -324,8 +324,8 @@ line 4`,
 			initialContent: `line 1
 line 2
 line 3`,
-			startLine: 1,
-			endLine:   2,
+			startLine:       1,
+			endLine:         2,
 			expectedContent: `line 3`,
 		},
 	}

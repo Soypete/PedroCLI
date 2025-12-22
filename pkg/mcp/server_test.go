@@ -226,7 +226,7 @@ func TestHandleToolCallToolNotFound(t *testing.T) {
 		ID:      4,
 		Method:  "tools/call",
 		Params: map[string]interface{}{
-			"name": "nonexistent",
+			"name":      "nonexistent",
 			"arguments": map[string]interface{}{},
 		},
 	}

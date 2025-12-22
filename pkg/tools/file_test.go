@@ -28,12 +28,12 @@ func TestFileToolRead(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		name      string
-		setup     func(string) string // Returns file path
-		args      map[string]interface{}
-		wantErr   bool
-		wantMsg   string
-		validate  func(*testing.T, *Result)
+		name     string
+		setup    func(string) string // Returns file path
+		args     map[string]interface{}
+		wantErr  bool
+		wantMsg  string
+		validate func(*testing.T, *Result)
 	}{
 		{
 			name: "read valid file",

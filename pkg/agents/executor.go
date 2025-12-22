@@ -15,18 +15,18 @@ import (
 
 // InferenceExecutor handles the inference loop
 type InferenceExecutor struct {
-	agent       *BaseAgent
-	contextMgr  *llmcontext.Manager
-	maxRounds   int
+	agent        *BaseAgent
+	contextMgr   *llmcontext.Manager
+	maxRounds    int
 	currentRound int
 }
 
 // NewInferenceExecutor creates a new inference executor
 func NewInferenceExecutor(agent *BaseAgent, contextMgr *llmcontext.Manager) *InferenceExecutor {
 	return &InferenceExecutor{
-		agent:       agent,
-		contextMgr:  contextMgr,
-		maxRounds:   agent.config.Limits.MaxInferenceRuns,
+		agent:        agent,
+		contextMgr:   contextMgr,
+		maxRounds:    agent.config.Limits.MaxInferenceRuns,
 		currentRound: 0,
 	}
 }

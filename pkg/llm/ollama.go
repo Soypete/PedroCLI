@@ -77,14 +77,14 @@ func (o *OllamaClient) Infer(ctx context.Context, req *InferenceRequest) (*Infer
 
 	// Parse response
 	var ollamaResp struct {
-		Model     string `json:"model"`
-		Response  string `json:"response"`
-		Done      bool   `json:"done"`
-		Context   []int  `json:"context"`
-		TotalDuration int64  `json:"total_duration"`
-		LoadDuration  int64  `json:"load_duration"`
-		PromptEvalCount int `json:"prompt_eval_count"`
-		EvalCount     int `json:"eval_count"`
+		Model           string `json:"model"`
+		Response        string `json:"response"`
+		Done            bool   `json:"done"`
+		Context         []int  `json:"context"`
+		TotalDuration   int64  `json:"total_duration"`
+		LoadDuration    int64  `json:"load_duration"`
+		PromptEvalCount int    `json:"prompt_eval_count"`
+		EvalCount       int    `json:"eval_count"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&ollamaResp); err != nil {
@@ -95,7 +95,7 @@ func (o *OllamaClient) Infer(ctx context.Context, req *InferenceRequest) (*Infer
 	response := &InferenceResponse{
 		Text:       strings.TrimSpace(ollamaResp.Response),
 		ToolCalls:  []ToolCall{}, // TODO: Parse tool calls from response
-		NextAction: "COMPLETE",    // TODO: Determine based on response
+		NextAction: "COMPLETE",   // TODO: Determine based on response
 		TokensUsed: ollamaResp.PromptEvalCount + ollamaResp.EvalCount,
 	}
 
@@ -106,28 +106,28 @@ func (o *OllamaClient) Infer(ctx context.Context, req *InferenceRequest) (*Infer
 func (o *OllamaClient) GetContextWindow() int {
 	// Known model context windows
 	modelContexts := map[string]int{
-		"qwen2.5-coder:7b":      32768,
-		"qwen2.5-coder:14b":     32768,
-		"qwen2.5-coder:32b":     32768,
-		"qwen2.5-coder:72b":     131072,
-		"deepseek-coder:33b":    16384,
-		"codellama:7b":          16384,
-		"codellama:13b":         16384,
-		"codellama:34b":         16384,
-		"llama3.1:8b":           131072,
-		"llama3.1:70b":          131072,
-		"llama3.1:405b":         131072,
-		"llama3.2:1b":           131072,
-		"llama3.2:3b":           131072,
-		"mistral:7b":            32768,
-		"mixtral:8x7b":          32768,
-		"mixtral:8x22b":         65536,
-		"phi3:mini":             131072,
-		"phi3:medium":           131072,
-		"gemma:2b":              8192,
-		"gemma:7b":              8192,
-		"gemma2:9b":             8192,
-		"gemma2:27b":            8192,
+		"qwen2.5-coder:7b":   32768,
+		"qwen2.5-coder:14b":  32768,
+		"qwen2.5-coder:32b":  32768,
+		"qwen2.5-coder:72b":  131072,
+		"deepseek-coder:33b": 16384,
+		"codellama:7b":       16384,
+		"codellama:13b":      16384,
+		"codellama:34b":      16384,
+		"llama3.1:8b":        131072,
+		"llama3.1:70b":       131072,
+		"llama3.1:405b":      131072,
+		"llama3.2:1b":        131072,
+		"llama3.2:3b":        131072,
+		"mistral:7b":         32768,
+		"mixtral:8x7b":       32768,
+		"mixtral:8x22b":      65536,
+		"phi3:mini":          131072,
+		"phi3:medium":        131072,
+		"gemma:2b":           8192,
+		"gemma:7b":           8192,
+		"gemma2:9b":          8192,
+		"gemma2:27b":         8192,
 	}
 
 	if ctx, ok := modelContexts[o.modelName]; ok {
