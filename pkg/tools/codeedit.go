@@ -1,22 +1,32 @@
 package tools
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"os"
-	"strings"
+	"path/filepath"
+
+	"github.com/soypete/pedrocli/pkg/fileio"
 )
 
 // CodeEditTool provides precise line-based code editing
 type CodeEditTool struct {
 	maxFileSize int64
+	fs          *fileio.FileSystem
 }
 
 // NewCodeEditTool creates a new code edit tool
 func NewCodeEditTool() *CodeEditTool {
 	return &CodeEditTool{
 		maxFileSize: 10 * 1024 * 1024, // 10MB max
+		fs:          fileio.NewFileSystem(),
+	}
+}
+
+// NewCodeEditToolWithFileSystem creates a new code edit tool with a custom FileSystem
+func NewCodeEditToolWithFileSystem(fs *fileio.FileSystem) *CodeEditTool {
+	return &CodeEditTool{
+		maxFileSize: 10 * 1024 * 1024,
+		fs:          fs,
 	}
 }
 
@@ -71,43 +81,15 @@ func (c *CodeEditTool) getLines(args map[string]interface{}) (*Result, error) {
 	start := int(startLine)
 	end := int(endLine)
 
-	if start < 1 {
-		return &Result{Success: false, Error: "start_line must be >= 1"}, nil
-	}
-
-	if end < start {
-		return &Result{Success: false, Error: "end_line must be >= start_line"}, nil
-	}
-
-	// Read file
-	file, err := os.Open(path)
+	// Use fileio to read lines
+	content, err := c.fs.ReadLinesString(path, start, end)
 	if err != nil {
-		return &Result{Success: false, Error: fmt.Sprintf("failed to open file: %s", err)}, nil
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	var lines []string
-	lineNum := 1
-
-	for scanner.Scan() {
-		if lineNum >= start && lineNum <= end {
-			lines = append(lines, scanner.Text())
-		}
-		if lineNum > end {
-			break
-		}
-		lineNum++
-	}
-
-	if err := scanner.Err(); err != nil {
 		return &Result{Success: false, Error: err.Error()}, nil
 	}
 
-	output := strings.Join(lines, "\n")
 	return &Result{
 		Success: true,
-		Output:  output,
+		Output:  content,
 	}, nil
 }
 
@@ -136,47 +118,16 @@ func (c *CodeEditTool) editLines(args map[string]interface{}) (*Result, error) {
 	start := int(startLine)
 	end := int(endLine)
 
-	if start < 1 {
-		return &Result{Success: false, Error: "start_line must be >= 1"}, nil
-	}
-
-	if end < start {
-		return &Result{Success: false, Error: "end_line must be >= start_line"}, nil
-	}
-
-	// Read all lines
-	content, err := os.ReadFile(path)
-	if err != nil {
+	// Use fileio to edit lines
+	if err := c.fs.EditLines(path, start, end, newContent); err != nil {
 		return &Result{Success: false, Error: err.Error()}, nil
 	}
 
-	lines := strings.Split(string(content), "\n")
-
-	// Validate line numbers
-	if start > len(lines) {
-		return &Result{Success: false, Error: fmt.Sprintf("start_line %d exceeds file length %d", start, len(lines))}, nil
-	}
-
-	if end > len(lines) {
-		end = len(lines)
-	}
-
-	// Build new file content
-	var newLines []string
-	newLines = append(newLines, lines[:start-1]...)        // Lines before edit
-	newLines = append(newLines, strings.Split(newContent, "\n")...) // New content
-	newLines = append(newLines, lines[end:]...)            // Lines after edit
-
-	// Write back
-	newFileContent := strings.Join(newLines, "\n")
-	if err := os.WriteFile(path, []byte(newFileContent), 0644); err != nil {
-		return &Result{Success: false, Error: err.Error()}, nil
-	}
-
+	absPath, _ := filepath.Abs(path)
 	return &Result{
 		Success:       true,
 		Output:        fmt.Sprintf("Edited lines %d-%d in %s", start, end, path),
-		ModifiedFiles: []string{path},
+		ModifiedFiles: []string{absPath},
 	}, nil
 }
 
@@ -199,41 +150,16 @@ func (c *CodeEditTool) insertAtLine(args map[string]interface{}) (*Result, error
 
 	line := int(lineNum)
 
-	if line < 1 {
-		return &Result{Success: false, Error: "line_number must be >= 1"}, nil
-	}
-
-	// Read all lines
-	fileContent, err := os.ReadFile(path)
-	if err != nil {
+	// Use fileio to insert at line
+	if err := c.fs.InsertAtLine(path, line, content); err != nil {
 		return &Result{Success: false, Error: err.Error()}, nil
 	}
 
-	lines := strings.Split(string(fileContent), "\n")
-
-	// Insert content
-	var newLines []string
-	if line > len(lines) {
-		// Append at end
-		newLines = append(newLines, lines...)
-		newLines = append(newLines, strings.Split(content, "\n")...)
-	} else {
-		// Insert at position
-		newLines = append(newLines, lines[:line-1]...)
-		newLines = append(newLines, strings.Split(content, "\n")...)
-		newLines = append(newLines, lines[line-1:]...)
-	}
-
-	// Write back
-	newFileContent := strings.Join(newLines, "\n")
-	if err := os.WriteFile(path, []byte(newFileContent), 0644); err != nil {
-		return &Result{Success: false, Error: err.Error()}, nil
-	}
-
+	absPath, _ := filepath.Abs(path)
 	return &Result{
 		Success:       true,
 		Output:        fmt.Sprintf("Inserted content at line %d in %s", line, path),
-		ModifiedFiles: []string{path},
+		ModifiedFiles: []string{absPath},
 	}, nil
 }
 
@@ -257,45 +183,20 @@ func (c *CodeEditTool) deleteLines(args map[string]interface{}) (*Result, error)
 	start := int(startLine)
 	end := int(endLine)
 
-	if start < 1 {
-		return &Result{Success: false, Error: "start_line must be >= 1"}, nil
-	}
-
-	if end < start {
-		return &Result{Success: false, Error: "end_line must be >= start_line"}, nil
-	}
-
-	// Read all lines
-	content, err := os.ReadFile(path)
-	if err != nil {
+	// Use fileio to delete lines
+	if err := c.fs.DeleteLines(path, start, end); err != nil {
 		return &Result{Success: false, Error: err.Error()}, nil
 	}
 
-	lines := strings.Split(string(content), "\n")
-
-	// Validate
-	if start > len(lines) {
-		return &Result{Success: false, Error: fmt.Sprintf("start_line %d exceeds file length %d", start, len(lines))}, nil
-	}
-
-	if end > len(lines) {
-		end = len(lines)
-	}
-
-	// Build new content
-	var newLines []string
-	newLines = append(newLines, lines[:start-1]...) // Lines before deletion
-	newLines = append(newLines, lines[end:]...)     // Lines after deletion
-
-	// Write back
-	newFileContent := strings.Join(newLines, "\n")
-	if err := os.WriteFile(path, []byte(newFileContent), 0644); err != nil {
-		return &Result{Success: false, Error: err.Error()}, nil
-	}
-
+	absPath, _ := filepath.Abs(path)
 	return &Result{
 		Success:       true,
 		Output:        fmt.Sprintf("Deleted lines %d-%d in %s", start, end, path),
-		ModifiedFiles: []string{path},
+		ModifiedFiles: []string{absPath},
 	}, nil
+}
+
+// GetFileSystem returns the underlying FileSystem for advanced operations
+func (c *CodeEditTool) GetFileSystem() *fileio.FileSystem {
+	return c.fs
 }

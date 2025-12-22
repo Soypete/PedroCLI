@@ -3,20 +3,30 @@ package tools
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
-	"strings"
+
+	"github.com/soypete/pedrocli/pkg/fileio"
 )
 
 // FileTool provides cross-platform file operations using pure Go (no sed/awk)
 type FileTool struct {
 	maxFileSize int64
+	fs          *fileio.FileSystem
 }
 
 // NewFileTool creates a new file tool
 func NewFileTool() *FileTool {
 	return &FileTool{
 		maxFileSize: 10 * 1024 * 1024, // 10MB max
+		fs:          fileio.NewFileSystem(),
+	}
+}
+
+// NewFileToolWithFileSystem creates a new file tool with a custom FileSystem
+func NewFileToolWithFileSystem(fs *fileio.FileSystem) *FileTool {
+	return &FileTool{
+		maxFileSize: 10 * 1024 * 1024,
+		fs:          fs,
 	}
 }
 
@@ -60,24 +70,14 @@ func (f *FileTool) read(args map[string]interface{}) (*Result, error) {
 		return &Result{Success: false, Error: "missing 'path' parameter"}, nil
 	}
 
-	// Check file size
-	info, err := os.Stat(path)
-	if err != nil {
-		return &Result{Success: false, Error: fmt.Sprintf("file not found: %s", path)}, nil
-	}
-
-	if info.Size() > f.maxFileSize {
-		return &Result{Success: false, Error: fmt.Sprintf("file too large: %d bytes (max %d)", info.Size(), f.maxFileSize)}, nil
-	}
-
-	content, err := os.ReadFile(path)
+	content, err := f.fs.ReadFileString(path)
 	if err != nil {
 		return &Result{Success: false, Error: err.Error()}, nil
 	}
 
 	return &Result{
 		Success: true,
-		Output:  string(content),
+		Output:  content,
 	}, nil
 }
 
@@ -93,21 +93,16 @@ func (f *FileTool) write(args map[string]interface{}) (*Result, error) {
 		return &Result{Success: false, Error: "missing 'content' parameter"}, nil
 	}
 
-	// Ensure directory exists
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return &Result{Success: false, Error: fmt.Sprintf("failed to create directory: %s", err)}, nil
-	}
-
-	// Write file
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	// Use fileio to write file (handles directory creation and atomic writes)
+	if err := f.fs.WriteFileString(path, content); err != nil {
 		return &Result{Success: false, Error: err.Error()}, nil
 	}
 
+	absPath, _ := filepath.Abs(path)
 	return &Result{
 		Success:       true,
 		Output:        fmt.Sprintf("Wrote %d bytes to %s", len(content), path),
-		ModifiedFiles: []string{path},
+		ModifiedFiles: []string{absPath},
 	}, nil
 }
 
@@ -123,29 +118,22 @@ func (f *FileTool) replace(args map[string]interface{}) (*Result, error) {
 		return &Result{Success: false, Error: "missing 'old' parameter"}, nil
 	}
 
-	new, ok := args["new"].(string)
+	newStr, ok := args["new"].(string)
 	if !ok {
 		return &Result{Success: false, Error: "missing 'new' parameter"}, nil
 	}
 
-	// Read file
-	content, err := os.ReadFile(path)
+	// Use fileio to replace in file
+	count, err := f.fs.ReplaceInFile(path, old, newStr)
 	if err != nil {
 		return &Result{Success: false, Error: err.Error()}, nil
 	}
 
-	// Replace using Go strings (cross-platform, no sed)
-	newContent := strings.ReplaceAll(string(content), old, new)
-
-	// Write back
-	if err := os.WriteFile(path, []byte(newContent), 0644); err != nil {
-		return &Result{Success: false, Error: err.Error()}, nil
-	}
-
+	absPath, _ := filepath.Abs(path)
 	return &Result{
 		Success:       true,
-		Output:        fmt.Sprintf("Replaced '%s' with '%s' in %s", old, new, path),
-		ModifiedFiles: []string{path},
+		Output:        fmt.Sprintf("Replaced %d occurrence(s) of '%s' with '%s' in %s", count, old, newStr, path),
+		ModifiedFiles: []string{absPath},
 	}, nil
 }
 
@@ -161,22 +149,16 @@ func (f *FileTool) append(args map[string]interface{}) (*Result, error) {
 		return &Result{Success: false, Error: "missing 'content' parameter"}, nil
 	}
 
-	// Open file in append mode
-	f_ptr, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return &Result{Success: false, Error: err.Error()}, nil
-	}
-	defer f_ptr.Close()
-
-	// Append content
-	if _, err := f_ptr.WriteString(content); err != nil {
+	// Use fileio to append to file
+	if err := f.fs.AppendFileString(path, content); err != nil {
 		return &Result{Success: false, Error: err.Error()}, nil
 	}
 
+	absPath, _ := filepath.Abs(path)
 	return &Result{
 		Success:       true,
 		Output:        fmt.Sprintf("Appended %d bytes to %s", len(content), path),
-		ModifiedFiles: []string{path},
+		ModifiedFiles: []string{absPath},
 	}, nil
 }
 
@@ -187,13 +169,24 @@ func (f *FileTool) delete(args map[string]interface{}) (*Result, error) {
 		return &Result{Success: false, Error: "missing 'path' parameter"}, nil
 	}
 
-	if err := os.Remove(path); err != nil {
+	absPath, _ := filepath.Abs(path)
+	if err := f.fs.DeleteFile(path); err != nil {
 		return &Result{Success: false, Error: err.Error()}, nil
 	}
 
 	return &Result{
 		Success:       true,
 		Output:        fmt.Sprintf("Deleted %s", path),
-		ModifiedFiles: []string{path},
+		ModifiedFiles: []string{absPath},
 	}, nil
+}
+
+// GetFileInfo returns file metadata including language detection
+func (f *FileTool) GetFileInfo(path string) (*fileio.FileInfo, error) {
+	return f.fs.GetFileInfo(path)
+}
+
+// GetFileSystem returns the underlying FileSystem for advanced operations
+func (f *FileTool) GetFileSystem() *fileio.FileSystem {
+	return f.fs
 }

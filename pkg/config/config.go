@@ -18,20 +18,22 @@ type Config struct {
 	Debug     DebugConfig     `json:"debug"`
 	Platform  PlatformConfig  `json:"platform"`
 	Init      InitConfig      `json:"init"`
+	LSP       LSPConfig       `json:"lsp"`
+	FileIO    FileIOConfig    `json:"fileio"`
 }
 
 // ModelConfig contains model configuration
 type ModelConfig struct {
-	Type           string  `json:"type"` // "llamacpp" or "ollama"
-	ModelPath      string  `json:"model_path,omitempty"`
-	LlamaCppPath   string  `json:"llamacpp_path,omitempty"`
-	ModelName      string  `json:"model_name,omitempty"` // for Ollama
-	OllamaURL      string  `json:"ollama_url,omitempty"` // Ollama API URL
-	ContextSize    int     `json:"context_size"`
-	UsableContext  int     `json:"usable_context,omitempty"`
-	NGpuLayers     int     `json:"n_gpu_layers,omitempty"`
-	Temperature    float64 `json:"temperature"`
-	Threads        int     `json:"threads,omitempty"`
+	Type          string  `json:"type"` // "llamacpp" or "ollama"
+	ModelPath     string  `json:"model_path,omitempty"`
+	LlamaCppPath  string  `json:"llamacpp_path,omitempty"`
+	ModelName     string  `json:"model_name,omitempty"` // for Ollama
+	OllamaURL     string  `json:"ollama_url,omitempty"` // Ollama API URL
+	ContextSize   int     `json:"context_size"`
+	UsableContext int     `json:"usable_context,omitempty"`
+	NGpuLayers    int     `json:"n_gpu_layers,omitempty"`
+	Temperature   float64 `json:"temperature"`
+	Threads       int     `json:"threads,omitempty"`
 }
 
 // ExecutionConfig contains execution settings
@@ -83,6 +85,34 @@ type PlatformConfig struct {
 type InitConfig struct {
 	SkipChecks bool `json:"skip_checks"`
 	Verbose    bool `json:"verbose"`
+}
+
+// LSPConfig contains LSP (Language Server Protocol) settings
+type LSPConfig struct {
+	Enabled      bool                    `json:"enabled"`
+	AutoDiscover bool                    `json:"auto_discover"`
+	Timeout      int                     `json:"timeout"`
+	Servers      map[string]LSPServerDef `json:"servers,omitempty"`
+}
+
+// LSPServerDef defines an LSP server configuration
+type LSPServerDef struct {
+	Command     string                 `json:"command"`
+	Args        []string               `json:"args,omitempty"`
+	Languages   []string               `json:"languages"`
+	RootURI     string                 `json:"root_uri,omitempty"`
+	InitOptions map[string]interface{} `json:"init_options,omitempty"`
+	Settings    map[string]interface{} `json:"settings,omitempty"`
+	Enabled     bool                   `json:"enabled"`
+}
+
+// FileIOConfig contains file I/O settings
+type FileIOConfig struct {
+	MaxFileSize   int64  `json:"max_file_size"`
+	EnableBackup  bool   `json:"enable_backup"`
+	BackupDir     string `json:"backup_dir,omitempty"`
+	AtomicWrites  bool   `json:"atomic_writes"`
+	PreservePerms bool   `json:"preserve_permissions"`
 }
 
 // Load loads configuration from a file
@@ -180,6 +210,22 @@ func (c *Config) setDefaults() {
 			"sed", "grep", "find", "xargs", "rm", "mv", "dd", "sudo",
 		}
 	}
+
+	// LSP defaults
+	if c.LSP.Timeout == 0 {
+		c.LSP.Timeout = 30
+	}
+	if c.LSP.Servers == nil {
+		c.LSP.Servers = make(map[string]LSPServerDef)
+	}
+
+	// FileIO defaults
+	if c.FileIO.MaxFileSize == 0 {
+		c.FileIO.MaxFileSize = 10 * 1024 * 1024 // 10MB
+	}
+	if !c.FileIO.AtomicWrites {
+		c.FileIO.AtomicWrites = true // Enable by default
+	}
 }
 
 // Validate validates the configuration
@@ -210,6 +256,29 @@ func (c *Config) Validate() error {
 		if c.Model.ModelName == "" {
 			return fmt.Errorf("model_name is required for ollama backend")
 		}
+	}
+
+	// Validate LSP config
+	if c.LSP.Enabled {
+		if c.LSP.Timeout < 1 || c.LSP.Timeout > 300 {
+			return fmt.Errorf("LSP timeout must be between 1 and 300 seconds")
+		}
+		for name, server := range c.LSP.Servers {
+			if server.Command == "" {
+				return fmt.Errorf("LSP server %s has no command specified", name)
+			}
+			if len(server.Languages) == 0 {
+				return fmt.Errorf("LSP server %s has no languages specified", name)
+			}
+		}
+	}
+
+	// Validate FileIO config (only if explicitly set to a non-default value)
+	if c.FileIO.MaxFileSize != 0 && c.FileIO.MaxFileSize < 1024 {
+		return fmt.Errorf("max_file_size must be at least 1KB")
+	}
+	if c.FileIO.MaxFileSize > 100*1024*1024 {
+		return fmt.Errorf("max_file_size cannot exceed 100MB")
 	}
 
 	return nil
