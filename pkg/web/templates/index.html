@@ -1,0 +1,163 @@
+{{template "base" .}}
+
+{{define "content"}}
+<div class="max-w-6xl mx-auto">
+    <!-- Page header -->
+    <div class="mb-6 sm:mb-8">
+        <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Coding Jobs</h1>
+        <p class="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600">Create and manage autonomous coding tasks</p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+        <!-- Job creation form (left column on desktop, top on mobile) -->
+        <div class="lg:col-span-1 order-1 lg:order-1">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6 lg:sticky lg:top-4">
+                <h2 class="text-xl font-semibold text-gray-900 mb-4">Create New Job</h2>
+
+                <form id="create-job-form"
+                      hx-post="/api/jobs"
+                      hx-target="#job-list"
+                      hx-swap="afterbegin"
+                      class="space-y-4">
+
+                    <!-- Job type selector -->
+                    <div>
+                        <label for="type" class="block text-sm font-medium text-gray-700 mb-2">
+                            Job Type
+                        </label>
+                        <select id="type"
+                                name="type"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                onchange="updateFormFields(this.value)">
+                            <option value="builder">Builder - Build new features</option>
+                            <option value="debugger">Debugger - Fix issues</option>
+                            <option value="reviewer">Reviewer - Review code</option>
+                            <option value="triager">Triager - Diagnose issues</option>
+                        </select>
+                    </div>
+
+                    <!-- Description field (for builder, triager) -->
+                    <div id="description-field">
+                        <label for="description" class="block text-sm font-medium text-gray-700 mb-2">
+                            Description
+                        </label>
+                        <textarea id="description"
+                                  name="description"
+                                  rows="4"
+                                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                  placeholder="Describe what you want to build..."></textarea>
+                    </div>
+
+                    <!-- Issue field (optional for builder) -->
+                    <div id="issue-field">
+                        <label for="issue" class="block text-sm font-medium text-gray-700 mb-2">
+                            Issue # (optional)
+                        </label>
+                        <input type="text"
+                               id="issue"
+                               name="issue"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="GH-123">
+                    </div>
+
+                    <!-- Symptoms field (for debugger) -->
+                    <div id="symptoms-field" class="hidden">
+                        <label for="symptoms" class="block text-sm font-medium text-gray-700 mb-2">
+                            Symptoms
+                        </label>
+                        <textarea id="symptoms"
+                                  name="symptoms"
+                                  rows="3"
+                                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                  placeholder="Describe the problem..."></textarea>
+                    </div>
+
+                    <!-- Logs field (for debugger) -->
+                    <div id="logs-field" class="hidden">
+                        <label for="logs" class="block text-sm font-medium text-gray-700 mb-2">
+                            Logs (optional)
+                        </label>
+                        <textarea id="logs"
+                                  name="logs"
+                                  rows="3"
+                                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                  placeholder="Paste error logs..."></textarea>
+                    </div>
+
+                    <!-- Branch field (for reviewer) -->
+                    <div id="branch-field" class="hidden">
+                        <label for="branch" class="block text-sm font-medium text-gray-700 mb-2">
+                            Branch
+                        </label>
+                        <input type="text"
+                               id="branch"
+                               name="branch"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="feature/my-feature">
+                    </div>
+
+                    <!-- Submit button (larger touch target on mobile) -->
+                    <button type="submit"
+                            class="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-base sm:text-sm">
+                        Create Job
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Job list (right column on desktop, below form on mobile) -->
+        <div class="lg:col-span-2 order-2 lg:order-2">
+            <div class="flex items-center justify-between mb-3 sm:mb-4">
+                <h2 class="text-lg sm:text-xl font-semibold text-gray-900">Active Jobs</h2>
+                <button hx-get="/api/jobs"
+                        hx-target="#job-list"
+                        hx-swap="innerHTML"
+                        class="text-sm text-blue-600 hover:text-blue-700 py-2 px-3">
+                    Refresh
+                </button>
+            </div>
+
+            <!-- Job list (auto-refresh will be added dynamically if jobs exist) -->
+            <div id="job-list"
+                 hx-get="/api/jobs"
+                 hx-trigger="load"
+                 hx-swap="innerHTML"
+                 class="space-y-4">
+                <div class="text-center py-12 text-gray-500">
+                    Loading jobs...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Update form fields based on job type
+function updateFormFields(type) {
+    // Hide all optional fields
+    document.getElementById('description-field').classList.add('hidden');
+    document.getElementById('issue-field').classList.add('hidden');
+    document.getElementById('symptoms-field').classList.add('hidden');
+    document.getElementById('logs-field').classList.add('hidden');
+    document.getElementById('branch-field').classList.add('hidden');
+
+    // Show relevant fields based on type
+    switch(type) {
+        case 'builder':
+            document.getElementById('description-field').classList.remove('hidden');
+            document.getElementById('issue-field').classList.remove('hidden');
+            break;
+        case 'debugger':
+            document.getElementById('symptoms-field').classList.remove('hidden');
+            document.getElementById('logs-field').classList.remove('hidden');
+            break;
+        case 'reviewer':
+            document.getElementById('branch-field').classList.remove('hidden');
+            break;
+        case 'triager':
+            document.getElementById('description-field').classList.remove('hidden');
+            break;
+    }
+}
+</script>
+{{end}}
