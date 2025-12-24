@@ -2,7 +2,10 @@ module github.com/soypete/pedrocli
 
 go 1.24.7
 
-require github.com/golangci/golangci-lint v1.64.8
+require (
+	github.com/golangci/golangci-lint v1.64.8
+	github.com/google/uuid v1.6.0
+)
 
 require (
 	4d63.com/gocheckcompilerdirectives v1.3.0 // indirect
