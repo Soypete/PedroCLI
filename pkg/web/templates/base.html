@@ -1,0 +1,66 @@
+{{define "base"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.title}}</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+    <!-- Custom styles -->
+    <style>
+        .job-card {
+            transition: all 0.3s ease;
+        }
+        .job-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="text-2xl font-bold text-blue-600">Pedro</div>
+                    <div class="text-sm text-gray-500">Autonomous Coding Agent</div>
+                </div>
+                <nav class="flex items-center space-x-4">
+                    <a href="/" class="text-gray-600 hover:text-gray-900">Jobs</a>
+                    <div id="github-status" class="text-sm text-gray-500">
+                        <!-- GitHub status will be loaded here -->
+                    </div>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main content -->
+    <main class="container mx-auto px-4 py-8">
+        {{template "content" .}}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 mt-12">
+        <div class="container mx-auto px-4 py-6 text-center text-sm text-gray-500">
+            <p>PedroCLI - Self-hosted autonomous coding agent</p>
+            <p class="mt-1">
+                <a href="https://github.com/soypete/pedrocli" target="_blank" class="text-blue-600 hover:underline">
+                    GitHub
+                </a>
+            </p>
+        </div>
+    </footer>
+
+    <!-- Custom JavaScript -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
+{{end}}

@@ -20,6 +20,7 @@ type Config struct {
 	Init      InitConfig      `json:"init"`
 	LSP       LSPConfig       `json:"lsp"`
 	FileIO    FileIOConfig    `json:"fileio"`
+	Web       WebConfig       `json:"web"`
 }
 
 // ModelConfig contains model configuration
@@ -113,6 +114,13 @@ type FileIOConfig struct {
 	BackupDir     string `json:"backup_dir,omitempty"`
 	AtomicWrites  bool   `json:"atomic_writes"`
 	PreservePerms bool   `json:"preserve_permissions"`
+}
+
+// WebConfig contains web server settings
+type WebConfig struct {
+	Enabled bool   `json:"enabled"`
+	Port    int    `json:"port"`
+	Host    string `json:"host"`
 }
 
 // Load loads configuration from a file
@@ -225,6 +233,14 @@ func (c *Config) setDefaults() {
 	}
 	if !c.FileIO.AtomicWrites {
 		c.FileIO.AtomicWrites = true // Enable by default
+	}
+
+	// Web defaults
+	if c.Web.Port == 0 {
+		c.Web.Port = 8080
+	}
+	if c.Web.Host == "" {
+		c.Web.Host = "0.0.0.0" // Bind to all interfaces for Tailscale/remote access
 	}
 }
 

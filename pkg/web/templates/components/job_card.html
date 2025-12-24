@@ -1,0 +1,67 @@
+{{define "job_card.html"}}
+<div class="job-card bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div class="flex items-start justify-between">
+        <div class="flex-1">
+            <!-- Job header -->
+            <div class="flex items-center space-x-3 mb-2">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                    {{if eq .type "builder"}}bg-blue-100 text-blue-800{{end}}
+                    {{if eq .type "debugger"}}bg-red-100 text-red-800{{end}}
+                    {{if eq .type "reviewer"}}bg-purple-100 text-purple-800{{end}}
+                    {{if eq .type "triager"}}bg-yellow-100 text-yellow-800{{end}}">
+                    {{.type}}
+                </span>
+
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                    {{if eq .status "pending"}}bg-gray-100 text-gray-800{{end}}
+                    {{if eq .status "running"}}bg-blue-100 text-blue-800 animate-pulse{{end}}
+                    {{if eq .status "completed"}}bg-green-100 text-green-800{{end}}
+                    {{if eq .status "failed"}}bg-red-100 text-red-800{{end}}
+                    {{if eq .status "cancelled"}}bg-gray-100 text-gray-800{{end}}">
+                    {{.status}}
+                </span>
+            </div>
+
+            <!-- Job ID -->
+            <div class="text-sm font-mono text-gray-500 mb-2">
+                {{.job_id}}
+            </div>
+
+            <!-- Job description/status -->
+            {{if .description}}
+            <div class="text-gray-700 mb-3">
+                {{.description}}
+            </div>
+            {{end}}
+
+            {{if .status_text}}
+            <div class="text-sm text-gray-600 font-mono bg-gray-50 p-3 rounded border border-gray-200 overflow-auto max-h-32">
+                <pre class="whitespace-pre-wrap">{{.status_text}}</pre>
+            </div>
+            {{end}}
+        </div>
+
+        <!-- Actions -->
+        <div class="ml-4 flex-shrink-0">
+            {{if or (eq .status "running") (eq .status "pending")}}
+            <button hx-delete="/api/jobs/{{.job_id}}"
+                    hx-confirm="Are you sure you want to cancel this job?"
+                    hx-target="closest .job-card"
+                    hx-swap="outerHTML"
+                    class="text-red-600 hover:text-red-700 text-sm font-medium">
+                Cancel
+            </button>
+            {{end}}
+        </div>
+    </div>
+
+    <!-- Auto-refresh if running -->
+    {{if eq .status "running"}}
+    <div hx-get="/api/jobs/{{.job_id}}"
+         hx-trigger="every 3s"
+         hx-target="closest .job-card"
+         hx-swap="outerHTML">
+    </div>
+    {{end}}
+</div>
+{{end}}
