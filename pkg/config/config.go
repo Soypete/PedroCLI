@@ -21,6 +21,7 @@ type Config struct {
 	LSP       LSPConfig       `json:"lsp"`
 	FileIO    FileIOConfig    `json:"fileio"`
 	Web       WebConfig       `json:"web"`
+	Voice     VoiceConfig     `json:"voice"`
 }
 
 // ModelConfig contains model configuration
@@ -121,6 +122,13 @@ type WebConfig struct {
 	Enabled bool   `json:"enabled"`
 	Port    int    `json:"port"`
 	Host    string `json:"host"`
+}
+
+// VoiceConfig contains voice/whisper.cpp settings
+type VoiceConfig struct {
+	Enabled    bool   `json:"enabled"`
+	WhisperURL string `json:"whisper_url"`
+	Language   string `json:"language,omitempty"` // Default language hint (e.g., "en", "auto")
 }
 
 // Load loads configuration from a file
@@ -241,6 +249,14 @@ func (c *Config) setDefaults() {
 	}
 	if c.Web.Host == "" {
 		c.Web.Host = "0.0.0.0" // Bind to all interfaces for Tailscale/remote access
+	}
+
+	// Voice defaults
+	if c.Voice.WhisperURL == "" {
+		c.Voice.WhisperURL = "http://localhost:8080" // Default whisper.cpp server
+	}
+	if c.Voice.Language == "" {
+		c.Voice.Language = "auto" // Auto-detect language
 	}
 }
 

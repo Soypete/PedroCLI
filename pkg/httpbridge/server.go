@@ -66,6 +66,10 @@ func (s *Server) setupRoutes() {
 	s.mux.HandleFunc("/api/jobs", s.handleJobs)
 	s.mux.HandleFunc("/api/jobs/", s.handleJobsWithID)
 	s.mux.HandleFunc("/api/stream/jobs/", s.handleJobStream)
+
+	// Voice API routes
+	s.mux.HandleFunc("/api/voice/transcribe", s.handleVoiceTranscribe)
+	s.mux.HandleFunc("/api/voice/status", s.handleVoiceStatus)
 }
 
 // Run starts the HTTP server

@@ -242,9 +242,127 @@ go test ./pkg/httpbridge/... -v -run TestSSE
 - localStorage: ~1KB per job
 - No performance impact on MCP layer
 
+## Phase 3: Voice Dictation ✅
+
+### What Was Added
+
+#### 🎤 Voice Recording & Transcription
+- **Voice Package** (`pkg/voice/`)
+  - `types.go` - Request/response types for transcription
+  - `client.go` - HTTP client for whisper.cpp server
+  - `client_test.go` - Unit tests with mock whisper.cpp server
+
+- **Browser Audio Recording** (`pkg/web/static/js/voice.js`)
+  - MediaRecorder API integration
+  - Real-time microphone access
+  - Audio blob creation and upload
+  - Automatic status checking
+
+- **New Endpoints**:
+  - `POST /api/voice/transcribe` - Upload audio, get text transcription
+  - `GET /api/voice/status` - Check if whisper.cpp is running
+
+#### 🎛️ UI Integration
+- **Voice Button** in job creation form
+  - Click to start recording
+  - Click again to stop and transcribe
+  - Disabled automatically if whisper.cpp not running
+  - Visual feedback (pulsing red when recording)
+
+- **Configuration** (`.pedrocli.json`):
+  ```json
+  {
+    "voice": {
+      "enabled": true,
+      "whisper_url": "http://localhost:8080",
+      "language": "auto"
+    }
+  }
+  ```
+
+### Architecture
+
+```
+Browser
+  ↓ MediaRecorder API (audio/webm)
+Voice Button
+  ↓ POST multipart/form-data
+Voice Transcribe Handler
+  ↓ HTTP request
+whisper.cpp Server (localhost:8080)
+  ↓ transcribed text
+Fill textarea
+```
+
+### Key Features
+
+✅ Browser-based audio recording (no plugins needed)
+✅ Automatic whisper.cpp health checking
+✅ Supports multiple audio formats (webm, wav, mp3, ogg)
+✅ Language auto-detection or manual hint
+✅ Visual recording indicator
+✅ Graceful degradation when whisper.cpp unavailable
+
+### whisper.cpp Setup
+
+To use voice dictation, you need to run whisper.cpp server separately:
+
+```bash
+# Clone whisper.cpp
+git clone https://github.com/ggerganov/whisper.cpp
+cd whisper.cpp
+
+# Build
+make
+
+# Download model (base.en is good for English)
+bash ./models/download-ggml-model.sh base.en
+
+# Run HTTP server
+./server -m models/ggml-base.en.bin --port 8080 --host 0.0.0.0
+```
+
+### Files
+
+**New**:
+- `pkg/voice/types.go` - Transcription types
+- `pkg/voice/client.go` - whisper.cpp HTTP client
+- `pkg/voice/client_test.go` - Unit tests (6 tests)
+- `pkg/httpbridge/voice_handlers.go` - Voice API handlers
+- `pkg/web/static/js/voice.js` - Browser audio recording (~250 lines)
+
+**Modified**:
+- `pkg/config/config.go` - Added `VoiceConfig`
+- `pkg/httpbridge/server.go` - Registered voice routes
+- `pkg/web/templates/index.html` - Added voice button
+- `pkg/web/templates/base.html` - Included voice.js script
+
+### Testing
+
+```bash
+# Unit tests
+go test ./pkg/voice/... -v
+
+# Manual test (requires whisper.cpp running)
+./pedrocli-http-server
+# Open browser, click Voice button
+# Allow microphone access
+# Speak, click Stop
+# See transcribed text appear in textarea
+```
+
+### Performance
+
+- Recording: ~64kbps audio/webm
+- Transcription: ~1-2s for 5s audio (depends on whisper.cpp model)
+- whisper.cpp models:
+  - tiny: fastest, less accurate (~50MB)
+  - base: balanced (~150MB) **recommended**
+  - small: better accuracy (~500MB)
+  - medium/large: best accuracy, slower (>1GB)
+
 ## Next Steps (Future Phases)
 
-- **Phase 3**: Voice dictation (whisper.cpp integration)
 - **Phase 4**: GitHub OAuth authentication
 - **Phase 5**: Auto-create PRs on job completion
 - **Phase 6**: PR comments + polish
@@ -272,6 +390,10 @@ go test ./pkg/httpbridge/... -v -run TestSSE
 
 **Phase 2**:
 - `github.com/google/uuid` - Client ID generation for SSE
+
+**Phase 3**:
+- None! Standard library only
+- External: whisper.cpp (separate process)
 
 ## Code Quality
 
@@ -303,3 +425,10 @@ go test ./pkg/httpbridge/... -v -run TestSSE
 - Files Created: 2 (sse.go, sse_test.go)
 - Files Modified: 2 (server.go, app.js)
 - Breaking Changes: None (fully backward compatible)
+
+**Phase 3** (Completed):
+- Lines of Code: ~500 (excluding tests)
+- Files Created: 5 (types.go, client.go, client_test.go, voice_handlers.go, voice.js)
+- Files Modified: 4 (config.go, server.go, index.html, base.html)
+- Breaking Changes: None (fully backward compatible)
+- External Dependency: whisper.cpp server (optional)
