@@ -38,9 +38,22 @@
 
                     <!-- Description field (for builder, triager) -->
                     <div id="description-field">
-                        <label for="description" class="block text-sm font-medium text-gray-700 mb-2">
-                            Description
-                        </label>
+                        <div class="flex items-center justify-between mb-2">
+                            <label for="description" class="block text-sm font-medium text-gray-700">
+                                Description
+                            </label>
+                            <!-- Voice input button -->
+                            <button type="button"
+                                    id="voice-btn"
+                                    onclick="VoiceRecorder.toggle('description')"
+                                    class="inline-flex items-center px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded-md transition-colors">
+                                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z"/>
+                                    <path d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z"/>
+                                </svg>
+                                <span class="ml-2">Voice</span>
+                            </button>
+                        </div>
                         <textarea id="description"
                                   name="description"
                                   rows="4"
