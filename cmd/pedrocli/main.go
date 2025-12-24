@@ -378,10 +378,10 @@ func debugCommand(cfg *config.Config, args []string) {
 
 	// Build arguments
 	arguments := map[string]interface{}{
-		"description": *symptoms,  // Agent expects "description"
+		"description": *symptoms, // Agent expects "description"
 	}
 	if *logs != "" {
-		arguments["error_log"] = *logs  // Agent expects "error_log"
+		arguments["error_log"] = *logs // Agent expects "error_log"
 	}
 
 	callAgent(cfg, "debugger", arguments)
@@ -437,7 +437,7 @@ func triageCommand(cfg *config.Config, args []string) {
 		"description": *description,
 	}
 	if *errorLogs != "" {
-		arguments["error_log"] = *errorLogs  // Agent expects "error_log"
+		arguments["error_log"] = *errorLogs // Agent expects "error_log"
 	}
 
 	callAgent(cfg, "triager", arguments)

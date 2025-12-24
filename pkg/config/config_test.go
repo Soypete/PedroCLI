@@ -9,11 +9,11 @@ import (
 
 func TestLoad(t *testing.T) {
 	tests := []struct {
-		name      string
-		content   string
-		wantErr   bool
-		errMsg    string
-		validate  func(*testing.T, *Config)
+		name     string
+		content  string
+		wantErr  bool
+		errMsg   string
+		validate func(*testing.T, *Config)
 	}{
 		{
 			name: "valid llamacpp config",

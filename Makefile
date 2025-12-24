@@ -1,4 +1,4 @@
-.PHONY: build build-mac build-linux build-all test install clean run-server run-cli
+.PHONY: build build-mac build-linux build-all test test-coverage test-coverage-report install clean run-server run-cli fmt lint tidy
 
 # Default build for current platform (CLI and server)
 build:
@@ -31,8 +31,14 @@ test:
 
 # Run tests with coverage
 test-coverage:
-	go test -coverprofile=coverage.out ./...
-	go tool cover -html=coverage.out
+	go test -race -coverprofile=coverage.out -covermode=atomic ./...
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
+
+# Show coverage percentage
+test-coverage-report:
+	go test -race -coverprofile=coverage.out -covermode=atomic ./...
+	@go tool cover -func=coverage.out | grep total | awk '{print "Total Coverage: " $$3}'
 
 # Install locally
 install:
@@ -41,7 +47,7 @@ install:
 
 # Clean build artifacts
 clean:
-	rm -f pedrocli pedrocli-* coverage.out
+	rm -f pedrocli pedrocli-* coverage.out coverage.html
 
 # Run MCP server
 run-server:

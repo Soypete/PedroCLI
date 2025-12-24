@@ -206,9 +206,9 @@ func TestAgentToolExecuteWithDiagnosis(t *testing.T) {
 
 func TestAgentToolExecuteWithError(t *testing.T) {
 	agent := &mockAgent{
-		name:        "builder",
-		executeErr:  fmt.Errorf("agent execution failed"),
-		executeJob:  nil,
+		name:       "builder",
+		executeErr: fmt.Errorf("agent execution failed"),
+		executeJob: nil,
 	}
 
 	agentTool := NewAgentTool(agent)
@@ -260,33 +260,33 @@ func TestAgentToolExecuteWithEmptyOutput(t *testing.T) {
 
 func TestAgentToolExecuteStatusMapping(t *testing.T) {
 	testCases := []struct {
-		name           string
-		jobStatus      jobs.Status
+		name            string
+		jobStatus       jobs.Status
 		expectedSuccess bool
 	}{
 		{
-			name:           "Completed job",
-			jobStatus:      jobs.StatusCompleted,
+			name:            "Completed job",
+			jobStatus:       jobs.StatusCompleted,
 			expectedSuccess: true,
 		},
 		{
-			name:           "Failed job",
-			jobStatus:      jobs.StatusFailed,
+			name:            "Failed job",
+			jobStatus:       jobs.StatusFailed,
 			expectedSuccess: false,
 		},
 		{
-			name:           "Running job",
-			jobStatus:      jobs.StatusRunning,
+			name:            "Running job",
+			jobStatus:       jobs.StatusRunning,
 			expectedSuccess: false,
 		},
 		{
-			name:           "Pending job",
-			jobStatus:      jobs.StatusPending,
+			name:            "Pending job",
+			jobStatus:       jobs.StatusPending,
 			expectedSuccess: false,
 		},
 		{
-			name:           "Cancelled job",
-			jobStatus:      jobs.StatusCancelled,
+			name:            "Cancelled job",
+			jobStatus:       jobs.StatusCancelled,
 			expectedSuccess: false,
 		},
 	}

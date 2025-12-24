@@ -61,7 +61,7 @@ func (l *LlamaCppClient) Infer(ctx context.Context, req *InferenceRequest) (*Inf
 	response := &InferenceResponse{
 		Text:       strings.TrimSpace(string(output)),
 		ToolCalls:  []ToolCall{}, // TODO: Parse tool calls from response
-		NextAction: "COMPLETE",    // TODO: Determine based on response
+		NextAction: "COMPLETE",   // TODO: Determine based on response
 		TokensUsed: EstimateTokens(string(output)),
 	}
 

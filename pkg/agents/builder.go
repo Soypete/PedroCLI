@@ -75,8 +75,8 @@ func (b *BuilderAgent) Execute(ctx context.Context, input map[string]interface{}
 
 		// Update job with results
 		output := map[string]interface{}{
-			"status":   "completed",
-			"job_dir":  contextMgr.GetJobDir(),
+			"status":  "completed",
+			"job_dir": contextMgr.GetJobDir(),
 		}
 
 		b.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
