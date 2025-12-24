@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/soypete/pedrocli/pkg/config"
 	"github.com/soypete/pedrocli/pkg/mcp"
@@ -12,11 +13,12 @@ import (
 
 // Server represents the HTTP server
 type Server struct {
-	config    *config.Config
-	mcpClient *mcp.Client
-	ctx       context.Context
-	mux       *http.ServeMux
-	templates *template.Template
+	config       *config.Config
+	mcpClient    *mcp.Client
+	ctx          context.Context
+	mux          *http.ServeMux
+	templates    *template.Template
+	sseBroadcast *SSEBroadcaster
 }
 
 // NewServer creates a new HTTP server
@@ -30,16 +32,23 @@ func NewServer(cfg *config.Config, mcpClient *mcp.Client, ctx context.Context) *
 		"pkg/web/templates/components/job_card.html",
 	))
 
+	// Create SSE broadcaster
+	sseBroadcast := NewSSEBroadcaster(mcpClient, ctx)
+
 	server := &Server{
-		config:    cfg,
-		mcpClient: mcpClient,
-		ctx:       ctx,
-		mux:       mux,
-		templates: templates,
+		config:       cfg,
+		mcpClient:    mcpClient,
+		ctx:          ctx,
+		mux:          mux,
+		templates:    templates,
+		sseBroadcast: sseBroadcast,
 	}
 
 	// Setup routes
 	server.setupRoutes()
+
+	// Start background polling for real-time updates (every 2 seconds)
+	go sseBroadcast.StartPolling(2 * time.Second)
 
 	return server
 }
@@ -56,6 +65,7 @@ func (s *Server) setupRoutes() {
 	// API routes
 	s.mux.HandleFunc("/api/jobs", s.handleJobs)
 	s.mux.HandleFunc("/api/jobs/", s.handleJobsWithID)
+	s.mux.HandleFunc("/api/stream/jobs/", s.handleJobStream)
 }
 
 // Run starts the HTTP server
@@ -78,4 +88,17 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	if err := s.templates.ExecuteTemplate(w, "index.html", data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// handleJobStream handles SSE connections for job updates
+func (s *Server) handleJobStream(w http.ResponseWriter, r *http.Request) {
+	// Extract job ID from path: /api/stream/jobs/:id
+	jobID := r.URL.Path[len("/api/stream/jobs/"):]
+	if jobID == "" {
+		http.Error(w, "Job ID required", http.StatusBadRequest)
+		return
+	}
+
+	// Serve SSE stream
+	s.sseBroadcast.ServeHTTP(w, r, jobID)
 }

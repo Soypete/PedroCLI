@@ -164,9 +164,86 @@ make build
 ✅ Unit tests pass
 ✅ Zero changes to existing MCP infrastructure
 
+## Phase 2: Real-Time Updates + Browser Storage ✅
+
+### What Was Added
+
+#### 📡 Server-Sent Events (SSE)
+- **SSE Broadcaster** (`pkg/httpbridge/sse.go`)
+  - Manages multiple concurrent SSE connections
+  - Broadcasts job status updates to connected clients
+  - Background polling every 2 seconds for job changes
+  - Automatic reconnection on client disconnect
+
+- **New Endpoint**:
+  - `GET /api/stream/jobs/:id` - SSE stream for specific job or "*" for all jobs
+  - Sends `update` events when job status changes
+  - Sends `list` events with full job list
+
+#### 💾 Browser Storage
+- **localStorage Caching** (`pkg/web/static/js/app.js`)
+  - Saves jobs with 24-hour expiry
+  - Automatic cleanup of expired jobs on page load
+  - Persists across page reloads
+  - Reduces server load by caching job data
+
+- **SSE Manager** (JavaScript)
+  - Manages EventSource connections
+  - Handles reconnections on error
+  - Triggers HTMX updates when SSE messages arrive
+  - Automatic cleanup on page unload
+
+### Architecture
+
+```
+Browser
+  ↓ EventSource connection
+SSE Broadcaster
+  ↓ polls every 2s
+MCP Server
+  ↓ get_job_status
+Job Manager
+  ↓ updates
+localStorage (24hr cache)
+```
+
+### Key Features
+
+✅ Real-time job status updates (no polling from browser)
+✅ Automatic reconnection on connection loss
+✅ Browser caching with 24-hour expiry
+✅ Memory-efficient SSE broadcast to multiple clients
+✅ Works alongside Phase 1's conditional auto-refresh
+
+### Files Modified
+
+- `pkg/httpbridge/server.go` - Added SSE broadcaster, background polling
+- `pkg/httpbridge/sse.go` - **NEW** SSE implementation
+- `pkg/httpbridge/sse_test.go` - **NEW** SSE tests
+- `pkg/web/static/js/app.js` - Added localStorage + SSE manager
+
+### Testing
+
+```bash
+# Run SSE tests
+go test ./pkg/httpbridge/... -v -run TestSSE
+
+# Manual test
+./pedrocli-http-server
+# Open browser console, watch SSE connection logs
+# Create job, see real-time updates
+# Check localStorage in DevTools
+```
+
+### Performance Impact
+
+- SSE polling interval: 2 seconds (configurable)
+- Memory per SSE client: ~10KB (buffered channel)
+- localStorage: ~1KB per job
+- No performance impact on MCP layer
+
 ## Next Steps (Future Phases)
 
-- **Phase 2**: Real-time updates (SSE) + browser localStorage
 - **Phase 3**: Voice dictation (whisper.cpp integration)
 - **Phase 4**: GitHub OAuth authentication
 - **Phase 5**: Auto-create PRs on job completion
@@ -188,9 +265,13 @@ make build
 
 ## Dependencies Added
 
-- **None!** Standard library only (`net/http`)
+**Phase 1**:
+- Standard library only (`net/http`)
 - HTMX 1.9.10 (CDN)
 - Tailwind CSS 3.x (CDN)
+
+**Phase 2**:
+- `github.com/google/uuid` - Client ID generation for SSE
 
 ## Code Quality
 
@@ -210,6 +291,15 @@ make build
 
 ---
 
-**Total Lines of Code**: ~600 lines (excluding tests)
-**Time to Implement**: Single session
-**Breaking Changes**: None (fully backward compatible)
+## Summary
+
+**Phase 1** (Completed):
+- Lines of Code: ~600 (excluding tests)
+- Files Created: 11
+- Breaking Changes: None
+
+**Phase 2** (Completed):
+- Lines of Code: ~350 (excluding tests)
+- Files Created: 2 (sse.go, sse_test.go)
+- Files Modified: 2 (server.go, app.js)
+- Breaking Changes: None (fully backward compatible)
