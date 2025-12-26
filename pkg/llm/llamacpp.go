@@ -22,14 +22,19 @@ type LlamaCppClient struct {
 
 // NewLlamaCppClient creates a new llama.cpp client
 func NewLlamaCppClient(cfg *config.Config) *LlamaCppClient {
+	return NewLlamaCppClientFromModel(cfg, cfg.Model)
+}
+
+// NewLlamaCppClientFromModel creates a new llama.cpp client from a specific model config
+func NewLlamaCppClientFromModel(cfg *config.Config, modelCfg config.ModelConfig) *LlamaCppClient {
 	return &LlamaCppClient{
-		llamacppPath: cfg.Model.LlamaCppPath,
-		modelPath:    cfg.Model.ModelPath,
-		contextSize:  cfg.Model.ContextSize,
-		usableSize:   cfg.Model.UsableContext,
-		nGpuLayers:   cfg.Model.NGpuLayers,
-		temperature:  cfg.Model.Temperature,
-		threads:      cfg.Model.Threads,
+		llamacppPath: modelCfg.LlamaCppPath,
+		modelPath:    modelCfg.ModelPath,
+		contextSize:  modelCfg.ContextSize,
+		usableSize:   modelCfg.UsableContext,
+		nGpuLayers:   modelCfg.NGpuLayers,
+		temperature:  modelCfg.Temperature,
+		threads:      modelCfg.Threads,
 	}
 }
 
