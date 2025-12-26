@@ -21,6 +21,8 @@ type Config struct {
 	LSP       LSPConfig       `json:"lsp"`
 	FileIO    FileIOConfig    `json:"fileio"`
 	Web       WebConfig       `json:"web"`
+	Blog      BlogConfig      `json:"blog"`
+	Database  DatabaseConfig  `json:"database"`
 }
 
 // ModelConfig contains model configuration
@@ -121,6 +123,31 @@ type WebConfig struct {
 	Enabled bool   `json:"enabled"`
 	Port    int    `json:"port"`
 	Host    string `json:"host"`
+}
+
+// BlogConfig contains blog writing tools configuration
+type BlogConfig struct {
+	Enabled            bool   `json:"enabled"`
+	DefaultModel       string `json:"default_model"`        // Model to use for blog writing (e.g., "qwen3:7b")
+	WriterAutoRevise   bool   `json:"writer_auto_revise"`   // Auto-revise after writing
+	EditorMode         string `json:"editor_mode"`          // "review" or "auto_revise"
+	NotionAPIKey       string `json:"notion_api_key"`       // TODO: Move to secure storage
+	NotionDraftsDB     string `json:"notion_drafts_db"`     // Database ID for drafts
+	NotionPublishedDB  string `json:"notion_published_db"`  // Database ID for published posts
+	NotionAssetsDB     string `json:"notion_assets_db"`     // Database ID for assets
+	NotionIdeasDB      string `json:"notion_ideas_db"`      // Database ID for post ideas
+	SubstackEnabled    bool   `json:"substack_enabled"`     // Enable Substack integration
+	PaywallDays        int    `json:"paywall_days"`         // Days before removing paywall (default: 7)
+}
+
+// DatabaseConfig contains database configuration
+type DatabaseConfig struct {
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	User     string `json:"user"`
+	Password string `json:"password"` // TODO: Move to secure storage
+	Database string `json:"database"`
+	SSLMode  string `json:"ssl_mode"` // disable, require, verify-ca, verify-full
 }
 
 // Load loads configuration from a file
@@ -241,6 +268,34 @@ func (c *Config) setDefaults() {
 	}
 	if c.Web.Host == "" {
 		c.Web.Host = "0.0.0.0" // Bind to all interfaces for Tailscale/remote access
+	}
+
+	// Blog defaults
+	if c.Blog.DefaultModel == "" {
+		c.Blog.DefaultModel = "qwen3:7b" // Default to Qwen 3 (not Coder)
+	}
+	if c.Blog.EditorMode == "" {
+		c.Blog.EditorMode = "review" // Default to review mode
+	}
+	if c.Blog.PaywallDays == 0 {
+		c.Blog.PaywallDays = 7 // Default 7-day paywall
+	}
+
+	// Database defaults
+	if c.Database.Host == "" {
+		c.Database.Host = "localhost"
+	}
+	if c.Database.Port == 0 {
+		c.Database.Port = 5432
+	}
+	if c.Database.User == "" {
+		c.Database.User = "pedrocli"
+	}
+	if c.Database.Database == "" {
+		c.Database.Database = "pedrocli_blog"
+	}
+	if c.Database.SSLMode == "" {
+		c.Database.SSLMode = "disable" // TODO: Enable SSL for production
 	}
 }
 
