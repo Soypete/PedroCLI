@@ -1,0 +1,90 @@
+{
+  "_comment": "TODO: Replace with actual ComfyUI workflow JSON for Flux.1 dev",
+  "_description": "Flux.1 dev workflow for high-quality image generation (20-50 steps)",
+  "version": "1.0.0",
+  "name": "flux_dev",
+  "nodes": {
+    "unet_loader": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "{{unet_name}}",
+        "weight_dtype": "fp8_e4m3fn"
+      }
+    },
+    "dual_clip_loader": {
+      "class_type": "DualCLIPLoader",
+      "inputs": {
+        "clip_name1": "{{clip_l}}",
+        "clip_name2": "{{clip_g}}",
+        "type": "flux"
+      }
+    },
+    "vae_loader": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "{{vae_name}}"
+      }
+    },
+    "clip_text_encode": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "text": "{{positive_prompt}}",
+        "clip": ["dual_clip_loader", 0]
+      }
+    },
+    "guidance_scale": {
+      "class_type": "FluxGuidance",
+      "inputs": {
+        "conditioning": ["clip_text_encode", 0],
+        "guidance": "{{guidance_scale}}"
+      }
+    },
+    "empty_sd3_latent": {
+      "class_type": "EmptySD3LatentImage",
+      "inputs": {
+        "width": "{{width}}",
+        "height": "{{height}}",
+        "batch_size": 1
+      }
+    },
+    "ksampler": {
+      "class_type": "KSampler",
+      "inputs": {
+        "model": ["unet_loader", 0],
+        "positive": ["guidance_scale", 0],
+        "negative": ["clip_text_encode", 0],
+        "latent_image": ["empty_sd3_latent", 0],
+        "seed": "{{seed}}",
+        "steps": "{{steps}}",
+        "cfg": 1.0,
+        "sampler_name": "euler",
+        "scheduler": "simple",
+        "denoise": 1.0
+      }
+    },
+    "vae_decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": ["ksampler", 0],
+        "vae": ["vae_loader", 0]
+      }
+    },
+    "save_image": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": ["vae_decode", 0],
+        "filename_prefix": "{{output_prefix}}"
+      }
+    }
+  },
+  "defaults": {
+    "unet_name": "flux1-dev.safetensors",
+    "clip_l": "clip_l.safetensors",
+    "clip_g": "t5xxl_fp8_e4m3fn.safetensors",
+    "vae_name": "ae.safetensors",
+    "width": 1024,
+    "height": 1024,
+    "steps": 30,
+    "guidance_scale": 3.5
+  }
+}

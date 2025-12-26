@@ -1,0 +1,22 @@
+{
+  "name": "newsletter_header",
+  "category": "newsletter_header",
+  "description": "Header images for email newsletters - minimal, professional",
+  "base_prompt": "minimal newsletter header, professional design, clean layout, subtle gradient, elegant typography space, modern aesthetic",
+  "style_modifiers": [
+    "soft colors",
+    "geometric shapes",
+    "subtle texture",
+    "corporate style"
+  ],
+  "negative_prompt": "text, complex imagery, busy, cluttered, low quality, amateur, harsh colors",
+  "recommended_model": "sdxl_base",
+  "aspect_ratio": "3:1",
+  "width": 1200,
+  "height": 400,
+  "steps": 30,
+  "cfg_scale": 7.0,
+  "sampler": "dpmpp_2m",
+  "scheduler": "karras",
+  "alt_text_instructions": "Describe the visual theme of the newsletter header. Keep it simple and professional. Under 80 characters is ideal for email accessibility."
+}
