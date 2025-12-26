@@ -1,0 +1,75 @@
+{
+  "_comment": "TODO: Replace with actual ComfyUI workflow JSON",
+  "_description": "Base SDXL workflow for general image generation",
+  "version": "1.0.0",
+  "name": "sdxl_base",
+  "nodes": {
+    "checkpoint_loader": {
+      "class_type": "CheckpointLoaderSimple",
+      "inputs": {
+        "ckpt_name": "{{model_name}}"
+      }
+    },
+    "clip_text_encode_positive": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "text": "{{positive_prompt}}",
+        "clip": ["checkpoint_loader", 1]
+      }
+    },
+    "clip_text_encode_negative": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "text": "{{negative_prompt}}",
+        "clip": ["checkpoint_loader", 1]
+      }
+    },
+    "empty_latent_image": {
+      "class_type": "EmptyLatentImage",
+      "inputs": {
+        "width": "{{width}}",
+        "height": "{{height}}",
+        "batch_size": 1
+      }
+    },
+    "ksampler": {
+      "class_type": "KSampler",
+      "inputs": {
+        "model": ["checkpoint_loader", 0],
+        "positive": ["clip_text_encode_positive", 0],
+        "negative": ["clip_text_encode_negative", 0],
+        "latent_image": ["empty_latent_image", 0],
+        "seed": "{{seed}}",
+        "steps": "{{steps}}",
+        "cfg": "{{cfg_scale}}",
+        "sampler_name": "{{sampler}}",
+        "scheduler": "{{scheduler}}",
+        "denoise": 1.0
+      }
+    },
+    "vae_decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": ["ksampler", 0],
+        "vae": ["checkpoint_loader", 2]
+      }
+    },
+    "save_image": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": ["vae_decode", 0],
+        "filename_prefix": "{{output_prefix}}"
+      }
+    }
+  },
+  "defaults": {
+    "model_name": "sd_xl_base_1.0.safetensors",
+    "width": 1024,
+    "height": 1024,
+    "steps": 30,
+    "cfg_scale": 7.5,
+    "sampler": "euler_ancestral",
+    "scheduler": "normal",
+    "negative_prompt": "low quality, blurry, distorted, deformed, ugly, bad anatomy"
+  }
+}

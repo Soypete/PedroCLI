@@ -1,0 +1,458 @@
+{{template "base" .}}
+
+{{define "content"}}
+<div class="max-w-6xl mx-auto">
+    <!-- Page header -->
+    <div class="mb-6 sm:mb-8">
+        <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Vision Tools</h1>
+        <p class="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600">Generate images for blog posts with AI-powered alt text</p>
+    </div>
+
+    <!-- Mode tabs -->
+    <div class="border-b border-gray-200 mb-6">
+        <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+            <button onclick="switchMode('generate')" id="tab-generate"
+                    class="tab-active border-b-2 border-blue-500 py-4 px-1 text-sm font-medium text-blue-600">
+                Generate Image
+            </button>
+            <button onclick="switchMode('analyze')" id="tab-analyze"
+                    class="border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                Analyze Image
+            </button>
+            <button onclick="switchMode('gallery')" id="tab-gallery"
+                    class="border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                Gallery
+            </button>
+        </nav>
+    </div>
+
+    <!-- Generate Mode -->
+    <div id="mode-generate" class="mode-content">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+            <!-- Left: Form -->
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6 lg:sticky lg:top-4">
+                    <h2 class="text-xl font-semibold text-gray-900 mb-4">Generate Blog Image</h2>
+
+                    <form id="generate-form" class="space-y-4">
+                        <!-- Blog content -->
+                        <div>
+                            <label for="blog-content" class="block text-sm font-medium text-gray-700 mb-2">
+                                Blog Content
+                            </label>
+                            <textarea id="blog-content"
+                                      name="blog_content"
+                                      rows="6"
+                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                      placeholder="Paste your blog post content here..."></textarea>
+                        </div>
+
+                        <!-- Style preset -->
+                        <div>
+                            <label for="style-preset" class="block text-sm font-medium text-gray-700 mb-2">
+                                Style Preset
+                            </label>
+                            <select id="style-preset"
+                                    name="style_preset"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                                <option value="blog_hero">Blog Hero Image</option>
+                                <option value="technical_diagram">Technical Diagram</option>
+                                <option value="code_visualization">Code Visualization</option>
+                                <option value="social_preview">Social Preview (OG Image)</option>
+                                <option value="newsletter_header">Newsletter Header</option>
+                            </select>
+                        </div>
+
+                        <!-- Aspect ratio -->
+                        <div>
+                            <label for="aspect-ratio" class="block text-sm font-medium text-gray-700 mb-2">
+                                Aspect Ratio
+                            </label>
+                            <select id="aspect-ratio"
+                                    name="aspect_ratio"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                                <option value="16:9">16:9 (Standard)</option>
+                                <option value="21:9">21:9 (Ultra-wide)</option>
+                                <option value="4:3">4:3 (Classic)</option>
+                                <option value="1:1">1:1 (Square)</option>
+                            </select>
+                        </div>
+
+                        <!-- Reference image upload -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Reference Image (optional)
+                            </label>
+                            <div id="drop-zone"
+                                 class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-blue-400 transition-colors">
+                                <input type="file" id="reference-image" name="reference_image"
+                                       accept="image/*" class="hidden" onchange="handleFileSelect(this)">
+                                <div class="text-gray-500">
+                                    <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                    </svg>
+                                    <p class="mt-1">Drag & drop or <span class="text-blue-600">browse</span></p>
+                                    <p class="text-xs mt-1">Use for style reference</p>
+                                </div>
+                            </div>
+                            <div id="file-preview" class="hidden mt-2">
+                                <img id="preview-img" class="w-full rounded-lg" />
+                                <button type="button" onclick="clearFile()" class="mt-2 text-sm text-red-600 hover:text-red-700">
+                                    Remove
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Additional instructions -->
+                        <div>
+                            <label for="instructions" class="block text-sm font-medium text-gray-700 mb-2">
+                                Additional Instructions (optional)
+                            </label>
+                            <textarea id="instructions"
+                                      name="instructions"
+                                      rows="2"
+                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                      placeholder="Any specific style or content requirements..."></textarea>
+                        </div>
+
+                        <!-- Submit button -->
+                        <button type="submit" id="generate-btn"
+                                class="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-base sm:text-sm flex items-center justify-center">
+                            <svg class="hidden animate-spin -ml-1 mr-3 h-5 w-5 text-white" id="generate-spinner" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span>Generate Image</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Right: Results -->
+            <div class="lg:col-span-2">
+                <div id="results-area" class="space-y-4">
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 text-center text-gray-500">
+                        <p>Generated images will appear here</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Analyze Mode -->
+    <div id="mode-analyze" class="mode-content hidden">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Upload area -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 class="text-xl font-semibold text-gray-900 mb-4">Analyze Image</h2>
+
+                <div id="analyze-drop-zone"
+                     class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-blue-400 transition-colors">
+                    <input type="file" id="analyze-image" accept="image/*" class="hidden" onchange="handleAnalyzeFileSelect(this)">
+                    <svg class="mx-auto h-16 w-16 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <p class="mt-2 text-lg">Drag & drop an image</p>
+                    <p class="text-sm text-gray-500">or click to browse</p>
+                </div>
+
+                <div id="analyze-preview" class="hidden mt-4">
+                    <img id="analyze-preview-img" class="w-full rounded-lg shadow" />
+                    <div class="mt-4 flex space-x-2">
+                        <button onclick="analyzeImage('description')" class="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700">
+                            Describe
+                        </button>
+                        <button onclick="analyzeImage('alt_text')" class="flex-1 bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700">
+                            Generate Alt Text
+                        </button>
+                        <button onclick="analyzeImage('extract_text')" class="flex-1 bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700">
+                            Extract Text
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analysis results -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 class="text-xl font-semibold text-gray-900 mb-4">Analysis Results</h2>
+                <div id="analysis-results" class="text-gray-600">
+                    <p class="text-center text-gray-400 py-8">Upload an image to analyze</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gallery Mode -->
+    <div id="mode-gallery" class="mode-content hidden">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-semibold text-gray-900">Generated Images</h2>
+            <button onclick="refreshGallery()" class="text-sm text-blue-600 hover:text-blue-700 py-2 px-3">
+                Refresh
+            </button>
+        </div>
+
+        <div id="gallery-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="text-center py-12 text-gray-500 col-span-full">
+                Loading gallery...
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Mode switching
+function switchMode(mode) {
+    // Update tabs
+    document.querySelectorAll('[id^="tab-"]').forEach(tab => {
+        tab.classList.remove('tab-active', 'border-blue-500', 'text-blue-600');
+        tab.classList.add('border-transparent', 'text-gray-500');
+    });
+    const activeTab = document.getElementById('tab-' + mode);
+    activeTab.classList.add('tab-active', 'border-blue-500', 'text-blue-600');
+    activeTab.classList.remove('border-transparent', 'text-gray-500');
+
+    // Update content
+    document.querySelectorAll('.mode-content').forEach(content => {
+        content.classList.add('hidden');
+    });
+    document.getElementById('mode-' + mode).classList.remove('hidden');
+
+    // Load gallery if switching to gallery mode
+    if (mode === 'gallery') {
+        refreshGallery();
+    }
+}
+
+// File upload handling
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('reference-image');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('border-blue-500', 'bg-blue-50');
+});
+dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+});
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+    if (e.dataTransfer.files.length) {
+        fileInput.files = e.dataTransfer.files;
+        handleFileSelect(fileInput);
+    }
+});
+
+function handleFileSelect(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            document.getElementById('preview-img').src = e.target.result;
+            document.getElementById('file-preview').classList.remove('hidden');
+            document.getElementById('drop-zone').classList.add('hidden');
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+function clearFile() {
+    document.getElementById('reference-image').value = '';
+    document.getElementById('file-preview').classList.add('hidden');
+    document.getElementById('drop-zone').classList.remove('hidden');
+}
+
+// Analyze mode file handling
+const analyzeDropZone = document.getElementById('analyze-drop-zone');
+const analyzeFileInput = document.getElementById('analyze-image');
+
+analyzeDropZone.addEventListener('click', () => analyzeFileInput.click());
+analyzeDropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    analyzeDropZone.classList.add('border-blue-500', 'bg-blue-50');
+});
+analyzeDropZone.addEventListener('dragleave', () => {
+    analyzeDropZone.classList.remove('border-blue-500', 'bg-blue-50');
+});
+analyzeDropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    analyzeDropZone.classList.remove('border-blue-500', 'bg-blue-50');
+    if (e.dataTransfer.files.length) {
+        analyzeFileInput.files = e.dataTransfer.files;
+        handleAnalyzeFileSelect(analyzeFileInput);
+    }
+});
+
+function handleAnalyzeFileSelect(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            document.getElementById('analyze-preview-img').src = e.target.result;
+            document.getElementById('analyze-preview').classList.remove('hidden');
+            analyzeDropZone.classList.add('hidden');
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+// Generate form submission
+document.getElementById('generate-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const btn = document.getElementById('generate-btn');
+    const spinner = document.getElementById('generate-spinner');
+    btn.disabled = true;
+    spinner.classList.remove('hidden');
+
+    const formData = new FormData(e.target);
+
+    try {
+        const response = await fetch('/api/vision/generate', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+        displayGenerationResult(result);
+    } catch (error) {
+        console.error('Generation error:', error);
+        document.getElementById('results-area').innerHTML = `
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+                Error: ${error.message}
+            </div>
+        `;
+    } finally {
+        btn.disabled = false;
+        spinner.classList.add('hidden');
+    }
+});
+
+function displayGenerationResult(result) {
+    const resultsArea = document.getElementById('results-area');
+
+    if (result.error) {
+        resultsArea.innerHTML = `
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+                ${result.error}
+            </div>
+        `;
+        return;
+    }
+
+    let imagesHtml = '';
+    if (result.images && result.images.length > 0) {
+        imagesHtml = result.images.map(img => `
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <img src="/api/vision/image/${result.job_id}/${img.filename}"
+                     alt="${result.alt_text || 'Generated image'}"
+                     class="w-full object-cover" />
+                <div class="p-4">
+                    <p class="text-sm text-gray-600 mb-2"><strong>Alt Text:</strong> ${result.alt_text || 'Generating...'}</p>
+                    <p class="text-xs text-gray-400">Seed: ${result.seed}</p>
+                    <div class="mt-3 flex space-x-2">
+                        <a href="/api/vision/image/${result.job_id}/${img.filename}"
+                           download="${img.filename}"
+                           class="flex-1 text-center bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 text-sm">
+                            Download
+                        </a>
+                        <button onclick="regenerateImage('${result.prompt_used}', ${result.seed})"
+                                class="flex-1 bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 text-sm">
+                            Regenerate
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    resultsArea.innerHTML = imagesHtml || '<div class="text-center text-gray-500 py-8">No images generated</div>';
+}
+
+async function analyzeImage(action) {
+    const file = document.getElementById('analyze-image').files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('image', file);
+    formData.append('action', action);
+
+    document.getElementById('analysis-results').innerHTML = '<p class="text-center">Analyzing...</p>';
+
+    try {
+        const response = await fetch('/api/vision/analyze', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+
+        let html = '';
+        if (action === 'alt_text') {
+            html = `
+                <div class="space-y-2">
+                    <h3 class="font-medium">Generated Alt Text:</h3>
+                    <p class="bg-gray-100 p-3 rounded-lg text-gray-800">${result.alt_text}</p>
+                    <button onclick="navigator.clipboard.writeText('${result.alt_text}')"
+                            class="text-sm text-blue-600 hover:text-blue-700">
+                        Copy to clipboard
+                    </button>
+                </div>
+            `;
+        } else {
+            html = `
+                <div class="space-y-2">
+                    <h3 class="font-medium">Analysis Result:</h3>
+                    <p class="bg-gray-100 p-3 rounded-lg text-gray-800 whitespace-pre-wrap">${result.description || result.text || JSON.stringify(result, null, 2)}</p>
+                </div>
+            `;
+        }
+
+        document.getElementById('analysis-results').innerHTML = html;
+    } catch (error) {
+        document.getElementById('analysis-results').innerHTML = `
+            <div class="text-red-600">Error: ${error.message}</div>
+        `;
+    }
+}
+
+async function refreshGallery() {
+    const grid = document.getElementById('gallery-grid');
+    grid.innerHTML = '<div class="text-center py-12 text-gray-500 col-span-full">Loading...</div>';
+
+    try {
+        const response = await fetch('/api/vision/gallery');
+        const images = await response.json();
+
+        if (!images || images.length === 0) {
+            grid.innerHTML = '<div class="text-center py-12 text-gray-500 col-span-full">No images yet</div>';
+            return;
+        }
+
+        grid.innerHTML = images.map(img => `
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <img src="/api/vision/image/${img.job_id}/${img.filename}"
+                     alt="${img.alt_text || 'Generated image'}"
+                     class="w-full h-48 object-cover cursor-pointer"
+                     onclick="openImageModal('${img.job_id}', '${img.filename}')" />
+                <div class="p-3">
+                    <p class="text-xs text-gray-500 truncate">${img.alt_text || 'No alt text'}</p>
+                    <p class="text-xs text-gray-400 mt-1">${new Date(img.created_at).toLocaleDateString()}</p>
+                </div>
+            </div>
+        `).join('');
+    } catch (error) {
+        grid.innerHTML = `<div class="text-center py-12 text-red-500 col-span-full">Error: ${error.message}</div>`;
+    }
+}
+
+function regenerateImage(prompt, seed) {
+    document.getElementById('instructions').value = prompt;
+    // Optionally trigger generation with new seed
+}
+
+function openImageModal(jobId, filename) {
+    // TODO: Implement modal view
+    window.open(`/api/vision/image/${jobId}/${filename}`, '_blank');
+}
+</script>
+{{end}}

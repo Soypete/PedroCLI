@@ -19,22 +19,90 @@ services:
     #           count: 1
     #           capabilities: [gpu]
 
+  # ComfyUI service for image generation
+  comfyui:
+    image: ghcr.io/ai-dock/comfyui:latest
+    container_name: pedrocli-comfyui
+    ports:
+      - "8188:8188"  # ComfyUI web interface
+      - "8189:8189"  # API port (if separate)
+    volumes:
+      # Model storage
+      - ./models/sd:/opt/ComfyUI/models/checkpoints
+      - ./models/vae:/opt/ComfyUI/models/vae
+      - ./models/lora:/opt/ComfyUI/models/loras
+      - ./models/controlnet:/opt/ComfyUI/models/controlnet
+      - ./models/clip:/opt/ComfyUI/models/clip
+      # Output and input directories
+      - ./storage/generated:/opt/ComfyUI/output
+      - ./storage/reference:/opt/ComfyUI/input
+      # Custom workflows
+      - ./comfyui/workflows:/opt/ComfyUI/user/default/workflows
+      # Custom nodes (optional)
+      - ./comfyui/custom_nodes:/opt/ComfyUI/custom_nodes
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CLI_ARGS=--listen 0.0.0.0 --enable-cors-header
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8188/system_stats"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # PedroCLI service
   pedrocli:
     build: .
     container_name: pedrocli
     depends_on:
       - ollama
+      - comfyui
     volumes:
       # Mount your project directory
       - ./:/workspace
       # Mount config file
       - ./.pedroceli.json:/root/.pedroceli.json:ro
+      # Shared storage for images
+      - ./storage:/storage
     environment:
       # Ollama URL (internal docker network)
       OLLAMA_URL: http://ollama:11434
-    network_mode: "service:ollama"
+      # ComfyUI URL
+      COMFYUI_URL: http://comfyui:8188
+    networks:
+      - pedrocli-network
     command: help
+
+  # HTTP server for web UI
+  pedrocli-http:
+    build: .
+    container_name: pedrocli-http
+    depends_on:
+      - ollama
+      - comfyui
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./:/workspace
+      - ./.pedroceli.json:/root/.pedroceli.json:ro
+      - ./storage:/storage
+    environment:
+      OLLAMA_URL: http://ollama:11434
+      COMFYUI_URL: http://comfyui:8188
+    networks:
+      - pedrocli-network
+    command: http-server --port 8080
+
+networks:
+  pedrocli-network:
+    driver: bridge
 
 volumes:
   ollama-data:
