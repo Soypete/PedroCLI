@@ -509,6 +509,78 @@ Unlike in-memory systems, PedroCLI writes all context to `/tmp/pedroceli-jobs/`:
 - Natural context window management
 - Clear history of what the agent did
 
+## Podcast Tools Mode
+
+PedroCLI includes a **Podcast Tools Mode** for managing podcast content. This mode integrates with Notion and Google Calendar via MCP servers.
+
+### Podcast Job Types
+
+- **Create Script**: Generate episode scripts from topics and notes
+- **Add Link**: Add articles/news links to Notion for review
+- **Add Guest**: Add guest information to your guests database
+- **Create Outline**: Generate episode structure and outlines
+- **Review News**: Summarize news items for episode prep
+
+### Setup
+
+1. Copy the podcast config template:
+```bash
+cp .pedroceli.example.podcast.json ~/.pedroceli.json
+```
+
+2. Fill in the TODO placeholders:
+   - Notion API key from https://www.notion.so/my-integrations
+   - Notion database IDs for scripts, articles, news, and guests
+   - Google Calendar credentials
+   - Podcast metadata (name, description, cohosts)
+
+3. Install the MCP servers (first run will install automatically):
+```bash
+npx -y @notionhq/notion-mcp-server  # Notion
+npx -y @anthropic/google-calendar-mcp  # Google Calendar
+```
+
+### Model Profiles
+
+Configure different models for coding vs content tasks:
+
+```json
+{
+  "model_profiles": {
+    "coder": {
+      "type": "ollama",
+      "model_name": "qwen2.5-coder:32b",
+      "temperature": 0.2
+    },
+    "content": {
+      "type": "ollama",
+      "model_name": "qwen3:32b",
+      "temperature": 0.7
+    }
+  },
+  "podcast": {
+    "model_profile": "content"
+  }
+}
+```
+
+### Web UI Mode Switching
+
+The web UI includes a mode switcher to toggle between:
+- **Coding Tools**: Builder, Debugger, Reviewer, Triager
+- **Podcast Tools**: Script Creator, Link Adder, Guest Manager, etc.
+
+Mode selection is persisted in localStorage.
+
+## Future Work / TODO
+
+The following features are planned for future releases:
+
+- [ ] **Database for Job Management**: Replace file-based job storage with PostgreSQL for better querying, persistence, and scalability
+- [x] **Podcast Tools Mode**: Add support for podcast content management with Notion and Google Calendar integration
+- [x] **Model Profiles**: Support for multiple model configurations (e.g., coding model vs content model)
+- [x] **Web UI Enhancements**: Mode switching between different tool sets
+
 ## License
 
 MIT - Use it however you want. Build cool things.
