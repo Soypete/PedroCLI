@@ -1,0 +1,23 @@
+{
+  "name": "code_visualization",
+  "category": "code_visualization",
+  "description": "Abstract visualizations of code concepts and programming themes",
+  "base_prompt": "abstract digital art, code concept visualization, technology theme, circuit patterns, data flow, neon accents, dark background",
+  "style_modifiers": [
+    "cyberpunk aesthetic",
+    "glowing elements",
+    "matrix-style",
+    "binary patterns",
+    "network nodes"
+  ],
+  "negative_prompt": "photo, realistic faces, cluttered, text heavy, low quality, blurry, messy",
+  "recommended_model": "sdxl_base",
+  "aspect_ratio": "16:9",
+  "width": 1536,
+  "height": 864,
+  "steps": 35,
+  "cfg_scale": 8.5,
+  "sampler": "dpmpp_2m",
+  "scheduler": "karras",
+  "alt_text_instructions": "Describe the programming or technology concept the visualization represents. Focus on the abstract meaning rather than literal description of shapes."
+}

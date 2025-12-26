@@ -1,0 +1,22 @@
+{
+  "name": "blog_hero_image",
+  "category": "blog_hero",
+  "description": "Hero images for blog posts - professional, clean, visually striking",
+  "base_prompt": "professional blog header image, clean modern design, high quality photography, sharp focus, centered composition",
+  "style_modifiers": [
+    "professional lighting",
+    "minimal background",
+    "editorial style",
+    "high contrast"
+  ],
+  "negative_prompt": "low quality, blurry, distorted, text, watermark, logo, amateur, busy background, cluttered, noisy",
+  "recommended_model": "sdxl_base",
+  "aspect_ratio": "16:9",
+  "width": 1536,
+  "height": 864,
+  "steps": 35,
+  "cfg_scale": 8.0,
+  "sampler": "dpmpp_2m",
+  "scheduler": "karras",
+  "alt_text_instructions": "Describe the main subject and its relevance to the blog topic. Focus on what the image represents conceptually. Maximum 125 characters. Do not start with 'image of' or similar phrases."
+}
