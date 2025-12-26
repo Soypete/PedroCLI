@@ -8,10 +8,13 @@ import (
 
 	"github.com/soypete/pedrocli/pkg/agents"
 	"github.com/soypete/pedrocli/pkg/config"
+	"github.com/soypete/pedrocli/pkg/database"
+	"github.com/soypete/pedrocli/pkg/hooks"
 	depcheck "github.com/soypete/pedrocli/pkg/init"
 	"github.com/soypete/pedrocli/pkg/jobs"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/mcp"
+	"github.com/soypete/pedrocli/pkg/repos"
 	"github.com/soypete/pedrocli/pkg/tools"
 )
 
@@ -80,6 +83,35 @@ func main() {
 	listJobsTool := tools.NewListJobsTool(jobManager)
 	cancelJobTool := tools.NewCancelJobTool(jobManager)
 
+	// Initialize repo management system
+	var repoStore repos.Store
+	if cfg.RepoStorage.DatabasePath != "" {
+		store, err := database.NewSQLiteStore(cfg.RepoStorage.DatabasePath)
+		if err != nil {
+			// Log but don't fail - repo management is optional
+			fmt.Fprintf(os.Stderr, "Warning: Failed to initialize repo store: %v\n", err)
+		} else {
+			repoStore = store
+			defer store.Close()
+		}
+	}
+
+	// Create hooks manager
+	hooksManager := hooks.NewManager()
+
+	// Create repo manager with GOPATH-style storage
+	repoManager := repos.NewManager(
+		repos.WithBasePath(cfg.RepoStorage.BasePath),
+		repos.WithStore(repoStore),
+	)
+
+	// Create git operations and executor
+	gitOps := repos.NewGitOps()
+	repoExecutor := repos.NewExecutor()
+
+	// Create repo management tool
+	repoTool := tools.NewRepoTool(repoManager, gitOps, hooksManager, repoExecutor)
+
 	server.RegisterTool(fileTool)
 	server.RegisterTool(gitTool)
 	server.RegisterTool(bashTool)
@@ -90,6 +122,7 @@ func main() {
 	server.RegisterTool(getJobStatusTool)
 	server.RegisterTool(listJobsTool)
 	server.RegisterTool(cancelJobTool)
+	server.RegisterTool(repoTool)
 
 	// Create and register agents with all tools
 	builderAgent := agents.NewBuilderAgent(cfg, backend, jobManager)
@@ -100,6 +133,7 @@ func main() {
 	builderAgent.RegisterTool(gitTool)
 	builderAgent.RegisterTool(bashTool)
 	builderAgent.RegisterTool(testTool)
+	builderAgent.RegisterTool(repoTool)
 
 	reviewerAgent := agents.NewReviewerAgent(cfg, backend, jobManager)
 	reviewerAgent.RegisterTool(fileTool)
@@ -109,6 +143,7 @@ func main() {
 	reviewerAgent.RegisterTool(gitTool)
 	reviewerAgent.RegisterTool(bashTool)
 	reviewerAgent.RegisterTool(testTool)
+	reviewerAgent.RegisterTool(repoTool)
 
 	debuggerAgent := agents.NewDebuggerAgent(cfg, backend, jobManager)
 	debuggerAgent.RegisterTool(fileTool)
@@ -118,6 +153,7 @@ func main() {
 	debuggerAgent.RegisterTool(gitTool)
 	debuggerAgent.RegisterTool(bashTool)
 	debuggerAgent.RegisterTool(testTool)
+	debuggerAgent.RegisterTool(repoTool)
 
 	triagerAgent := agents.NewTriagerAgent(cfg, backend, jobManager)
 	triagerAgent.RegisterTool(fileTool)
@@ -127,6 +163,7 @@ func main() {
 	triagerAgent.RegisterTool(gitTool)
 	triagerAgent.RegisterTool(bashTool)
 	triagerAgent.RegisterTool(testTool)
+	triagerAgent.RegisterTool(repoTool)
 
 	// Wrap agents as tools for MCP
 	server.RegisterTool(mcp.NewAgentTool(builderAgent))
