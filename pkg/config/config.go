@@ -24,6 +24,10 @@ type Config struct {
 	Voice       VoiceConfig       `json:"voice"`
 	RepoStorage RepoStorageConfig `json:"repo_storage"`
 	Hooks       HooksConfig       `json:"hooks"`
+	// Model profiles for different use cases (coding vs content)
+	ModelProfiles map[string]ModelConfig `json:"model_profiles,omitempty"`
+	// Podcast tools configuration
+	Podcast PodcastConfig `json:"podcast,omitempty"`
 }
 
 // ModelConfig contains model configuration
@@ -168,6 +172,98 @@ type CustomCheck struct {
 	Command  string   `json:"command"`
 	Args     []string `json:"args,omitempty"`
 	Optional bool     `json:"optional,omitempty"`
+}
+
+// PodcastConfig contains podcast tools configuration
+type PodcastConfig struct {
+	Enabled bool `json:"enabled"`
+	// Model profile to use for podcast tasks (references ModelProfiles key)
+	ModelProfile string `json:"model_profile,omitempty"`
+	// Notion MCP server configuration
+	Notion NotionMCPConfig `json:"notion,omitempty"`
+	// Google Calendar MCP server configuration
+	Calendar CalendarMCPConfig `json:"calendar,omitempty"`
+	// Podcast metadata
+	Metadata PodcastMetadata `json:"metadata,omitempty"`
+}
+
+// NotionMCPConfig contains Notion MCP server configuration
+type NotionMCPConfig struct {
+	Enabled bool   `json:"enabled"`
+	Command string `json:"command,omitempty"` // e.g., "npx @notionhq/notion-mcp-server"
+	// TODO: Add your Notion API key here
+	APIKey string `json:"api_key,omitempty"`
+	// Database IDs for different content types
+	Databases NotionDatabases `json:"databases,omitempty"`
+}
+
+// NotionDatabases contains Notion database IDs
+type NotionDatabases struct {
+	// TODO: Add your Notion database IDs here
+	Scripts          string `json:"scripts,omitempty"`           // Episode scripts and drafts
+	PotentialArticle string `json:"potential_articles,omitempty"` // Links to review for episodes
+	ArticlesReview   string `json:"articles_review,omitempty"`   // Curated article summaries
+	NewsReview       string `json:"news_review,omitempty"`       // Current news items to discuss
+	Guests           string `json:"guests,omitempty"`            // Guest information and scheduling
+}
+
+// CalendarMCPConfig contains Google Calendar MCP server configuration
+type CalendarMCPConfig struct {
+	Enabled bool   `json:"enabled"`
+	Command string `json:"command,omitempty"` // e.g., "npx google-calendar-mcp"
+	// TODO: Add your Google Calendar ID here
+	CalendarID string `json:"calendar_id,omitempty"`
+	// TODO: Path to OAuth credentials file
+	CredentialsPath string `json:"credentials_path,omitempty"`
+}
+
+// PodcastMetadata contains podcast information for prompts
+type PodcastMetadata struct {
+	// TODO: Fill in your podcast details
+	Name        string   `json:"name,omitempty"`        // e.g., "Domesticating AI"
+	Description string   `json:"description,omitempty"` // Podcast description
+	Format      string   `json:"format,omitempty"`      // e.g., "weekly discussion with cohost"
+	Cohosts     []Cohost `json:"cohosts,omitempty"`     // Cohost information
+	// TODO: Add recording platform details if needed
+	RecordingPlatform string `json:"recording_platform,omitempty"` // e.g., "Riverside"
+	// TODO: Google Drive folder for assets
+	DriveFolder string `json:"drive_folder,omitempty"`
+}
+
+// Cohost contains cohost information
+type Cohost struct {
+	Name string `json:"name,omitempty"`
+	Bio  string `json:"bio,omitempty"`
+	Role string `json:"role,omitempty"` // e.g., "host", "cohost", "producer"
+}
+
+// GetModelConfig returns the model configuration for a given profile name.
+// If the profile is empty or not found, returns the default Model config.
+func (c *Config) GetModelConfig(profile string) ModelConfig {
+	if profile == "" {
+		return c.Model
+	}
+	if c.ModelProfiles != nil {
+		if cfg, ok := c.ModelProfiles[profile]; ok {
+			return cfg
+		}
+	}
+	return c.Model
+}
+
+// GetPodcastModelConfig returns the model configuration for podcast tasks.
+// Uses the podcast.model_profile if set, otherwise falls back to default.
+func (c *Config) GetPodcastModelConfig() ModelConfig {
+	if c.Podcast.ModelProfile != "" {
+		return c.GetModelConfig(c.Podcast.ModelProfile)
+	}
+	// If no podcast profile specified, try "content" profile, then default
+	if c.ModelProfiles != nil {
+		if cfg, ok := c.ModelProfiles["content"]; ok {
+			return cfg
+		}
+	}
+	return c.Model
 }
 
 // Load loads configuration from a file
@@ -321,6 +417,28 @@ func (c *Config) setDefaults() {
 	}
 	if c.Hooks.PrePushTimeout == "" {
 		c.Hooks.PrePushTimeout = "5m"
+	}
+
+	// Model profiles defaults - apply same defaults to each profile
+	for name, profile := range c.ModelProfiles {
+		if profile.Temperature == 0 {
+			profile.Temperature = 0.2
+		}
+		if profile.UsableContext == 0 && profile.ContextSize > 0 {
+			profile.UsableContext = profile.ContextSize * 3 / 4
+		}
+		if profile.Threads == 0 {
+			profile.Threads = 8
+		}
+		c.ModelProfiles[name] = profile
+	}
+
+	// Podcast defaults
+	if c.Podcast.Notion.Command == "" {
+		c.Podcast.Notion.Command = "npx -y @notionhq/notion-mcp-server"
+	}
+	if c.Podcast.Calendar.Command == "" {
+		c.Podcast.Calendar.Command = "npx -y @anthropic/google-calendar-mcp"
 	}
 }
 
