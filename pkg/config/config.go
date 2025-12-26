@@ -9,18 +9,20 @@ import (
 
 // Config represents the Pedroceli configuration
 type Config struct {
-	Model     ModelConfig     `json:"model"`
-	Execution ExecutionConfig `json:"execution"`
-	Git       GitConfig       `json:"git"`
-	Tools     ToolsConfig     `json:"tools"`
-	Project   ProjectConfig   `json:"project"`
-	Limits    LimitsConfig    `json:"limits"`
-	Debug     DebugConfig     `json:"debug"`
-	Platform  PlatformConfig  `json:"platform"`
-	Init      InitConfig      `json:"init"`
-	LSP       LSPConfig       `json:"lsp"`
-	FileIO    FileIOConfig    `json:"fileio"`
-	Web       WebConfig       `json:"web"`
+	Model       ModelConfig       `json:"model"`
+	Execution   ExecutionConfig   `json:"execution"`
+	Git         GitConfig         `json:"git"`
+	Tools       ToolsConfig       `json:"tools"`
+	Project     ProjectConfig     `json:"project"`
+	Limits      LimitsConfig      `json:"limits"`
+	Debug       DebugConfig       `json:"debug"`
+	Platform    PlatformConfig    `json:"platform"`
+	Init        InitConfig        `json:"init"`
+	LSP         LSPConfig         `json:"lsp"`
+	FileIO      FileIOConfig      `json:"fileio"`
+	Web         WebConfig         `json:"web"`
+	RepoStorage RepoStorageConfig `json:"repo_storage"`
+	Hooks       HooksConfig       `json:"hooks"`
 }
 
 // ModelConfig contains model configuration
@@ -121,6 +123,43 @@ type WebConfig struct {
 	Enabled bool   `json:"enabled"`
 	Port    int    `json:"port"`
 	Host    string `json:"host"`
+}
+
+// RepoStorageConfig contains repository storage settings
+type RepoStorageConfig struct {
+	BasePath       string                       `json:"base_path"`
+	DatabasePath   string                       `json:"database_path,omitempty"`
+	GitCredentials map[string]GitCredentialDef  `json:"git_credentials,omitempty"`
+	AutoPruneDays  int                          `json:"auto_prune_days,omitempty"`
+	DefaultBranch  string                       `json:"default_branch,omitempty"`
+	FetchOnAccess  bool                         `json:"fetch_on_access"`
+	SSHKeyPath     string                       `json:"ssh_key_path,omitempty"`
+}
+
+// GitCredentialDef defines credentials for a git provider
+type GitCredentialDef struct {
+	Type       string `json:"type"` // "ssh", "https", "token"
+	SSHKeyPath string `json:"ssh_key_path,omitempty"`
+	Username   string `json:"username,omitempty"`
+	// Token should be stored in environment variable, not config file
+	TokenEnvVar string `json:"token_env_var,omitempty"`
+}
+
+// HooksConfig contains git hooks settings
+type HooksConfig struct {
+	AutoInstall   bool          `json:"auto_install"`
+	ParseCIConfig bool          `json:"parse_ci_config"`
+	CustomChecks  []CustomCheck `json:"custom_checks,omitempty"`
+	PreCommitTimeout string     `json:"pre_commit_timeout,omitempty"`
+	PrePushTimeout   string     `json:"pre_push_timeout,omitempty"`
+}
+
+// CustomCheck defines a custom hook check
+type CustomCheck struct {
+	Name     string   `json:"name"`
+	Command  string   `json:"command"`
+	Args     []string `json:"args,omitempty"`
+	Optional bool     `json:"optional,omitempty"`
 }
 
 // Load loads configuration from a file
@@ -241,6 +280,31 @@ func (c *Config) setDefaults() {
 	}
 	if c.Web.Host == "" {
 		c.Web.Host = "0.0.0.0" // Bind to all interfaces for Tailscale/remote access
+	}
+
+	// RepoStorage defaults
+	if c.RepoStorage.BasePath == "" {
+		c.RepoStorage.BasePath = "/var/pedro/repos"
+	}
+	if c.RepoStorage.DatabasePath == "" {
+		c.RepoStorage.DatabasePath = filepath.Join(c.RepoStorage.BasePath, "pedro.db")
+	}
+	if c.RepoStorage.DefaultBranch == "" {
+		c.RepoStorage.DefaultBranch = "main"
+	}
+	if c.RepoStorage.AutoPruneDays == 0 {
+		c.RepoStorage.AutoPruneDays = 30
+	}
+	if c.RepoStorage.GitCredentials == nil {
+		c.RepoStorage.GitCredentials = make(map[string]GitCredentialDef)
+	}
+
+	// Hooks defaults
+	if c.Hooks.PreCommitTimeout == "" {
+		c.Hooks.PreCommitTimeout = "30s"
+	}
+	if c.Hooks.PrePushTimeout == "" {
+		c.Hooks.PrePushTimeout = "5m"
 	}
 }
 

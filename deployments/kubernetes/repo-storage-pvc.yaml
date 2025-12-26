@@ -1,0 +1,167 @@
+# Kubernetes PersistentVolumeClaim for PedroCLI Repository Storage
+#
+# This PVC provides persistent storage for the GOPATH-style repository structure:
+# /var/pedro/repos/src/{provider}/{owner}/{repo}/
+#
+# Usage:
+#   kubectl apply -f repo-storage-pvc.yaml
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pedro-repos
+  namespace: default
+  labels:
+    app: pedrocli
+    component: repo-storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  # Optional: specify a storage class
+  # storageClassName: fast-ssd
+---
+# ConfigMap for PedroCLI configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pedrocli-config
+  namespace: default
+data:
+  .pedrocli.json: |
+    {
+      "model": {
+        "type": "ollama",
+        "model_name": "qwen2.5-coder:32b",
+        "ollama_url": "http://ollama-service:11434"
+      },
+      "repo_storage": {
+        "base_path": "/var/pedro/repos",
+        "database_path": "/var/pedro/repos/pedro.db",
+        "fetch_on_access": true,
+        "default_branch": "main",
+        "auto_prune_days": 30
+      },
+      "hooks": {
+        "auto_install": true,
+        "parse_ci_config": true,
+        "pre_commit_timeout": "30s",
+        "pre_push_timeout": "5m"
+      },
+      "limits": {
+        "max_task_duration_minutes": 30,
+        "max_inference_runs": 20
+      }
+    }
+---
+# Deployment for PedroCLI HTTP Server
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pedrocli-server
+  namespace: default
+  labels:
+    app: pedrocli
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pedrocli
+  template:
+    metadata:
+      labels:
+        app: pedrocli
+    spec:
+      containers:
+        - name: pedrocli
+          image: pedrocli:latest
+          ports:
+            - containerPort: 8080
+              name: http
+          volumeMounts:
+            - name: repos
+              mountPath: /var/pedro/repos
+            - name: config
+              mountPath: /app/.pedrocli.json
+              subPath: .pedrocli.json
+            - name: ssh-keys
+              mountPath: /root/.ssh
+              readOnly: true
+          env:
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: git-credentials
+                  key: github-token
+                  optional: true
+            - name: GITLAB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: git-credentials
+                  key: gitlab-token
+                  optional: true
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "2000m"
+      volumes:
+        - name: repos
+          persistentVolumeClaim:
+            claimName: pedro-repos
+        - name: config
+          configMap:
+            name: pedrocli-config
+        - name: ssh-keys
+          secret:
+            secretName: git-ssh-keys
+            optional: true
+            defaultMode: 0600
+---
+# Service for PedroCLI HTTP Server
+apiVersion: v1
+kind: Service
+metadata:
+  name: pedrocli-service
+  namespace: default
+spec:
+  selector:
+    app: pedrocli
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+  type: ClusterIP
+---
+# Secret template for git credentials
+# Apply separately with your actual credentials:
+#   kubectl create secret generic git-credentials \
+#     --from-literal=github-token=ghp_xxx \
+#     --from-literal=gitlab-token=glpat-xxx
+apiVersion: v1
+kind: Secret
+metadata:
+  name: git-credentials
+  namespace: default
+type: Opaque
+stringData:
+  # Replace with actual tokens
+  github-token: ""
+  gitlab-token: ""
+---
+# Secret template for SSH keys
+# Apply separately with your actual keys:
+#   kubectl create secret generic git-ssh-keys \
+#     --from-file=id_ed25519=/path/to/key \
+#     --from-file=known_hosts=/path/to/known_hosts
+apiVersion: v1
+kind: Secret
+metadata:
+  name: git-ssh-keys
+  namespace: default
+type: Opaque
+# data should contain base64-encoded SSH keys

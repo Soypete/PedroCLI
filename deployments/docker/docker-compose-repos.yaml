@@ -1,0 +1,82 @@
+# Docker Compose configuration for PedroCLI with Repository Storage
+#
+# This configuration sets up PedroCLI with:
+# - Persistent GOPATH-style repository storage
+# - SQLite database for tracking repos and PRs
+# - Optional Ollama for local LLM inference
+#
+# Usage:
+#   docker-compose -f docker-compose-repos.yaml up -d
+
+version: '3.8'
+
+services:
+  pedrocli:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: pedrocli-server
+    ports:
+      - "8080:8080"
+    volumes:
+      # Persistent repository storage (GOPATH-style)
+      - pedro-repos:/var/pedro/repos
+
+      # Mount SSH keys for git authentication (optional)
+      - ${HOME}/.ssh:/root/.ssh:ro
+
+      # Configuration file
+      - ./config/.pedrocli.json:/app/.pedrocli.json:ro
+    environment:
+      # Git authentication tokens (set in .env file or environment)
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - GITLAB_TOKEN=${GITLAB_TOKEN:-}
+
+      # Ollama URL if running separately
+      - OLLAMA_URL=http://ollama:11434
+    depends_on:
+      - ollama
+    restart: unless-stopped
+    networks:
+      - pedrocli-network
+
+  # Optional: Ollama service for local LLM inference
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    restart: unless-stopped
+    networks:
+      - pedrocli-network
+    # Uncomment for GPU support
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+volumes:
+  # Persistent storage for repositories
+  # Structure: /var/pedro/repos/src/{provider}/{owner}/{repo}/
+  pedro-repos:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      # Change this path to your desired location
+      device: ${PEDRO_REPOS_PATH:-/var/pedro/repos}
+
+  # Persistent storage for Ollama models
+  ollama-models:
+    driver: local
+
+networks:
+  pedrocli-network:
+    driver: bridge

@@ -1,0 +1,58 @@
+{
+  "model": {
+    "type": "ollama",
+    "model_name": "qwen2.5-coder:32b",
+    "ollama_url": "http://ollama:11434",
+    "temperature": 0.2
+  },
+  "repo_storage": {
+    "base_path": "/var/pedro/repos",
+    "database_path": "/var/pedro/repos/pedro.db",
+    "fetch_on_access": true,
+    "default_branch": "main",
+    "auto_prune_days": 30,
+    "git_credentials": {
+      "github.com": {
+        "type": "token",
+        "token_env_var": "GITHUB_TOKEN"
+      },
+      "gitlab.com": {
+        "type": "token",
+        "token_env_var": "GITLAB_TOKEN"
+      }
+    }
+  },
+  "hooks": {
+    "auto_install": true,
+    "parse_ci_config": true,
+    "pre_commit_timeout": "30s",
+    "pre_push_timeout": "5m",
+    "custom_checks": [
+      {
+        "name": "security_scan",
+        "command": "trivy",
+        "args": ["fs", "."],
+        "optional": true
+      }
+    ]
+  },
+  "git": {
+    "always_draft_pr": false,
+    "branch_prefix": "pedrocli/",
+    "remote": "origin"
+  },
+  "limits": {
+    "max_task_duration_minutes": 30,
+    "max_inference_runs": 20
+  },
+  "web": {
+    "enabled": true,
+    "port": 8080,
+    "host": "0.0.0.0"
+  },
+  "debug": {
+    "enabled": false,
+    "keep_temp_files": false,
+    "log_level": "info"
+  }
+}
