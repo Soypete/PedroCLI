@@ -1,0 +1,73 @@
+{
+  "model": {
+    "type": "ollama",
+    "model_name": "qwen2.5-coder:32b",
+    "temperature": 0.2
+  },
+  "model_profiles": {
+    "coder": {
+      "type": "ollama",
+      "model_name": "qwen2.5-coder:32b",
+      "temperature": 0.2
+    },
+    "content": {
+      "type": "ollama",
+      "model_name": "qwen3:32b",
+      "temperature": 0.7
+    }
+  },
+  "project": {
+    "name": "My Project",
+    "workdir": "/path/to/your/project"
+  },
+  "podcast": {
+    "enabled": true,
+    "model_profile": "content",
+    "notion": {
+      "enabled": true,
+      "command": "npx -y @notionhq/notion-mcp-server",
+      "api_key": "TODO: Add your Notion integration API key from https://www.notion.so/my-integrations",
+      "databases": {
+        "scripts": "TODO: Add Notion database ID for episode scripts",
+        "potential_articles": "TODO: Add Notion database ID for potential articles to review",
+        "articles_review": "TODO: Add Notion database ID for reviewed articles",
+        "news_review": "TODO: Add Notion database ID for news items",
+        "guests": "TODO: Add Notion database ID for guest information"
+      }
+    },
+    "calendar": {
+      "enabled": true,
+      "command": "npx -y @anthropic/google-calendar-mcp",
+      "calendar_id": "TODO: Add your Google Calendar ID (e.g., primary or specific calendar ID)",
+      "credentials_path": "TODO: Add path to your Google OAuth credentials JSON file"
+    },
+    "metadata": {
+      "name": "TODO: Your Podcast Name (e.g., Domesticating AI)",
+      "description": "TODO: Brief description of your podcast",
+      "format": "TODO: Describe your format (e.g., weekly discussion with cohost, interview format, solo commentary)",
+      "cohosts": [
+        {
+          "name": "TODO: Host Name",
+          "bio": "TODO: Brief bio",
+          "role": "host"
+        },
+        {
+          "name": "TODO: Cohost Name",
+          "bio": "TODO: Brief bio",
+          "role": "cohost"
+        }
+      ],
+      "recording_platform": "TODO: e.g., Riverside, Zencastr, Zoom",
+      "drive_folder": "TODO: Google Drive folder ID for podcast assets (optional)"
+    }
+  },
+  "web": {
+    "enabled": true,
+    "port": 8080,
+    "host": "0.0.0.0"
+  },
+  "limits": {
+    "max_task_duration_minutes": 30,
+    "max_inference_runs": 20
+  }
+}

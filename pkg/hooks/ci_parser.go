@@ -113,10 +113,10 @@ func (p *DefaultCIConfigParser) SupportsFormat(format string) bool {
 type githubWorkflow struct {
 	Jobs map[string]struct {
 		Steps []struct {
-			Name string `yaml:"name"`
-			Run  string `yaml:"run"`
+			Name string                 `yaml:"name"`
+			Run  string                 `yaml:"run"`
 			With map[string]interface{} `yaml:"with"`
-			Uses string `yaml:"uses"`
+			Uses string                 `yaml:"uses"`
 		} `yaml:"steps"`
 	} `yaml:"jobs"`
 }
@@ -161,9 +161,9 @@ func (p *DefaultCIConfigParser) parseGitHubActions(data []byte) ([]CIStep, error
 
 type gitlabCI struct {
 	Jobs map[string]struct {
-		Script     []string          `yaml:"script"`
-		BeforeScript []string        `yaml:"before_script"`
-		Variables  map[string]string `yaml:"variables"`
+		Script       []string          `yaml:"script"`
+		BeforeScript []string          `yaml:"before_script"`
+		Variables    map[string]string `yaml:"variables"`
 	} `yaml:",inline"`
 }
 
@@ -280,16 +280,16 @@ func (p *DefaultCIConfigParser) parseMakefile(data []byte) ([]CIStep, error) {
 	// Looks for common targets: test, lint, build, fmt, check
 	targetRegex := regexp.MustCompile(`^([a-zA-Z_-]+):.*$`)
 	commonTargets := map[string]bool{
-		"test":       true,
-		"lint":       true,
-		"build":      true,
-		"fmt":        true,
-		"format":     true,
-		"check":      true,
-		"vet":        true,
-		"verify":     true,
-		"all":        true,
-		"ci":         true,
+		"test":   true,
+		"lint":   true,
+		"build":  true,
+		"fmt":    true,
+		"format": true,
+		"check":  true,
+		"vet":    true,
+		"verify": true,
+		"all":    true,
+		"ci":     true,
 	}
 
 	scanner := bufio.NewScanner(strings.NewReader(string(data)))

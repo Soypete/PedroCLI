@@ -192,14 +192,14 @@ type LintResult struct {
 
 // TestResult represents test execution results
 type TestResult struct {
-	Passed     bool          `json:"passed"`
-	TotalTests int           `json:"total_tests"`
-	PassedTests int          `json:"passed_tests"`
-	FailedTests int          `json:"failed_tests"`
-	SkippedTests int         `json:"skipped_tests"`
-	Duration   time.Duration `json:"duration"`
-	Output     string        `json:"output"`
-	Failures   []TestFailure `json:"failures,omitempty"`
+	Passed       bool          `json:"passed"`
+	TotalTests   int           `json:"total_tests"`
+	PassedTests  int           `json:"passed_tests"`
+	FailedTests  int           `json:"failed_tests"`
+	SkippedTests int           `json:"skipped_tests"`
+	Duration     time.Duration `json:"duration"`
+	Output       string        `json:"output"`
+	Failures     []TestFailure `json:"failures,omitempty"`
 }
 
 // TestFailure represents a single test failure

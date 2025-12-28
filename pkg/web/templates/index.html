@@ -2,10 +2,24 @@
 
 {{define "content"}}
 <div class="max-w-6xl mx-auto">
+    <!-- Mode switcher -->
+    <div class="mb-4 sm:mb-6">
+        <div class="inline-flex rounded-lg border border-gray-200 bg-white p-1">
+            <button id="mode-coding" onclick="switchMode('coding')"
+                    class="mode-btn px-4 py-2 text-sm font-medium rounded-md transition-colors bg-blue-600 text-white">
+                Coding Tools
+            </button>
+            <button id="mode-podcast" onclick="switchMode('podcast')"
+                    class="mode-btn px-4 py-2 text-sm font-medium rounded-md transition-colors text-gray-700 hover:bg-gray-100">
+                Podcast Tools
+            </button>
+        </div>
+    </div>
+
     <!-- Page header -->
     <div class="mb-6 sm:mb-8">
-        <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Coding Jobs</h1>
-        <p class="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600">Create and manage autonomous coding tasks</p>
+        <h1 id="page-title" class="text-2xl sm:text-3xl font-bold text-gray-900">Coding Jobs</h1>
+        <p id="page-subtitle" class="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600">Create and manage autonomous coding tasks</p>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
@@ -25,14 +39,26 @@
                         <label for="type" class="block text-sm font-medium text-gray-700 mb-2">
                             Job Type
                         </label>
+                        <!-- Coding mode job types -->
                         <select id="type"
                                 name="type"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                class="coding-mode-only w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                                 onchange="updateFormFields(this.value)">
                             <option value="builder">Builder - Build new features</option>
                             <option value="debugger">Debugger - Fix issues</option>
                             <option value="reviewer">Reviewer - Review code</option>
                             <option value="triager">Triager - Diagnose issues</option>
+                        </select>
+                        <!-- Podcast mode job types -->
+                        <select id="type-podcast"
+                                name="type"
+                                class="podcast-mode-only hidden w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                onchange="updateFormFields(this.value)">
+                            <option value="create_podcast_script">Create Script - Generate episode scripts</option>
+                            <option value="add_notion_link">Add Link - Add article/news to review</option>
+                            <option value="add_guest">Add Guest - Add guest information</option>
+                            <option value="create_episode_outline">Create Outline - Generate episode structure</option>
+                            <option value="review_news_summary">Review News - Summarize news for prep</option>
                         </select>
                     </div>
 
@@ -109,6 +135,90 @@
                                placeholder="feature/my-feature">
                     </div>
 
+                    <!-- Podcast: Topic field -->
+                    <div id="topic-field" class="hidden">
+                        <label for="topic" class="block text-sm font-medium text-gray-700 mb-2">
+                            Episode Topic
+                        </label>
+                        <textarea id="topic"
+                                  name="topic"
+                                  rows="3"
+                                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                  placeholder="What is the episode about?"></textarea>
+                    </div>
+
+                    <!-- Podcast: Notes field -->
+                    <div id="notes-field" class="hidden">
+                        <label for="notes" class="block text-sm font-medium text-gray-700 mb-2">
+                            Notes (optional)
+                        </label>
+                        <textarea id="notes"
+                                  name="notes"
+                                  rows="2"
+                                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                  placeholder="Additional notes or context..."></textarea>
+                    </div>
+
+                    <!-- Podcast: URL field -->
+                    <div id="url-field" class="hidden">
+                        <label for="url" class="block text-sm font-medium text-gray-700 mb-2">
+                            URL
+                        </label>
+                        <input type="url"
+                               id="url"
+                               name="url"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="https://example.com/article">
+                    </div>
+
+                    <!-- Podcast: Guest Name field -->
+                    <div id="guest-name-field" class="hidden">
+                        <label for="guest-name" class="block text-sm font-medium text-gray-700 mb-2">
+                            Guest Name
+                        </label>
+                        <input type="text"
+                               id="guest-name"
+                               name="name"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="Jane Smith">
+                    </div>
+
+                    <!-- Podcast: Guest Bio field -->
+                    <div id="guest-bio-field" class="hidden">
+                        <label for="guest-bio" class="block text-sm font-medium text-gray-700 mb-2">
+                            Guest Bio
+                        </label>
+                        <textarea id="guest-bio"
+                                  name="bio"
+                                  rows="2"
+                                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                  placeholder="Brief bio or description..."></textarea>
+                    </div>
+
+                    <!-- Podcast: Guest Email field -->
+                    <div id="guest-email-field" class="hidden">
+                        <label for="guest-email" class="block text-sm font-medium text-gray-700 mb-2">
+                            Guest Email (optional)
+                        </label>
+                        <input type="email"
+                               id="guest-email"
+                               name="email"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="guest@example.com">
+                    </div>
+
+                    <!-- Podcast: Focus Topic field -->
+                    <div id="focus-topic-field" class="hidden">
+                        <label for="focus-topic" class="block text-sm font-medium text-gray-700 mb-2">
+                            Focus Topic (optional)
+                        </label>
+                        <input type="text"
+                               id="focus-topic"
+                               name="focus_topic"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="AI, machine learning, etc.">
+                    </div>
+
                     <!-- Submit button (larger touch target on mobile) -->
                     <button type="submit"
                             class="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-base sm:text-sm">
@@ -145,17 +255,88 @@
 </div>
 
 <script>
+// Current mode (coding or podcast)
+let currentMode = localStorage.getItem('pedrocli_mode') || 'coding';
+
+// Initialize mode on page load
+document.addEventListener('DOMContentLoaded', function() {
+    switchMode(currentMode, false);
+});
+
+// Switch between coding and podcast modes
+function switchMode(mode, save = true) {
+    currentMode = mode;
+    if (save) {
+        localStorage.setItem('pedrocli_mode', mode);
+    }
+
+    // Update button styles
+    const codingBtn = document.getElementById('mode-coding');
+    const podcastBtn = document.getElementById('mode-podcast');
+
+    if (mode === 'coding') {
+        codingBtn.classList.add('bg-blue-600', 'text-white');
+        codingBtn.classList.remove('text-gray-700', 'hover:bg-gray-100');
+        podcastBtn.classList.remove('bg-blue-600', 'text-white');
+        podcastBtn.classList.add('text-gray-700', 'hover:bg-gray-100');
+
+        // Update header
+        document.getElementById('page-title').textContent = 'Coding Jobs';
+        document.getElementById('page-subtitle').textContent = 'Create and manage autonomous coding tasks';
+
+        // Show/hide selectors
+        document.getElementById('type').classList.remove('hidden');
+        document.getElementById('type-podcast').classList.add('hidden');
+        document.getElementById('type').name = 'type';
+        document.getElementById('type-podcast').name = '';
+
+        // Show coding mode elements
+        document.querySelectorAll('.coding-mode-only').forEach(el => el.classList.remove('hidden'));
+        document.querySelectorAll('.podcast-mode-only').forEach(el => el.classList.add('hidden'));
+
+        // Update form fields for current selection
+        updateFormFields(document.getElementById('type').value);
+    } else {
+        podcastBtn.classList.add('bg-blue-600', 'text-white');
+        podcastBtn.classList.remove('text-gray-700', 'hover:bg-gray-100');
+        codingBtn.classList.remove('bg-blue-600', 'text-white');
+        codingBtn.classList.add('text-gray-700', 'hover:bg-gray-100');
+
+        // Update header
+        document.getElementById('page-title').textContent = 'Podcast Tools';
+        document.getElementById('page-subtitle').textContent = 'Manage content for Domesticating AI podcast';
+
+        // Show/hide selectors
+        document.getElementById('type').classList.add('hidden');
+        document.getElementById('type-podcast').classList.remove('hidden');
+        document.getElementById('type').name = '';
+        document.getElementById('type-podcast').name = 'type';
+
+        // Show podcast mode elements
+        document.querySelectorAll('.coding-mode-only').forEach(el => el.classList.add('hidden'));
+        document.querySelectorAll('.podcast-mode-only').forEach(el => el.classList.remove('hidden'));
+
+        // Update form fields for current selection
+        updateFormFields(document.getElementById('type-podcast').value);
+    }
+}
+
 // Update form fields based on job type
 function updateFormFields(type) {
     // Hide all optional fields
-    document.getElementById('description-field').classList.add('hidden');
-    document.getElementById('issue-field').classList.add('hidden');
-    document.getElementById('symptoms-field').classList.add('hidden');
-    document.getElementById('logs-field').classList.add('hidden');
-    document.getElementById('branch-field').classList.add('hidden');
+    const fields = [
+        'description-field', 'issue-field', 'symptoms-field', 'logs-field', 'branch-field',
+        'topic-field', 'notes-field', 'url-field', 'guest-name-field', 'guest-bio-field',
+        'guest-email-field', 'focus-topic-field'
+    ];
+    fields.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+    });
 
     // Show relevant fields based on type
     switch(type) {
+        // Coding mode types
         case 'builder':
             document.getElementById('description-field').classList.remove('hidden');
             document.getElementById('issue-field').classList.remove('hidden');
@@ -169,6 +350,28 @@ function updateFormFields(type) {
             break;
         case 'triager':
             document.getElementById('description-field').classList.remove('hidden');
+            break;
+
+        // Podcast mode types
+        case 'create_podcast_script':
+            document.getElementById('topic-field').classList.remove('hidden');
+            document.getElementById('notes-field').classList.remove('hidden');
+            break;
+        case 'add_notion_link':
+            document.getElementById('url-field').classList.remove('hidden');
+            document.getElementById('notes-field').classList.remove('hidden');
+            break;
+        case 'add_guest':
+            document.getElementById('guest-name-field').classList.remove('hidden');
+            document.getElementById('guest-bio-field').classList.remove('hidden');
+            document.getElementById('guest-email-field').classList.remove('hidden');
+            break;
+        case 'create_episode_outline':
+            document.getElementById('topic-field').classList.remove('hidden');
+            document.getElementById('notes-field').classList.remove('hidden');
+            break;
+        case 'review_news_summary':
+            document.getElementById('focus-topic-field').classList.remove('hidden');
             break;
     }
 }

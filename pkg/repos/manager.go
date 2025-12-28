@@ -21,11 +21,11 @@ const (
 
 // DefaultManager implements Manager with GOPATH-style storage
 type DefaultManager struct {
-	basePath    string
-	gitOps      GitOps
-	store       Store
+	basePath     string
+	gitOps       GitOps
+	store        Store
 	hooksManager HooksManager // Will be set after hooks package is implemented
-	mu          sync.RWMutex
+	mu           sync.RWMutex
 }
 
 // HooksManager is defined here to avoid circular imports

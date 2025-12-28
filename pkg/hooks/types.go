@@ -36,7 +36,7 @@ type Check struct {
 	Name         string        `json:"name"`
 	Command      string        `json:"command"`
 	Args         []string      `json:"args,omitempty"`
-	Required     bool          `json:"required"`      // Fail hook if this fails
+	Required     bool          `json:"required"`       // Fail hook if this fails
 	FailOnOutput bool          `json:"fail_on_output"` // Fail if command produces output (e.g., gofmt -l)
 	Timeout      time.Duration `json:"timeout,omitempty"`
 	Optional     bool          `json:"optional"` // Don't fail if command doesn't exist
@@ -72,14 +72,14 @@ type HooksConfig struct {
 
 // HookResult represents the result of running a hook
 type HookResult struct {
-	HookName  string        `json:"hook_name"`
-	CheckName string        `json:"check_name,omitempty"`
-	Passed    bool          `json:"passed"`
-	Output    string        `json:"output"`
-	ErrorMsg  string        `json:"error_msg,omitempty"`
-	Duration  time.Duration `json:"duration"`
-	Skipped   bool          `json:"skipped,omitempty"`
-	SkipReason string       `json:"skip_reason,omitempty"`
+	HookName   string        `json:"hook_name"`
+	CheckName  string        `json:"check_name,omitempty"`
+	Passed     bool          `json:"passed"`
+	Output     string        `json:"output"`
+	ErrorMsg   string        `json:"error_msg,omitempty"`
+	Duration   time.Duration `json:"duration"`
+	Skipped    bool          `json:"skipped,omitempty"`
+	SkipReason string        `json:"skip_reason,omitempty"`
 }
 
 // ValidationResult represents the result of running all pre-push validation
@@ -106,11 +106,11 @@ type HookRun struct {
 
 // AgentFeedback provides structured feedback for the AI agent
 type AgentFeedback struct {
-	Success       bool           `json:"success"`
-	FailedCheck   string         `json:"failed_check,omitempty"`
-	ErrorOutput   string         `json:"error_output,omitempty"`
-	Suggestion    string         `json:"suggestion,omitempty"`
-	FilesAffected []string       `json:"files_affected,omitempty"`
+	Success       bool            `json:"success"`
+	FailedCheck   string          `json:"failed_check,omitempty"`
+	ErrorOutput   string          `json:"error_output,omitempty"`
+	Suggestion    string          `json:"suggestion,omitempty"`
+	FilesAffected []string        `json:"files_affected,omitempty"`
 	AllResults    []CheckFeedback `json:"all_results,omitempty"`
 }
 
@@ -125,9 +125,9 @@ type CheckFeedback struct {
 
 // CIConfig represents a parsed CI configuration
 type CIConfig struct {
-	Source      string    `json:"source"` // github_actions, gitlab_ci, circle_ci, etc.
-	RawConfig   []byte    `json:"raw_config,omitempty"`
-	ParsedSteps []CIStep  `json:"parsed_steps"`
+	Source      string   `json:"source"` // github_actions, gitlab_ci, circle_ci, etc.
+	RawConfig   []byte   `json:"raw_config,omitempty"`
+	ParsedSteps []CIStep `json:"parsed_steps"`
 }
 
 // CIStep represents a step from a CI configuration

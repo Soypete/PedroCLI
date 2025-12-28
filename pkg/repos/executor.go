@@ -220,11 +220,11 @@ func (e *DefaultExecutor) commandExists(cmd string) bool {
 func (e *DefaultExecutor) detectProjectType(repoPath string) string {
 	// Quick detection based on common files
 	checks := map[string]string{
-		"go.mod":        "go",
-		"package.json":  "node",
+		"go.mod":           "go",
+		"package.json":     "node",
 		"requirements.txt": "python",
-		"pyproject.toml": "python",
-		"Cargo.toml":    "rust",
+		"pyproject.toml":   "python",
+		"Cargo.toml":       "rust",
 	}
 
 	for file, projectType := range checks {

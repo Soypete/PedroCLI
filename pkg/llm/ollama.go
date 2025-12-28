@@ -21,15 +21,20 @@ type OllamaClient struct {
 
 // NewOllamaClient creates a new Ollama client
 func NewOllamaClient(cfg *config.Config) *OllamaClient {
-	baseURL := cfg.Model.OllamaURL
+	return NewOllamaClientFromModel(cfg, cfg.Model)
+}
+
+// NewOllamaClientFromModel creates a new Ollama client from a specific model config
+func NewOllamaClientFromModel(cfg *config.Config, modelCfg config.ModelConfig) *OllamaClient {
+	baseURL := modelCfg.OllamaURL
 	if baseURL == "" {
 		baseURL = "http://localhost:11434"
 	}
 
 	return &OllamaClient{
 		baseURL:     baseURL,
-		modelName:   cfg.Model.ModelName,
-		temperature: cfg.Model.Temperature,
+		modelName:   modelCfg.ModelName,
+		temperature: modelCfg.Temperature,
 	}
 }
 

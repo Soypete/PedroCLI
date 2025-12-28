@@ -84,8 +84,16 @@ Always think step-by-step and verify your changes with tests before committing.`
 
 // executeInference performs one-shot inference
 func (a *BaseAgent) executeInference(ctx context.Context, contextMgr *llmcontext.Manager, userPrompt string) (*llm.InferenceResponse, error) {
+	return a.executeInferenceWithSystemPrompt(ctx, contextMgr, userPrompt, "")
+}
+
+// executeInferenceWithSystemPrompt performs one-shot inference with a custom system prompt
+func (a *BaseAgent) executeInferenceWithSystemPrompt(ctx context.Context, contextMgr *llmcontext.Manager, userPrompt string, customSystemPrompt string) (*llm.InferenceResponse, error) {
 	// Build system prompt
-	systemPrompt := a.buildSystemPrompt()
+	systemPrompt := customSystemPrompt
+	if systemPrompt == "" {
+		systemPrompt = a.buildSystemPrompt()
+	}
 
 	// Calculate context budget
 	budget := llm.CalculateBudget(a.config, systemPrompt, userPrompt, "")

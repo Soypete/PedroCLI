@@ -164,13 +164,13 @@ func (m *DefaultManager) ValidateBeforePush(repoPath string) (*ValidationResult,
 	for _, check := range config.PreCommit {
 		checkResult := m.runCheck(repoPath, check, config.PreCommitTimeout)
 		hookResult := HookResult{
-			HookName:  "pre-commit",
-			CheckName: check.Name,
-			Passed:    checkResult.Passed,
-			Output:    checkResult.Output,
-			ErrorMsg:  checkResult.ErrorMsg,
-			Duration:  checkResult.Duration,
-			Skipped:   checkResult.Skipped,
+			HookName:   "pre-commit",
+			CheckName:  check.Name,
+			Passed:     checkResult.Passed,
+			Output:     checkResult.Output,
+			ErrorMsg:   checkResult.ErrorMsg,
+			Duration:   checkResult.Duration,
+			Skipped:    checkResult.Skipped,
 			SkipReason: checkResult.SkipReason,
 		}
 		result.Results = append(result.Results, hookResult)
@@ -184,13 +184,13 @@ func (m *DefaultManager) ValidateBeforePush(repoPath string) (*ValidationResult,
 	for _, check := range config.PrePush {
 		checkResult := m.runCheck(repoPath, check, config.PrePushTimeout)
 		hookResult := HookResult{
-			HookName:  "pre-push",
-			CheckName: check.Name,
-			Passed:    checkResult.Passed,
-			Output:    checkResult.Output,
-			ErrorMsg:  checkResult.ErrorMsg,
-			Duration:  checkResult.Duration,
-			Skipped:   checkResult.Skipped,
+			HookName:   "pre-push",
+			CheckName:  check.Name,
+			Passed:     checkResult.Passed,
+			Output:     checkResult.Output,
+			ErrorMsg:   checkResult.ErrorMsg,
+			Duration:   checkResult.Duration,
+			Skipped:    checkResult.Skipped,
 			SkipReason: checkResult.SkipReason,
 		}
 		result.Results = append(result.Results, hookResult)

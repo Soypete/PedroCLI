@@ -19,6 +19,7 @@ type InferenceExecutor struct {
 	contextMgr   *llmcontext.Manager
 	maxRounds    int
 	currentRound int
+	systemPrompt string // Custom system prompt (if set)
 }
 
 // NewInferenceExecutor creates a new inference executor
@@ -28,7 +29,21 @@ func NewInferenceExecutor(agent *BaseAgent, contextMgr *llmcontext.Manager) *Inf
 		contextMgr:   contextMgr,
 		maxRounds:    agent.config.Limits.MaxInferenceRuns,
 		currentRound: 0,
+		systemPrompt: "", // Will use agent's default if empty
 	}
+}
+
+// SetSystemPrompt sets a custom system prompt for this executor
+func (e *InferenceExecutor) SetSystemPrompt(prompt string) {
+	e.systemPrompt = prompt
+}
+
+// getSystemPrompt returns the system prompt to use
+func (e *InferenceExecutor) getSystemPrompt() string {
+	if e.systemPrompt != "" {
+		return e.systemPrompt
+	}
+	return e.agent.buildSystemPrompt()
 }
 
 // Execute runs the inference loop until completion or max rounds
@@ -40,8 +55,8 @@ func (e *InferenceExecutor) Execute(ctx context.Context, initialPrompt string) e
 
 		fmt.Fprintf(os.Stderr, "🔄 Inference round %d/%d\n", e.currentRound, e.maxRounds)
 
-		// Execute one inference round
-		response, err := e.agent.executeInference(ctx, e.contextMgr, currentPrompt)
+		// Execute one inference round (with custom system prompt if set)
+		response, err := e.agent.executeInferenceWithSystemPrompt(ctx, e.contextMgr, currentPrompt, e.systemPrompt)
 		if err != nil {
 			return fmt.Errorf("inference failed: %w", err)
 		}
