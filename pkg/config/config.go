@@ -438,7 +438,8 @@ func (c *Config) setDefaults() {
 		c.Podcast.Notion.Command = "npx -y @notionhq/notion-mcp-server"
 	}
 	if c.Podcast.Calendar.Command == "" {
-		c.Podcast.Calendar.Command = "npx -y @anthropic/google-calendar-mcp"
+		// Use our built-in calendar MCP server
+		c.Podcast.Calendar.Command = "./pedrocli-calendar-mcp"
 	}
 }
 
