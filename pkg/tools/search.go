@@ -29,7 +29,27 @@ func (s *SearchTool) Name() string {
 
 // Description returns the tool description
 func (s *SearchTool) Description() string {
-	return "Search code: grep in files, find files by pattern, find definitions"
+	return `Search code with regex patterns, find files, and locate definitions.
+
+Actions:
+- grep: Search for pattern across files
+  Args: pattern (regex string), directory (optional), file_pattern (optional glob), case_insensitive (optional bool), max_results (optional int, default 100)
+- find_files: Find files matching a glob pattern
+  Args: pattern (glob string), directory (optional), max_results (optional int)
+- find_in_file: Search for pattern in a specific file
+  Args: path (string), pattern (regex string), case_insensitive (optional bool)
+- find_definition: Find function/class definitions
+  Args: name (string), directory (optional), language (optional: go/python/javascript/typescript)
+
+Usage Tips:
+- ALWAYS use this tool before modifying code to find the right files
+- Use find_definition to locate functions/types by name
+- Supports full regex syntax for pattern matching
+- Automatically skips .git, node_modules, vendor directories
+
+Examples:
+{"tool": "search", "args": {"action": "grep", "pattern": "func.*Error", "file_pattern": "*.go"}}
+{"tool": "search", "args": {"action": "find_definition", "name": "HandleRequest", "language": "go"}}`
 }
 
 // Execute executes the search tool

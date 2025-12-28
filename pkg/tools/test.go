@@ -26,7 +26,35 @@ func (t *TestTool) Name() string {
 
 // Description returns the tool description
 func (t *TestTool) Description() string {
-	return "Run tests and parse results"
+	return `Run tests and parse results for Go, npm, and Python projects.
+
+Args:
+- type (string): Test framework - "go", "npm", or "python" (default: "go")
+
+Go-specific args:
+- package (string): Package to test (default: "./...")
+- verbose (bool): Verbose output (default: false)
+- run (string): Regex pattern to run specific tests
+- count (int): Run tests n times
+
+npm-specific args:
+- script (string): npm script to run (default: "test")
+
+Python-specific args:
+- module (string): Module/directory to test
+- verbose (bool): Verbose output
+
+Usage Tips:
+- ALWAYS run tests after making changes to verify correctness
+- Use specific package/module paths to run relevant tests faster
+- Use "run" to target specific test functions
+- Analyze test output carefully when tests fail
+
+Examples:
+{"tool": "test", "args": {"type": "go", "package": "./pkg/tools/..."}}
+{"tool": "test", "args": {"type": "go", "run": "TestFileTool"}}
+{"tool": "test", "args": {"type": "npm", "script": "test:unit"}}
+{"tool": "test", "args": {"type": "python", "module": "tests/", "verbose": true}}`
 }
 
 // Execute executes the test tool

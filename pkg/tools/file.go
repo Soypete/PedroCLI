@@ -37,7 +37,26 @@ func (f *FileTool) Name() string {
 
 // Description returns the tool description
 func (f *FileTool) Description() string {
-	return "Read, write, and modify files using pure Go (cross-platform)"
+	return `Read, write, and modify files.
+
+Actions:
+- read: Read entire file content
+  Args: path (string)
+- write: Write content to a file (creates parent directories)
+  Args: path (string), content (string)
+- replace: Replace text in a file
+  Args: path (string), old (string), new (string)
+- append: Append content to a file
+  Args: path (string), content (string)
+- delete: Delete a file
+  Args: path (string)
+
+IMPORTANT:
+- ALWAYS read a file before modifying it to understand its content
+- Use code_edit tool for precise line-based changes
+- This tool replaces sed/awk - never use those via bash
+
+Example: {"tool": "file", "args": {"action": "read", "path": "main.go"}}`
 }
 
 // Execute executes the file tool

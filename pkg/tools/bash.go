@@ -42,7 +42,28 @@ func (b *BashTool) Name() string {
 
 // Description returns the tool description
 func (b *BashTool) Description() string {
-	return "Execute safe bash commands (no sed/grep/find - use File tool instead)"
+	return `Execute shell commands for build and system operations.
+
+Args:
+- command (string): The shell command to execute
+
+IMPORTANT RESTRICTIONS:
+This tool is for terminal operations ONLY. DO NOT use for file operations:
+- DON'T use grep/rg - use the search tool instead
+- DON'T use sed/awk - use the file or code_edit tool instead
+- DON'T use cat/head/tail - use the file tool instead
+- DON'T use find - use the search tool instead
+
+ALLOWED uses:
+- Build commands: go build, npm run build, make, etc.
+- Test commands: go test, npm test, pytest, etc.
+- Package management: go mod tidy, npm install, pip install, etc.
+- System info: pwd, ls (simple), which, echo, etc.
+- Git operations (if not using git tool)
+
+Commands are checked against allow/deny lists in config.
+
+Example: {"tool": "bash", "args": {"command": "go build ./..."}}`
 }
 
 // Execute executes the bash tool
