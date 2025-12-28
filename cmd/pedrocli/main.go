@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/soypete/pedrocli/pkg/config"
+	"github.com/soypete/pedrocli/pkg/database"
 	depcheck "github.com/soypete/pedrocli/pkg/init"
 	"github.com/soypete/pedrocli/pkg/mcp"
 )
@@ -90,6 +91,8 @@ func main() {
 		triageCommand(cfg, os.Args[2:])
 	case "podcast":
 		podcastCommand(cfg, os.Args[2:])
+	case "migrate":
+		migrateCommand(cfg, os.Args[2:])
 	case "status":
 		statusCommand(cfg, os.Args[2:])
 	case "list":
@@ -115,6 +118,7 @@ Commands:
   review     Review a pull request or branch
   triage     Diagnose and triage an issue (no fix)
   podcast    Podcast production tools (create-script, review-news, add-link, add-guest, create-outline)
+  migrate    Database migration commands (up, down, status, reset, redo, version)
   status     Get status of a job
   list       List all jobs
   cancel     Cancel a running job
@@ -130,6 +134,8 @@ Examples:
   pedrocli review -branch feature/rate-limiting
   pedrocli triage -description "Memory leak in handler"
   pedrocli podcast create-script -topic "Starting a Homelab" -notes "Cover hardware, OS choices"
+  pedrocli migrate up
+  pedrocli migrate status
   pedrocli status job-1234567890
   pedrocli list
   pedrocli cancel job-1234567890
@@ -711,4 +717,163 @@ func podcastCreateOutlineCommand(cfg *config.Config, args []string) {
 	}
 
 	callAgent(cfg, "create_episode_outline", arguments)
+}
+
+// migrateCommand handles database migration subcommands
+func migrateCommand(cfg *config.Config, args []string) {
+	if len(args) == 0 {
+		printMigrateUsage()
+		os.Exit(1)
+	}
+
+	action := args[0]
+
+	// Get database path from config
+	dbPath := cfg.RepoStorage.DatabasePath
+
+	switch action {
+	case "up":
+		migrateUpCommand(dbPath)
+	case "down":
+		migrateDownCommand(dbPath)
+	case "status":
+		migrateStatusCommand(dbPath)
+	case "reset":
+		migrateResetCommand(dbPath)
+	case "redo":
+		migrateRedoCommand(dbPath)
+	case "version":
+		migrateVersionCommand(dbPath)
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown migrate action: %s\n\n", action)
+		printMigrateUsage()
+		os.Exit(1)
+	}
+}
+
+func printMigrateUsage() {
+	fmt.Println(`Database migration commands
+
+Usage:
+  pedrocli migrate <action>
+
+Actions:
+  up        Run all pending migrations
+  down      Rollback the last migration
+  status    Show migration status
+  reset     Rollback all migrations
+  redo      Rollback and re-run the last migration
+  version   Show current database version
+
+Examples:
+  pedrocli migrate up
+  pedrocli migrate down
+  pedrocli migrate status
+  pedrocli migrate reset
+  pedrocli migrate redo
+  pedrocli migrate version`)
+}
+
+func migrateUpCommand(dbPath string) {
+	fmt.Println("Running database migrations...")
+
+	store, err := database.NewSQLiteStoreWithOptions(dbPath, false)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: failed to open database: %v\n", err)
+		os.Exit(1)
+	}
+	defer store.Close()
+
+	if err := store.Migrate(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: migration failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("Migrations complete")
+}
+
+func migrateDownCommand(dbPath string) {
+	fmt.Println("Rolling back last migration...")
+
+	store, err := database.NewSQLiteStoreWithOptions(dbPath, false)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: failed to open database: %v\n", err)
+		os.Exit(1)
+	}
+	defer store.Close()
+
+	if err := store.MigrateDown(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: rollback failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("Rollback complete")
+}
+
+func migrateStatusCommand(dbPath string) {
+	store, err := database.NewSQLiteStoreWithOptions(dbPath, false)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: failed to open database: %v\n", err)
+		os.Exit(1)
+	}
+	defer store.Close()
+
+	fmt.Printf("Database: %s\n\n", dbPath)
+	if err := store.MigrationStatus(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: failed to get migration status: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func migrateResetCommand(dbPath string) {
+	fmt.Println("Rolling back all migrations...")
+
+	store, err := database.NewSQLiteStoreWithOptions(dbPath, false)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: failed to open database: %v\n", err)
+		os.Exit(1)
+	}
+	defer store.Close()
+
+	if err := store.MigrateReset(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: reset failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("Reset complete")
+}
+
+func migrateRedoCommand(dbPath string) {
+	fmt.Println("Re-running last migration...")
+
+	store, err := database.NewSQLiteStoreWithOptions(dbPath, false)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: failed to open database: %v\n", err)
+		os.Exit(1)
+	}
+	defer store.Close()
+
+	if err := store.MigrateRedo(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: redo failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("Redo complete")
+}
+
+func migrateVersionCommand(dbPath string) {
+	store, err := database.NewSQLiteStoreWithOptions(dbPath, false)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: failed to open database: %v\n", err)
+		os.Exit(1)
+	}
+	defer store.Close()
+
+	version, err := store.MigrationVersion()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: failed to get database version: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Database version: %d\n", version)
 }

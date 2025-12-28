@@ -3,26 +3,38 @@ package database
 import (
 	"context"
 	"database/sql"
+	"embed"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/pressly/goose/v3"
 
 	"github.com/soypete/pedrocli/pkg/hooks"
 	"github.com/soypete/pedrocli/pkg/repos"
 )
+
+//go:embed migrations/*.sql
+var embedMigrations embed.FS
 
 // SQLiteStore implements repos.Store using SQLite
 type SQLiteStore struct {
 	db *sql.DB
 }
 
-// NewSQLiteStore creates a new SQLite store
+// NewSQLiteStore creates a new SQLite store with auto-migration enabled
 func NewSQLiteStore(dbPath string) (*SQLiteStore, error) {
+	return NewSQLiteStoreWithOptions(dbPath, true)
+}
+
+// NewSQLiteStoreWithOptions creates a new SQLite store with configurable auto-migration
+func NewSQLiteStoreWithOptions(dbPath string, autoMigrate bool) (*SQLiteStore, error) {
 	// Ensure directory exists
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
@@ -33,15 +45,87 @@ func NewSQLiteStore(dbPath string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Apply all migrations
-	for i, migration := range Migrations {
-		if _, err := db.Exec(migration); err != nil {
+	// Test connection
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	store := &SQLiteStore{db: db}
+
+	// Setup and run migrations if enabled
+	if autoMigrate {
+		if err := store.setupGoose(); err != nil {
 			db.Close()
-			return nil, fmt.Errorf("failed to apply migration %d: %w", i+1, err)
+			return nil, fmt.Errorf("failed to setup goose: %w", err)
+		}
+
+		if err := store.Migrate(); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("migration failed: %w", err)
 		}
 	}
 
-	return &SQLiteStore{db: db}, nil
+	return store, nil
+}
+
+// setupGoose configures goose for SQLite with embedded migrations
+func (s *SQLiteStore) setupGoose() error {
+	goose.SetBaseFS(embedMigrations)
+
+	if err := goose.SetDialect("sqlite3"); err != nil {
+		return err
+	}
+
+	// Disable goose logging by default (set to discard)
+	goose.SetLogger(log.New(io.Discard, "", 0))
+
+	return nil
+}
+
+// Migrate runs all pending migrations
+func (s *SQLiteStore) Migrate() error {
+	return goose.Up(s.db, "migrations")
+}
+
+// MigrateDown rolls back the last migration
+func (s *SQLiteStore) MigrateDown() error {
+	if err := s.setupGoose(); err != nil {
+		return err
+	}
+	return goose.Down(s.db, "migrations")
+}
+
+// MigrateReset rolls back all migrations
+func (s *SQLiteStore) MigrateReset() error {
+	if err := s.setupGoose(); err != nil {
+		return err
+	}
+	return goose.Reset(s.db, "migrations")
+}
+
+// MigrateRedo rolls back and re-applies the last migration
+func (s *SQLiteStore) MigrateRedo() error {
+	if err := s.setupGoose(); err != nil {
+		return err
+	}
+	return goose.Redo(s.db, "migrations")
+}
+
+// MigrationStatus prints the status of all migrations
+func (s *SQLiteStore) MigrationStatus() error {
+	if err := s.setupGoose(); err != nil {
+		return err
+	}
+	return goose.Status(s.db, "migrations")
+}
+
+// MigrationVersion returns the current database version
+func (s *SQLiteStore) MigrationVersion() (int64, error) {
+	if err := s.setupGoose(); err != nil {
+		return 0, err
+	}
+	return goose.GetDBVersion(s.db)
 }
 
 // Close closes the database connection
