@@ -8,17 +8,17 @@ import (
 
 // LocalRepo represents a locally managed repository
 type LocalRepo struct {
-	ID          string    `json:"id"`
-	Provider    string    `json:"provider"`    // e.g., "github.com", "gitlab.com"
-	Owner       string    `json:"owner"`       // e.g., "soypete"
-	Name        string    `json:"name"`        // e.g., "pedro-cli"
-	LocalPath   string    `json:"local_path"`  // Full path on disk
-	CurrentRef  string    `json:"current_ref"` // Current branch or commit
-	DefaultBranch string  `json:"default_branch"`
-	ProjectType string    `json:"project_type"` // go, node, python, rust, etc.
-	LastFetched time.Time `json:"last_fetched"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID            string    `json:"id"`
+	Provider      string    `json:"provider"`    // e.g., "github.com", "gitlab.com"
+	Owner         string    `json:"owner"`       // e.g., "soypete"
+	Name          string    `json:"name"`        // e.g., "pedro-cli"
+	LocalPath     string    `json:"local_path"`  // Full path on disk
+	CurrentRef    string    `json:"current_ref"` // Current branch or commit
+	DefaultBranch string    `json:"default_branch"`
+	ProjectType   string    `json:"project_type"` // go, node, python, rust, etc.
+	LastFetched   time.Time `json:"last_fetched"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 // FullName returns the full repository path like "github.com/owner/repo"
@@ -39,22 +39,22 @@ func (r *LocalRepo) SSHCloneURL() string {
 
 // RepoStatus represents the current status of a repository
 type RepoStatus struct {
-	IsClean       bool     `json:"is_clean"`
-	CurrentBranch string   `json:"current_branch"`
-	HeadCommit    string   `json:"head_commit"`
-	ModifiedFiles []string `json:"modified_files,omitempty"`
+	IsClean        bool     `json:"is_clean"`
+	CurrentBranch  string   `json:"current_branch"`
+	HeadCommit     string   `json:"head_commit"`
+	ModifiedFiles  []string `json:"modified_files,omitempty"`
 	UntrackedFiles []string `json:"untracked_files,omitempty"`
-	StagedFiles   []string `json:"staged_files,omitempty"`
-	Ahead         int      `json:"ahead"`  // Commits ahead of remote
-	Behind        int      `json:"behind"` // Commits behind remote
+	StagedFiles    []string `json:"staged_files,omitempty"`
+	Ahead          int      `json:"ahead"`  // Commits ahead of remote
+	Behind         int      `json:"behind"` // Commits behind remote
 }
 
 // Branch represents a git branch
 type Branch struct {
-	Name      string    `json:"name"`
-	IsRemote  bool      `json:"is_remote"`
-	IsCurrent bool      `json:"is_current"`
-	Commit    string    `json:"commit"`
+	Name         string    `json:"name"`
+	IsRemote     bool      `json:"is_remote"`
+	IsCurrent    bool      `json:"is_current"`
+	Commit       string    `json:"commit"`
 	LastCommitAt time.Time `json:"last_commit_at,omitempty"`
 }
 
@@ -71,31 +71,31 @@ type Commit struct {
 
 // TrackedPR represents a pull request being tracked
 type TrackedPR struct {
-	ID              string    `json:"id"`
-	RepoID          string    `json:"repo_id"`
-	PRNumber        int       `json:"pr_number"`
-	BranchName      string    `json:"branch_name"`
-	BaseBranch      string    `json:"base_branch"`
-	Title           string    `json:"title"`
-	Body            string    `json:"body,omitempty"`
-	Status          PRStatus  `json:"status"`
-	LocalCommitHash string    `json:"local_commit_hash"`
-	RemoteCommitHash string   `json:"remote_commit_hash"`
-	HTMLURL         string    `json:"html_url,omitempty"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
-	MergedAt        *time.Time `json:"merged_at,omitempty"`
+	ID               string     `json:"id"`
+	RepoID           string     `json:"repo_id"`
+	PRNumber         int        `json:"pr_number"`
+	BranchName       string     `json:"branch_name"`
+	BaseBranch       string     `json:"base_branch"`
+	Title            string     `json:"title"`
+	Body             string     `json:"body,omitempty"`
+	Status           PRStatus   `json:"status"`
+	LocalCommitHash  string     `json:"local_commit_hash"`
+	RemoteCommitHash string     `json:"remote_commit_hash"`
+	HTMLURL          string     `json:"html_url,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+	MergedAt         *time.Time `json:"merged_at,omitempty"`
 }
 
 // PRStatus represents the status of a pull request
 type PRStatus string
 
 const (
-	PRStatusOpen     PRStatus = "open"
-	PRStatusClosed   PRStatus = "closed"
-	PRStatusMerged   PRStatus = "merged"
-	PRStatusDraft    PRStatus = "draft"
-	PRStatusUnknown  PRStatus = "unknown"
+	PRStatusOpen    PRStatus = "open"
+	PRStatusClosed  PRStatus = "closed"
+	PRStatusMerged  PRStatus = "merged"
+	PRStatusDraft   PRStatus = "draft"
+	PRStatusUnknown PRStatus = "unknown"
 )
 
 // RepoOperation represents an operation performed on a repository
@@ -135,9 +135,9 @@ const (
 
 // GitCredential represents authentication credentials for a git provider
 type GitCredential struct {
-	Provider    string         `json:"provider"`
-	Type        CredentialType `json:"type"`
-	SSHKeyPath  string         `json:"ssh_key_path,omitempty"`
-	Username    string         `json:"username,omitempty"`
-	Token       string         `json:"token,omitempty"` // TODO: encrypt at rest
+	Provider   string         `json:"provider"`
+	Type       CredentialType `json:"type"`
+	SSHKeyPath string         `json:"ssh_key_path,omitempty"`
+	Username   string         `json:"username,omitempty"`
+	Token      string         `json:"token,omitempty"` // TODO: encrypt at rest
 }

@@ -79,7 +79,7 @@ func TestDetectProjectType(t *testing.T) {
 
 func TestDefaultChecks(t *testing.T) {
 	tests := []struct {
-		projectType ProjectType
+		projectType  ProjectType
 		hasPreCommit bool
 		hasPrePush   bool
 	}{

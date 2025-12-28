@@ -1,10 +1,11 @@
-.PHONY: build build-mac build-linux build-all test test-coverage test-coverage-report install clean run-server run-cli run-http build-http fmt lint tidy
+.PHONY: build build-mac build-linux build-all test test-coverage test-coverage-report install clean run-server run-cli run-http build-http build-calendar fmt lint tidy
 
-# Default build for current platform (CLI, server, and HTTP server)
+# Default build for current platform (CLI, server, HTTP server, and calendar MCP server)
 build:
 	go build -o pedrocli cmd/pedrocli/main.go
 	go build -o pedrocli-server cmd/mcp-server/main.go
 	go build -o pedrocli-http-server cmd/http-server/main.go
+	go build -o pedrocli-calendar-mcp cmd/calendar-mcp-server/main.go
 
 # Build CLI only
 build-cli:
@@ -27,8 +28,12 @@ build-server:
 build-http:
 	go build -o pedrocli-http-server cmd/http-server/main.go
 
+# Build Calendar MCP server
+build-calendar:
+	go build -o pedrocli-calendar-mcp cmd/calendar-mcp-server/main.go
+
 # Build for both platforms
-build-all: build-mac build-linux build-server
+build-all: build-mac build-linux build-server build-calendar
 
 # Run tests
 test:

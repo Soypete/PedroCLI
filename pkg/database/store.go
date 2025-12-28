@@ -33,10 +33,12 @@ func NewSQLiteStore(dbPath string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Initialize schema
-	if _, err := db.Exec(Schema); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to initialize schema: %w", err)
+	// Apply all migrations
+	for i, migration := range Migrations {
+		if _, err := db.Exec(migration); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("failed to apply migration %d: %w", i+1, err)
+		}
 	}
 
 	return &SQLiteStore{db: db}, nil
@@ -204,7 +206,7 @@ func (s *SQLiteStore) ListOperations(ctx context.Context, repoID string, limit i
 		}
 
 		if detailsJSON != "" {
-			json.Unmarshal([]byte(detailsJSON), &op.Details)
+			_ = json.Unmarshal([]byte(detailsJSON), &op.Details) // Best effort unmarshal
 		}
 
 		operations = append(operations, op)
@@ -444,7 +446,7 @@ func (s *SQLiteStore) ListHookRuns(ctx context.Context, repoID string, limit int
 
 		run.Passed = passed == 1
 		if resultsJSON != "" {
-			json.Unmarshal([]byte(resultsJSON), &run.Results)
+			_ = json.Unmarshal([]byte(resultsJSON), &run.Results) // Best effort unmarshal
 		}
 
 		runs = append(runs, run)
@@ -627,13 +629,13 @@ func (s *SQLiteStore) scanJob(row *sql.Row) (*repos.RepoJob, error) {
 		job.CompletedAt = &completedAt.Time
 	}
 	if inputJSON != "" {
-		json.Unmarshal([]byte(inputJSON), &job.InputPayload)
+		_ = json.Unmarshal([]byte(inputJSON), &job.InputPayload) // Best effort unmarshal
 	}
 	if outputJSON != "" {
-		json.Unmarshal([]byte(outputJSON), &job.OutputPayload)
+		_ = json.Unmarshal([]byte(outputJSON), &job.OutputPayload) // Best effort unmarshal
 	}
 	if validationJSON != "" {
-		json.Unmarshal([]byte(validationJSON), &job.LastValidationResult)
+		_ = json.Unmarshal([]byte(validationJSON), &job.LastValidationResult) // Best effort unmarshal
 	}
 
 	return &job, nil
@@ -670,13 +672,13 @@ func (s *SQLiteStore) scanJobFromRows(rows *sql.Rows) (*repos.RepoJob, error) {
 		job.CompletedAt = &completedAt.Time
 	}
 	if inputJSON != "" {
-		json.Unmarshal([]byte(inputJSON), &job.InputPayload)
+		_ = json.Unmarshal([]byte(inputJSON), &job.InputPayload) // Best effort unmarshal
 	}
 	if outputJSON != "" {
-		json.Unmarshal([]byte(outputJSON), &job.OutputPayload)
+		_ = json.Unmarshal([]byte(outputJSON), &job.OutputPayload) // Best effort unmarshal
 	}
 	if validationJSON != "" {
-		json.Unmarshal([]byte(validationJSON), &job.LastValidationResult)
+		_ = json.Unmarshal([]byte(validationJSON), &job.LastValidationResult) // Best effort unmarshal
 	}
 
 	return &job, nil

@@ -104,8 +104,10 @@ func TestAgentToolExecuteSuccess(t *testing.T) {
 	if !result.Success {
 		t.Error("Expected success to be true")
 	}
-	if result.Output != "Feature built successfully" {
-		t.Errorf("Expected output 'Feature built successfully', got '%s'", result.Output)
+	// Agent tool now returns async job ID, not final output
+	expectedOutput := "Job job-123 started and running in background. Use get_job_status to check progress."
+	if result.Output != expectedOutput {
+		t.Errorf("Expected output '%s', got '%s'", expectedOutput, result.Output)
 	}
 	if result.Error != "" {
 		t.Errorf("Expected no error, got '%s'", result.Error)
@@ -134,11 +136,14 @@ func TestAgentToolExecuteFailure(t *testing.T) {
 	if result == nil {
 		t.Fatal("Execute() returned nil result")
 	}
-	if result.Success {
-		t.Error("Expected success to be false")
+	// Agent tool returns success=true when job is started, even if it later fails
+	if !result.Success {
+		t.Error("Expected success to be true (job started successfully)")
 	}
-	if result.Error != "Build failed: compilation error" {
-		t.Errorf("Expected error 'Build failed: compilation error', got '%s'", result.Error)
+	// Agent tool returns job ID message, not the final error
+	expectedOutput := "Job job-456 started and running in background. Use get_job_status to check progress."
+	if result.Output != expectedOutput {
+		t.Errorf("Expected output '%s', got '%s'", expectedOutput, result.Output)
 	}
 }
 
@@ -168,8 +173,9 @@ func TestAgentToolExecuteWithReviewText(t *testing.T) {
 	if !result.Success {
 		t.Error("Expected success to be true")
 	}
-	if result.Output != "Code looks good. No issues found." {
-		t.Errorf("Expected output 'Code looks good. No issues found.', got '%s'", result.Output)
+	expectedOutput := "Job job-789 started and running in background. Use get_job_status to check progress."
+	if result.Output != expectedOutput {
+		t.Errorf("Expected output '%s', got '%s'", expectedOutput, result.Output)
 	}
 }
 
@@ -199,8 +205,9 @@ func TestAgentToolExecuteWithDiagnosis(t *testing.T) {
 	if !result.Success {
 		t.Error("Expected success to be true")
 	}
-	if result.Output != "Memory leak detected in handler.go:42" {
-		t.Errorf("Expected output 'Memory leak detected in handler.go:42', got '%s'", result.Output)
+	expectedOutput := "Job job-101 started and running in background. Use get_job_status to check progress."
+	if result.Output != expectedOutput {
+		t.Errorf("Expected output '%s', got '%s'", expectedOutput, result.Output)
 	}
 }
 
@@ -253,41 +260,36 @@ func TestAgentToolExecuteWithEmptyOutput(t *testing.T) {
 	if !result.Success {
 		t.Error("Expected success to be true")
 	}
-	if result.Output != "" {
-		t.Errorf("Expected empty output, got '%s'", result.Output)
+	expectedOutput := "Job job-202 started and running in background. Use get_job_status to check progress."
+	if result.Output != expectedOutput {
+		t.Errorf("Expected output '%s', got '%s'", expectedOutput, result.Output)
 	}
 }
 
 func TestAgentToolExecuteStatusMapping(t *testing.T) {
 	testCases := []struct {
-		name            string
-		jobStatus       jobs.Status
-		expectedSuccess bool
+		name      string
+		jobStatus jobs.Status
 	}{
 		{
-			name:            "Completed job",
-			jobStatus:       jobs.StatusCompleted,
-			expectedSuccess: true,
+			name:      "Completed job",
+			jobStatus: jobs.StatusCompleted,
 		},
 		{
-			name:            "Failed job",
-			jobStatus:       jobs.StatusFailed,
-			expectedSuccess: false,
+			name:      "Failed job",
+			jobStatus: jobs.StatusFailed,
 		},
 		{
-			name:            "Running job",
-			jobStatus:       jobs.StatusRunning,
-			expectedSuccess: false,
+			name:      "Running job",
+			jobStatus: jobs.StatusRunning,
 		},
 		{
-			name:            "Pending job",
-			jobStatus:       jobs.StatusPending,
-			expectedSuccess: false,
+			name:      "Pending job",
+			jobStatus: jobs.StatusPending,
 		},
 		{
-			name:            "Cancelled job",
-			jobStatus:       jobs.StatusCancelled,
-			expectedSuccess: false,
+			name:      "Cancelled job",
+			jobStatus: jobs.StatusCancelled,
 		},
 	}
 
@@ -310,9 +312,16 @@ func TestAgentToolExecuteStatusMapping(t *testing.T) {
 				t.Fatalf("Execute() returned error: %v", err)
 			}
 
-			if result.Success != tc.expectedSuccess {
-				t.Errorf("Expected success=%v for status %s, got %v",
-					tc.expectedSuccess, tc.jobStatus, result.Success)
+			// Agent tool always returns success=true when job is started,
+			// regardless of the job's status. The client checks status later via get_job_status.
+			if !result.Success {
+				t.Errorf("Expected success=true for async job start, got %v", result.Success)
+			}
+
+			// Verify job ID is in the output message
+			expectedOutput := "Job test-job started and running in background. Use get_job_status to check progress."
+			if result.Output != expectedOutput {
+				t.Errorf("Expected output '%s', got '%s'", expectedOutput, result.Output)
 			}
 		})
 	}
