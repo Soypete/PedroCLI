@@ -15,20 +15,22 @@ import (
 
 // CalendarTool provides access to Google Calendar via MCP server
 type CalendarTool struct {
-	config  *config.Config
-	mu      sync.Mutex
-	cmd     *exec.Cmd
-	stdin   io.WriteCloser
-	stdout  *bufio.Reader
-	msgID   int
-	started bool
+	config       *config.Config
+	tokenManager TokenManager
+	mu           sync.Mutex
+	cmd          *exec.Cmd
+	stdin        io.WriteCloser
+	stdout       *bufio.Reader
+	msgID        int
+	started      bool
 }
 
 // NewCalendarTool creates a new Calendar tool
-func NewCalendarTool(cfg *config.Config) *CalendarTool {
+func NewCalendarTool(cfg *config.Config, tokenMgr TokenManager) *CalendarTool {
 	return &CalendarTool{
-		config: cfg,
-		msgID:  0,
+		config:       cfg,
+		tokenManager: tokenMgr,
+		msgID:        0,
 	}
 }
 
@@ -126,11 +128,27 @@ func (t *CalendarTool) ensureStarted(ctx context.Context) error {
 		return fmt.Errorf("no Calendar MCP command configured")
 	}
 
-	// Set up environment with credentials path
+	// Set up environment with credentials
+	// Try TokenManager first for OAuth tokens, fall back to credentials file
 	cmd := exec.CommandContext(ctx, cmdParts[0], cmdParts[1:]...)
-	cmd.Env = append(cmd.Environ(),
-		fmt.Sprintf("GOOGLE_APPLICATION_CREDENTIALS=%s", t.config.Podcast.Calendar.CredentialsPath),
-	)
+	if t.tokenManager != nil {
+		// Try to get OAuth access token (NEVER exposed to LLM)
+		accessToken, err := t.tokenManager.GetToken(ctx, "google", "calendar")
+		if err == nil && accessToken != "" {
+			// Use OAuth token if available
+			cmd.Env = append(cmd.Environ(), fmt.Sprintf("GOOGLE_OAUTH_TOKEN=%s", accessToken))
+		} else {
+			// Fall back to credentials file
+			cmd.Env = append(cmd.Environ(),
+				fmt.Sprintf("GOOGLE_APPLICATION_CREDENTIALS=%s", t.config.Podcast.Calendar.CredentialsPath),
+			)
+		}
+	} else {
+		// No token manager, use credentials file
+		cmd.Env = append(cmd.Environ(),
+			fmt.Sprintf("GOOGLE_APPLICATION_CREDENTIALS=%s", t.config.Podcast.Calendar.CredentialsPath),
+		)
+	}
 
 	// Set up pipes
 	stdin, err := cmd.StdinPipe()
