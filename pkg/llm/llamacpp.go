@@ -3,13 +3,16 @@ package llm
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/soypete/pedrocli/pkg/config"
 )
 
 // LlamaCppClient implements the Backend interface for llama.cpp
+// It uses one-shot subprocess execution (not llama-server HTTP API)
 type LlamaCppClient struct {
 	llamacppPath string
 	modelPath    string
@@ -18,6 +21,15 @@ type LlamaCppClient struct {
 	nGpuLayers   int
 	temperature  float64
 	threads      int
+
+	// Logit control options (applied via CLI flags)
+	grammar           string  // GBNF grammar string for constrained generation
+	grammarFile       string  // Path to grammar file (alternative to inline)
+	repeatPenalty     float64 // Repetition penalty (default 1.1)
+	repeatLastN       int     // How many tokens to check for repetition
+	topK              int     // Top-K sampling
+	topP              float64 // Top-P (nucleus) sampling
+	minP              float64 // Min-P sampling
 }
 
 // NewLlamaCppClient creates a new llama.cpp client
@@ -43,7 +55,7 @@ func (l *LlamaCppClient) Infer(ctx context.Context, req *InferenceRequest) (*Inf
 	// Build the full prompt
 	fullPrompt := l.buildPrompt(req)
 
-	// Build llama.cpp command
+	// Build llama.cpp command with base arguments
 	args := []string{
 		"-m", l.modelPath,
 		"-c", fmt.Sprintf("%d", l.contextSize),
@@ -53,6 +65,39 @@ func (l *LlamaCppClient) Infer(ctx context.Context, req *InferenceRequest) (*Inf
 		"-p", fullPrompt,
 		"-ngl", fmt.Sprintf("%d", l.nGpuLayers),
 		"--no-display-prompt", // Don't echo the prompt
+	}
+
+	// Add grammar constraints if configured
+	// Grammar is enforced directly by llama.cpp at the logit level
+	grammarFile := l.grammarFile
+	if l.grammar != "" && grammarFile == "" {
+		// Write inline grammar to temp file
+		tmpFile, err := l.writeGrammarToTempFile(l.grammar)
+		if err != nil {
+			return nil, fmt.Errorf("failed to write grammar: %w", err)
+		}
+		defer os.Remove(tmpFile)
+		grammarFile = tmpFile
+	}
+	if grammarFile != "" {
+		args = append(args, "--grammar-file", grammarFile)
+	}
+
+	// Add sampling parameters for logit control
+	if l.repeatPenalty > 0 {
+		args = append(args, "--repeat-penalty", fmt.Sprintf("%.2f", l.repeatPenalty))
+	}
+	if l.repeatLastN > 0 {
+		args = append(args, "--repeat-last-n", fmt.Sprintf("%d", l.repeatLastN))
+	}
+	if l.topK > 0 {
+		args = append(args, "--top-k", fmt.Sprintf("%d", l.topK))
+	}
+	if l.topP > 0 {
+		args = append(args, "--top-p", fmt.Sprintf("%.2f", l.topP))
+	}
+	if l.minP > 0 {
+		args = append(args, "--min-p", fmt.Sprintf("%.2f", l.minP))
 	}
 
 	// Execute llama.cpp
@@ -71,6 +116,16 @@ func (l *LlamaCppClient) Infer(ctx context.Context, req *InferenceRequest) (*Inf
 	}
 
 	return response, nil
+}
+
+// writeGrammarToTempFile writes a GBNF grammar string to a temporary file
+func (l *LlamaCppClient) writeGrammarToTempFile(grammar string) (string, error) {
+	tmpDir := os.TempDir()
+	tmpFile := filepath.Join(tmpDir, "pedrocli-grammar.gbnf")
+	if err := os.WriteFile(tmpFile, []byte(grammar), 0600); err != nil {
+		return "", err
+	}
+	return tmpFile, nil
 }
 
 // GetContextWindow returns the context window size
@@ -100,4 +155,66 @@ func (l *LlamaCppClient) buildPrompt(req *InferenceRequest) string {
 	prompt.WriteString("\n\nAssistant: ")
 
 	return prompt.String()
+}
+
+// SetGrammar sets a GBNF grammar string for constrained generation.
+// The grammar is enforced at the logit level by llama.cpp.
+func (l *LlamaCppClient) SetGrammar(grammar string) {
+	l.grammar = grammar
+	l.grammarFile = "" // Clear file if setting inline grammar
+}
+
+// SetGrammarFile sets a path to a GBNF grammar file.
+func (l *LlamaCppClient) SetGrammarFile(path string) {
+	l.grammarFile = path
+	l.grammar = "" // Clear inline if setting file
+}
+
+// ClearGrammar removes any grammar constraint.
+func (l *LlamaCppClient) ClearGrammar() {
+	l.grammar = ""
+	l.grammarFile = ""
+}
+
+// SetRepeatPenalty sets the repetition penalty (1.0 = no penalty).
+func (l *LlamaCppClient) SetRepeatPenalty(penalty float64) {
+	l.repeatPenalty = penalty
+}
+
+// SetRepeatLastN sets how many tokens to check for repetition.
+func (l *LlamaCppClient) SetRepeatLastN(n int) {
+	l.repeatLastN = n
+}
+
+// SetTopK sets top-k sampling (0 = disabled).
+func (l *LlamaCppClient) SetTopK(k int) {
+	l.topK = k
+}
+
+// SetTopP sets top-p (nucleus) sampling (0.0 = disabled).
+func (l *LlamaCppClient) SetTopP(p float64) {
+	l.topP = p
+}
+
+// SetMinP sets min-p sampling (0.0 = disabled).
+func (l *LlamaCppClient) SetMinP(p float64) {
+	l.minP = p
+}
+
+// ConfigureForStructuredOutput sets optimal parameters for structured output.
+// Low temperature, tight sampling, grammar enforcement.
+func (l *LlamaCppClient) ConfigureForStructuredOutput() {
+	l.temperature = 0.1
+	l.topK = 40
+	l.topP = 0.9
+	l.repeatPenalty = 1.0
+}
+
+// ConfigureForToolCalls sets optimal parameters for tool call generation.
+// Deterministic settings with tool call grammar.
+func (l *LlamaCppClient) ConfigureForToolCalls() {
+	l.temperature = 0.0
+	l.topK = 1
+	l.topP = 1.0
+	l.repeatPenalty = 1.0
 }

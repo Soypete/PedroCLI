@@ -45,53 +45,64 @@ prompt/context
 
 ---
 
-## PedroCLI Logit Architecture
+## PedroCLI Execution Model
+
+### One-Shot Subprocess Execution
+
+PedroCLI uses **one-shot subprocess execution** with llama.cpp, NOT a persistent HTTP server:
+
+```
+PedroCLI (Go)
+    │
+    ├─→ Builds prompt from context files
+    │
+    ├─→ Spawns llama.cpp subprocess with CLI flags
+    │       llama-cli -m model.gguf -p "prompt" --grammar-file tool.gbnf
+    │
+    ├─→ Reads stdout for response
+    │
+    └─→ Parses tool calls, updates context files
+```
+
+**Why one-shot?**
+- Simple: No server management, no connection pooling
+- Stateless: Each inference is independent
+- Context management: PedroCLI handles context via files, not KV cache
 
 ### Package Structure
 
 ```
+pkg/llm/llamacpp.go     # LlamaCppClient - subprocess execution with grammar support
 pkg/logits/
-├── filter.go           # Core LogitFilter interface
-├── chain.go            # FilterChain for composing filters
 ├── grammar.go          # GBNF grammar parser
-├── grammar_filter.go   # Grammar-based token masking
 ├── schema.go           # JSON Schema → GBNF converter
-├── safety.go           # Safety categories and token banning
-├── toolcall.go         # Tool call format enforcement
 ├── sampler.go          # Sampler configuration and presets
+├── filter.go           # LogitFilter interface (for future use)
+├── chain.go            # FilterChain for composing filters
+├── safety.go           # Safety categories
+├── toolcall.go         # Tool call schemas
 ├── tokenizer.go        # Vocabulary access interface
-├── backend.go          # LlamaHTTPBackend for llama-server
+├── backend.go          # LlamaHTTPBackend (alternative, optional)
 └── testing.go          # Test harness for configurations
 ```
 
-### Core Interfaces
+### How Grammar Constraints Work
+
+Grammar constraints are passed to llama.cpp via CLI flags:
 
 ```go
-// LogitFilter modifies logits before sampling
-type LogitFilter interface {
-    Name() string
-    Description() string
-    Apply(logits []float32, ctx *GenerationContext) []float32
-    OnTokenGenerated(tokenID int, tokenText string, ctx *GenerationContext)
-    Reset()
-    Enabled() bool
-    SetEnabled(enabled bool)
+// llama.cpp command with grammar
+args := []string{
+    "-m", l.modelPath,
+    "-p", fullPrompt,
+    "--grammar-file", "/tmp/tool-call.gbnf",  // Grammar enforced at logit level
+    "--temp", "0.0",                           // Deterministic
+    "--top-k", "1",
 }
-
-// FilterChain applies multiple filters in sequence
-type FilterChain struct {
-    filters []LogitFilter
-}
-
-func (c *FilterChain) Apply(logits []float32, ctx *GenerationContext) []float32 {
-    for _, f := range c.filters {
-        if f.Enabled() {
-            logits = f.Apply(logits, ctx)
-        }
-    }
-    return logits
-}
+cmd := exec.CommandContext(ctx, l.llamacppPath, args...)
 ```
+
+The grammar is enforced **inside llama.cpp** at the logit level - invalid tokens get -∞ logits before sampling.
 
 ---
 
@@ -101,10 +112,10 @@ func (c *FilterChain) Apply(logits []float32, ctx *GenerationContext) []float32 
 
 | Feature | Ollama | llama.cpp |
 |---------|--------|-----------|
-| Logit access | No | Yes (via llama-server) |
-| Grammar support | No | Yes (GBNF) |
-| Logit bias | Limited | Full control |
-| When to use logits | Never | Always for structured output |
+| Logit access | No | Yes (via CLI flags) |
+| Grammar support | No | Yes (GBNF via `--grammar-file`) |
+| Sampling control | Limited | Full (`--temp`, `--top-k`, etc.) |
+| Execution model | HTTP API | Subprocess (one-shot) |
 
 When using Ollama, rely on:
 - Prompt engineering
@@ -112,9 +123,9 @@ When using Ollama, rely on:
 - Retry loops
 
 When using llama.cpp, use:
-- GBNF grammars for structure
-- Logit bias for token control
-- Safety filters for content
+- GBNF grammars for structure (`--grammar-file`)
+- Sampling parameters for control (`--temp`, `--top-k`, `--top-p`)
+- Repetition penalties (`--repeat-penalty`)
 
 ---
 
@@ -321,42 +332,77 @@ custom := logits.NewPresetBuilder("my_preset").
 
 ---
 
-## LlamaHTTPBackend
+## Using LlamaCppClient with Grammar
 
-Interface with llama-server for generation with logit control.
+The primary approach uses `LlamaCppClient` with CLI-based grammar enforcement.
+
+### Basic Usage
 
 ```go
-// Create backend
+import "github.com/soypete/pedrocli/pkg/llm"
+
+// Create client from config
+client := llm.NewLlamaCppClient(cfg)
+
+// Set grammar for structured output
+client.SetGrammar(logits.ToolCallGrammar)
+
+// Configure for deterministic tool calls
+client.ConfigureForToolCalls()
+
+// Run inference
+resp, err := client.Infer(ctx, &llm.InferenceRequest{
+    SystemPrompt: "You are a helpful assistant.",
+    UserPrompt:   "Read the file /etc/hosts",
+    MaxTokens:    256,
+    Temperature:  0.0,
+})
+```
+
+### Grammar Methods
+
+```go
+// Set inline GBNF grammar (written to temp file)
+client.SetGrammar(`
+root ::= "{" ws "\"name\"" ws ":" ws string ws "}"
+string ::= "\"" [^"]* "\""
+ws ::= [ \t\n]*
+`)
+
+// Or use a grammar file directly
+client.SetGrammarFile("/path/to/grammar.gbnf")
+
+// Clear grammar for unconstrained generation
+client.ClearGrammar()
+```
+
+### Sampling Control
+
+```go
+// Set individual parameters
+client.SetTopK(40)
+client.SetTopP(0.9)
+client.SetMinP(0.05)
+client.SetRepeatPenalty(1.1)
+client.SetRepeatLastN(64)
+
+// Or use convenience methods
+client.ConfigureForStructuredOutput()  // Low temp, tight sampling
+client.ConfigureForToolCalls()         // Deterministic (temp=0, top_k=1)
+```
+
+### Alternative: LlamaHTTPBackend
+
+For llama-server (HTTP API) instead of CLI, use `LlamaHTTPBackend`:
+
+```go
+import "github.com/soypete/pedrocli/pkg/logits"
+
 backend := logits.NewLlamaHTTPBackend("http://localhost:8080")
-
-// Load vocabulary for filters (optional)
-backend.LoadVocabulary("/path/to/vocab.json")
-
-// Generate with preset
 resp, _ := backend.GenerateWithPreset(ctx, prompt, "tool_call")
-
-// Generate with schema
-resp, _ := backend.GenerateStructured(ctx, prompt, schema)
-
-// Generate tool call
-toolCall, _ := backend.GenerateToolCall(ctx, prompt, tools)
 ```
 
-### Request Structure
-
-```go
-req := &logits.GenerateRequest{
-    Prompt:        "Your prompt here",
-    SystemPrompt:  "Optional system prompt",
-    SamplerConfig: logits.StructuredOutputConfig,
-    Grammar:       logits.JSONObjectGrammar,
-    JSONSchema:    schema,  // Alternative to Grammar
-    Stream:        false,
-}
-
-resp, _ := backend.Generate(ctx, req)
-fmt.Println(resp.Text)
-```
+This is optional and not the primary execution model.
 
 ---
 
