@@ -13,22 +13,31 @@ import (
 	"github.com/soypete/pedrocli/pkg/config"
 )
 
+// TokenManager defines the interface for retrieving tokens
+// IMPORTANT: Tokens retrieved from this manager are NEVER exposed to the LLM
+// They are only used internally by tools for API authentication
+type TokenManager interface {
+	GetToken(ctx context.Context, provider, service string) (accessToken string, err error)
+}
+
 // NotionTool provides access to Notion via MCP server
 type NotionTool struct {
-	config  *config.Config
-	mu      sync.Mutex
-	cmd     *exec.Cmd
-	stdin   io.WriteCloser
-	stdout  *bufio.Reader
-	msgID   int
-	started bool
+	config       *config.Config
+	tokenManager TokenManager
+	mu           sync.Mutex
+	cmd          *exec.Cmd
+	stdin        io.WriteCloser
+	stdout       *bufio.Reader
+	msgID        int
+	started      bool
 }
 
 // NewNotionTool creates a new Notion tool
-func NewNotionTool(cfg *config.Config) *NotionTool {
+func NewNotionTool(cfg *config.Config, tokenMgr TokenManager) *NotionTool {
 	return &NotionTool{
-		config: cfg,
-		msgID:  0,
+		config:       cfg,
+		tokenManager: tokenMgr,
+		msgID:        0,
 	}
 }
 
@@ -120,15 +129,31 @@ func (t *NotionTool) ensureStarted(ctx context.Context) error {
 		return nil
 	}
 
+	// Get API key from TokenManager (NEVER exposed to LLM)
+	var apiKey string
+	var err error
+	if t.tokenManager != nil {
+		apiKey, err = t.tokenManager.GetToken(ctx, "notion", "database")
+		if err != nil {
+			return fmt.Errorf("failed to retrieve Notion API key: %w", err)
+		}
+	} else {
+		// Fallback to config (for backwards compatibility)
+		apiKey = t.config.Podcast.Notion.APIKey
+		if apiKey == "" {
+			return fmt.Errorf("Notion API key not configured")
+		}
+	}
+
 	// Parse command and args
 	cmdParts := strings.Fields(t.config.Podcast.Notion.Command)
 	if len(cmdParts) == 0 {
 		return fmt.Errorf("no Notion MCP command configured")
 	}
 
-	// Set up environment with API key
+	// Set up environment with API key (used only for subprocess authentication, never logged or exposed)
 	cmd := exec.CommandContext(ctx, cmdParts[0], cmdParts[1:]...)
-	cmd.Env = append(cmd.Environ(), fmt.Sprintf("NOTION_API_KEY=%s", t.config.Podcast.Notion.APIKey))
+	cmd.Env = append(cmd.Environ(), fmt.Sprintf("NOTION_API_KEY=%s", apiKey))
 
 	// Set up pipes
 	stdin, err := cmd.StdinPipe()

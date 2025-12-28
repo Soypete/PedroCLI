@@ -15,6 +15,7 @@ import (
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/mcp"
 	"github.com/soypete/pedrocli/pkg/repos"
+	"github.com/soypete/pedrocli/pkg/tokens"
 	"github.com/soypete/pedrocli/pkg/tools"
 )
 
@@ -165,6 +166,81 @@ func main() {
 	triagerAgent.RegisterTool(testTool)
 	triagerAgent.RegisterTool(repoTool)
 
+	// Create token manager for podcast tools (only if podcast mode is enabled)
+	var tokenManager *tokens.Manager
+	var toolTokenManager tools.TokenManager
+	if cfg.Podcast.Enabled {
+		// Create token store using the same database as repo store
+		var tokenStore tokens.Store
+		if repoStore != nil {
+			// Use the existing database connection
+			if sqliteStore, ok := repoStore.(*database.SQLiteStore); ok {
+				tokenStore = tokens.NewSQLiteTokenStore(sqliteStore.DB())
+			}
+		}
+
+		// If no database store, create in-memory store (tokens won't persist)
+		if tokenStore == nil {
+			fmt.Fprintf(os.Stderr, "Warning: No database configured, podcast tokens will not persist\n")
+		} else {
+			// Create token manager with refresh handlers
+			tokenManager = tokens.NewManager(tokenStore)
+
+			// Register Google OAuth refresh handler (if configured)
+			if cfg.OAuth.Google.ClientID != "" && cfg.OAuth.Google.ClientSecret != "" {
+				tokenManager.RegisterRefreshHandler(
+					tokens.NewGoogleRefreshHandler(cfg.OAuth.Google.ClientID, cfg.OAuth.Google.ClientSecret),
+				)
+			}
+
+			// Register Notion refresh handler (no-op, API keys don't expire)
+			tokenManager.RegisterRefreshHandler(tokens.NewNotionRefreshHandler())
+
+			// Wrap token manager for tools (only exposes access tokens, never full token objects)
+			toolTokenManager = &tokenManagerAdapter{manager: tokenManager}
+		}
+	}
+
+	// Create podcast tools (only if podcast mode is enabled)
+	var notionTool *tools.NotionTool
+	var calendarTool *tools.CalendarTool
+	if cfg.Podcast.Enabled {
+		notionTool = tools.NewNotionTool(cfg, toolTokenManager)
+		calendarTool = tools.NewCalendarTool(cfg, toolTokenManager)
+	}
+
+	// Create and register podcast agents (only if podcast mode is enabled)
+	if cfg.Podcast.Enabled {
+		scriptCreatorAgent := agents.NewScriptCreatorAgent(cfg, backend, jobManager)
+		scriptCreatorAgent.RegisterTool(fileTool)
+		scriptCreatorAgent.RegisterTool(notionTool)
+		scriptCreatorAgent.RegisterTool(calendarTool)
+
+		newsReviewerAgent := agents.NewNewsReviewerAgent(cfg, backend, jobManager)
+		newsReviewerAgent.RegisterTool(fileTool)
+		newsReviewerAgent.RegisterTool(notionTool)
+
+		linkAdderAgent := agents.NewLinkAdderAgent(cfg, backend, jobManager)
+		linkAdderAgent.RegisterTool(fileTool)
+		linkAdderAgent.RegisterTool(notionTool)
+
+		guestAdderAgent := agents.NewGuestAdderAgent(cfg, backend, jobManager)
+		guestAdderAgent.RegisterTool(fileTool)
+		guestAdderAgent.RegisterTool(notionTool)
+
+		episodeOutlinerAgent := agents.NewEpisodeOutlinerAgent(cfg, backend, jobManager)
+		episodeOutlinerAgent.RegisterTool(fileTool)
+		episodeOutlinerAgent.RegisterTool(notionTool)
+		episodeOutlinerAgent.RegisterTool(calendarTool)
+
+		// Wrap podcast agents as tools for MCP
+		server.RegisterTool(mcp.NewAgentTool(scriptCreatorAgent))
+		server.RegisterTool(mcp.NewAgentTool(newsReviewerAgent))
+		server.RegisterTool(mcp.NewAgentTool(linkAdderAgent))
+		server.RegisterTool(mcp.NewAgentTool(guestAdderAgent))
+		server.RegisterTool(mcp.NewAgentTool(episodeOutlinerAgent))
+	}
+
 	// Wrap agents as tools for MCP
 	server.RegisterTool(mcp.NewAgentTool(builderAgent))
 	server.RegisterTool(mcp.NewAgentTool(reviewerAgent))
@@ -175,4 +251,26 @@ func main() {
 	if err := server.Run(context.Background()); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
+}
+
+// tokenManagerAdapter wraps tokens.Manager to implement tools.TokenManager interface
+// SECURITY: This adapter ensures that only access tokens are exposed to tools, never the full token object
+// This prevents tokens from being logged or accidentally exposed to the LLM
+type tokenManagerAdapter struct {
+	manager *tokens.Manager
+}
+
+// GetToken retrieves only the access token string, hiding all other token details
+func (a *tokenManagerAdapter) GetToken(ctx context.Context, provider, service string) (string, error) {
+	if a.manager == nil {
+		return "", fmt.Errorf("token manager not initialized")
+	}
+
+	token, err := a.manager.GetToken(ctx, provider, service)
+	if err != nil {
+		return "", err
+	}
+
+	// Return ONLY the access token string - never expose the full token object
+	return token.AccessToken, nil
 }

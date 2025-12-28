@@ -49,6 +49,12 @@ func (s *SQLiteStore) Close() error {
 	return s.db.Close()
 }
 
+// DB returns the underlying database connection for use by other packages
+// (e.g., token storage that shares the same database)
+func (s *SQLiteStore) DB() *sql.DB {
+	return s.db
+}
+
 // SaveRepo saves or updates a repository record
 func (s *SQLiteStore) SaveRepo(ctx context.Context, repo *repos.LocalRepo) error {
 	if repo.ID == "" {
