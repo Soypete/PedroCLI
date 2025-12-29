@@ -50,6 +50,17 @@ func (m *Manager) GetPodcastSystemPrompt() string {
 	return m.renderPrompt(defaultPodcastSystemPrompt)
 }
 
+// GetCodingSystemPrompt returns the system prompt for coding mode
+func (m *Manager) GetCodingSystemPrompt() string {
+	// Try to load from file first
+	if prompt, err := m.loadPromptFile("coding/system.txt"); err == nil {
+		return prompt
+	}
+
+	// Fall back to default embedded prompt
+	return defaultCodingSystemPrompt
+}
+
 // GetPrompt returns a prompt for a specific job type
 func (m *Manager) GetPrompt(mode, jobType string) string {
 	// Try to load from file first
@@ -62,6 +73,12 @@ func (m *Manager) GetPrompt(mode, jobType string) string {
 	if mode == "podcast" {
 		if defaultPrompt, ok := defaultPodcastPrompts[jobType]; ok {
 			return m.renderPrompt(defaultPrompt)
+		}
+	}
+
+	if mode == "coding" {
+		if defaultPrompt, ok := defaultCodingPrompts[jobType]; ok {
+			return defaultPrompt
 		}
 	}
 

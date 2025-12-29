@@ -12,12 +12,12 @@ import (
 
 // BuilderAgent builds new features autonomously
 type BuilderAgent struct {
-	*BaseAgent
+	*CodingBaseAgent
 }
 
 // NewBuilderAgent creates a new builder agent
 func NewBuilderAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager) *BuilderAgent {
-	base := NewBaseAgent(
+	base := NewCodingBaseAgent(
 		"builder",
 		"Build new features autonomously and create draft PRs",
 		cfg,
@@ -26,7 +26,7 @@ func NewBuilderAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manag
 	)
 
 	return &BuilderAgent{
-		BaseAgent: base,
+		CodingBaseAgent: base,
 	}
 }
 
@@ -63,8 +63,9 @@ func (b *BuilderAgent) Execute(ctx context.Context, input map[string]interface{}
 		// Build initial prompt
 		userPrompt := b.buildInitialPrompt(input)
 
-		// Create inference executor
+		// Create inference executor with coding system prompt
 		executor := NewInferenceExecutor(b.BaseAgent, contextMgr)
+		executor.SetSystemPrompt(b.buildCodingSystemPrompt())
 
 		// Execute the inference loop
 		err = executor.Execute(bgCtx, userPrompt)
@@ -90,11 +91,15 @@ func (b *BuilderAgent) Execute(ctx context.Context, input map[string]interface{}
 func (b *BuilderAgent) buildInitialPrompt(input map[string]interface{}) string {
 	description := input["description"].(string)
 
-	prompt := fmt.Sprintf(`Task: Build a new feature
+	// Get the builder-specific prompt from the prompt manager
+	basePrompt := b.promptMgr.GetPrompt("coding", "builder")
+
+	prompt := basePrompt + fmt.Sprintf(`
+## Current Task
 
 Description: %s
 
-Steps to complete:
+### Steps to Complete
 1. Understand the requirements
 2. Search for relevant files using the search tool
 3. Read necessary files to understand the codebase
@@ -105,7 +110,7 @@ Steps to complete:
 8. Commit changes to a new branch using git tool
 9. Create a draft pull request using git tool
 
-IMPORTANT INSTRUCTIONS:
+### Important Instructions
 - Use tools by providing JSON objects: {"tool": "tool_name", "args": {"key": "value"}}
 - If a tool fails, analyze the error and try again with corrections
 - Keep iterating until you get it right - don't give up!

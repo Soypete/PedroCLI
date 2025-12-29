@@ -12,12 +12,12 @@ import (
 
 // DebuggerAgent debugs and fixes issues autonomously
 type DebuggerAgent struct {
-	*BaseAgent
+	*CodingBaseAgent
 }
 
 // NewDebuggerAgent creates a new debugger agent
 func NewDebuggerAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager) *DebuggerAgent {
-	base := NewBaseAgent(
+	base := NewCodingBaseAgent(
 		"debugger",
 		"Debug and fix issues autonomously",
 		cfg,
@@ -26,7 +26,7 @@ func NewDebuggerAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Mana
 	)
 
 	return &DebuggerAgent{
-		BaseAgent: base,
+		CodingBaseAgent: base,
 	}
 }
 
@@ -63,8 +63,9 @@ func (d *DebuggerAgent) Execute(ctx context.Context, input map[string]interface{
 		// Build debugging prompt
 		userPrompt := d.buildDebugPrompt(input)
 
-		// Create inference executor
+		// Create inference executor with coding system prompt
 		executor := NewInferenceExecutor(d.BaseAgent, contextMgr)
+		executor.SetSystemPrompt(d.buildCodingSystemPrompt())
 
 		// Execute the inference loop
 		err = executor.Execute(bgCtx, userPrompt)
@@ -90,18 +91,22 @@ func (d *DebuggerAgent) Execute(ctx context.Context, input map[string]interface{
 func (d *DebuggerAgent) buildDebugPrompt(input map[string]interface{}) string {
 	description := input["description"].(string)
 
-	prompt := fmt.Sprintf(`Task: Debug and fix an issue
+	// Get the debugger-specific prompt from the prompt manager
+	basePrompt := d.promptMgr.GetPrompt("coding", "debugger")
+
+	prompt := basePrompt + fmt.Sprintf(`
+## Current Task
 
 Issue Description: %s
 
-Your goal is to:
+### Your Goals
 1. **Analyze Symptoms**: Understand what's wrong by examining error messages, logs, and failing tests
 2. **Identify Root Cause**: Trace the issue to its source in the codebase
 3. **Develop a Fix**: Create a minimal, targeted fix for the issue
 4. **Verify the Fix**: Run tests to ensure the fix works and doesn't break anything else
 5. **Document the Solution**: Add comments or documentation if needed
 
-Debugging Steps:
+### Debugging Steps
 1. Search for relevant files using the search tool
 2. Read error messages and stack traces
 3. Examine relevant code files
@@ -112,7 +117,7 @@ Debugging Steps:
 8. Keep iterating until all tests pass
 9. Commit the fix with a clear message using git tool
 
-IMPORTANT INSTRUCTIONS:
+### Important Instructions
 - Use tools by providing JSON objects: {"tool": "tool_name", "args": {"key": "value"}}
 - If tests fail, don't give up - analyze the failure and try a different approach
 - Keep trying until you get it right!
@@ -123,48 +128,20 @@ Be systematic and thorough. Always verify your fix with tests before committing.
 
 	// Add optional context
 	if errorLog, ok := input["error_log"].(string); ok {
-		prompt += fmt.Sprintf("\n\nError Log:\n```\n%s\n```", errorLog)
+		prompt += fmt.Sprintf("\n\n### Error Log\n```\n%s\n```", errorLog)
 	}
 
 	if stackTrace, ok := input["stack_trace"].(string); ok {
-		prompt += fmt.Sprintf("\n\nStack Trace:\n```\n%s\n```", stackTrace)
+		prompt += fmt.Sprintf("\n\n### Stack Trace\n```\n%s\n```", stackTrace)
 	}
 
 	if failingTest, ok := input["failing_test"].(string); ok {
-		prompt += fmt.Sprintf("\n\nFailing Test: %s", failingTest)
+		prompt += fmt.Sprintf("\n\n### Failing Test\n%s", failingTest)
 	}
 
 	if reproduction, ok := input["reproduction_steps"].(string); ok {
-		prompt += fmt.Sprintf("\n\nReproduction Steps:\n%s", reproduction)
+		prompt += fmt.Sprintf("\n\n### Reproduction Steps\n%s", reproduction)
 	}
 
 	return prompt
-}
-
-// buildSystemPrompt overrides the base system prompt for debugging
-func (d *DebuggerAgent) buildSystemPrompt() string {
-	return `You are an expert debugging agent.
-
-Your role is to:
-- Systematically diagnose code issues
-- Identify root causes, not just symptoms
-- Apply minimal, targeted fixes
-- Verify fixes with tests
-- Avoid introducing new bugs
-
-Debugging Principles:
-1. **Reproduce First**: Always reproduce the issue before attempting a fix
-2. **Narrow Down**: Use binary search and isolation to find the exact cause
-3. **Read Error Messages Carefully**: They often contain the exact location and cause
-4. **Check Recent Changes**: Bugs often come from recent modifications
-5. **Test Thoroughly**: Verify the fix works and doesn't break anything else
-6. **Fix One Thing**: Don't fix multiple unrelated issues in one change
-
-Available tools:
-- file: Read, write, and modify files
-- git: Check git history, diff changes, create branches
-- bash: Run commands, check logs
-- test: Run tests and parse results
-
-Always run tests before and after your fix to verify the solution.`
 }
