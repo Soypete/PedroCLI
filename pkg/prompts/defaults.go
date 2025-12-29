@@ -39,48 +39,85 @@ var defaultPodcastPrompts = map[string]string{
 	"create_podcast_script": `Create a podcast script for "{{.PodcastName}}".
 
 ## Task
-Generate a structured episode script based on the provided topic and notes.
+Generate a structured episode script based on the provided topic and notes using the episode template.
 
-## Script Structure
-1. **Cold Open** (30 seconds)
-   - Hook the audience with an interesting fact or question
+## Episode Template Structure
 
-2. **Introduction** (1-2 minutes)
-   - Welcome listeners
-   - Introduce hosts
-   - Preview today's topic
+Use this format for all episode scripts:
 
-3. **Main Content** (15-25 minutes)
-   - Present the topic with clear segments
-   - Include discussion points for hosts
-   - Add transitions between segments
+# 🧾 Episode Details
+- Episode # / Title: [Episode number and title]
+- Hosts: [Host names]
+- Guests: [Guest names if any]
+- Recording Date: [Date if known]
+- Publish Date: [Date if known]
+- Status: Idea / Recording / Editing / Released
+- Notes: [Key points and context]
 
-4. **Guest Segment** (if applicable) (10-15 minutes)
-   - Introduction of guest
-   - Interview questions
-   - Discussion points
+# ⏱ Segment Outline
 
-5. **Wrap-up** (2-3 minutes)
-   - Summary of key points
-   - Call to action
-   - Teaser for next episode
-   - Sign-off
+**00:00 – 01:00  Intro**
+- Quick host intros
+- One-line show summary
+- Optional: mention tagline or mission
+- Notes / timestamps:
 
-## Formatting Guidelines
-- Use clear headers for each segment
-- Include timing estimates
-- Mark host speaking parts (e.g., [HOST1], [HOST2])
-- Include notes for tone/delivery where helpful
-- Add placeholder notes for ad reads if needed
+**01:00 – 10:00  News Segment**
+- Each host brings one or two articles or updates
+- Key discussion points:
+  • Why does this update matter?
+  • What changed this week?
+  • Quick takes or concerns
+- Paste links here:
+- Summary notes / reactions:
+
+**10:00 – 12:00  Sponsor / Community Shout-out**
+- Placeholder for sponsor or community mention
+- Read text / insert mid-roll marker:
+
+**12:00 – 35:00  Main Conversation**
+- Central topic / guest theme: [Topic]
+- Discussion prompts:
+  • Background and how you got started
+  • What's your current setup?
+  • What tools, stacks, or workflows are you using?
+  • Why does this topic matter to you?
+  • What are the current challenges or limits?
+- Follow-ups / quotes / time markers:
+
+**35:00 – 42:00  Reflection / Future Plans**
+- What stood out today?
+- What topics or guests are coming next?
+- Any new tools to explore?
+- Key takeaways / clips to pull:
+
+**42:00 – 45:00  Outro**
+- Recap key points / favorite moment
+- Mention where to find the show
+- Tease next episode topic or guest
+- Sign-off line
+- Outro music / notes / timestamp:
+
+## Instructions
+1. Fill in the episode details section with the provided topic and notes
+2. Expand the Main Conversation section based on the specific topic
+3. Add relevant discussion points and prompts
+4. Keep other sections as template structure for hosts to fill in
 
 ## Output
-Save the script to the Notion Scripts database with:
-- Title: Episode title
-- Status: Draft
-- Date: Recording date if known
-- Notes: Any additional context
+First, create a local file with the script content using the template above.
+Then, save to the Notion "Episode Planner" database with these exact properties:
+- Episode # (title property): Episode number and title (e.g., "S01E01 - Topic Name")
+- Title / Working Topic: Episode topic/title
+- Status 🎛: "Draft"
+- Recording Date: Recording date if known
+- Notes: Link to the script file or key context
 
-Use the notion tool to create the page in database: {{.NotionScriptsDB}}
+Use the file tool to create the script, then the notion tool to create the database entry.
+
+Example:
+{"tool": "file", "args": {"action": "write", "path": "episode_S01E01.md", "content": "..."}}
+{"tool": "notion", "args": {"action": "create_page", "database_id": "...", "properties": {"Episode #": "S01E01 - Topic", "Title / Working Topic": "Topic here", "Status 🎛": "Draft"}}}
 `,
 
 	"add_notion_link": `Add a link to the podcast content database.
@@ -105,7 +142,7 @@ Add the provided article/news link to the appropriate Notion database for review
    - Title: Article title
    - URL: Original link
    - Summary: Brief description
-   - Status: "To Review"
+   - Status 🎛: "To Review"
    - Added Date: Today
    - Tags: Relevant topics
 
@@ -171,7 +208,7 @@ Generate a high-level outline for a podcast episode without full script details.
 
 ## Output
 Save the outline to Notion with:
-- Status: "Outline"
+- Status 🎛: "Outline"
 - Type: "Episode Outline"
 
 Use the notion tool to query relevant articles from {{.NotionArticlesDB}} and {{.NotionNewsDB}} for research.

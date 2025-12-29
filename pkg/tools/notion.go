@@ -1,17 +1,19 @@
 package tools
 
 import (
-	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"os/exec"
+	"net/http"
 	"strings"
-	"sync"
 
 	"github.com/soypete/pedrocli/pkg/config"
 )
+
+const notionAPIBase = "https://api.notion.com/v1"
+const notionAPIVersion = "2022-06-28"
 
 // TokenManager defines the interface for retrieving tokens
 // IMPORTANT: Tokens retrieved from this manager are NEVER exposed to the LLM
@@ -20,16 +22,11 @@ type TokenManager interface {
 	GetToken(ctx context.Context, provider, service string) (accessToken string, err error)
 }
 
-// NotionTool provides access to Notion via MCP server
+// NotionTool provides access to Notion via REST API
 type NotionTool struct {
 	config       *config.Config
 	tokenManager TokenManager
-	mu           sync.Mutex
-	cmd          *exec.Cmd
-	stdin        io.WriteCloser
-	stdout       *bufio.Reader
-	msgID        int
-	started      bool
+	httpClient   *http.Client
 }
 
 // NewNotionTool creates a new Notion tool
@@ -37,7 +34,7 @@ func NewNotionTool(cfg *config.Config, tokenMgr TokenManager) *NotionTool {
 	return &NotionTool{
 		config:       cfg,
 		tokenManager: tokenMgr,
-		msgID:        0,
+		httpClient:   &http.Client{},
 	}
 }
 
@@ -48,7 +45,7 @@ func (t *NotionTool) Name() string {
 
 // Description returns the tool description
 func (t *NotionTool) Description() string {
-	return `Notion database and page management via MCP server.
+	return `Notion database and page management via REST API.
 
 Actions:
 - query_database: Query a Notion database
@@ -83,14 +80,6 @@ func (t *NotionTool) Execute(ctx context.Context, args map[string]interface{}) (
 		}, nil
 	}
 
-	// Check for API key
-	if t.config.Podcast.Notion.APIKey == "" {
-		return &Result{
-			Success: false,
-			Error:   "Notion API key not configured. Set podcast.notion.api_key in config. TODO: Add your Notion API key.",
-		}, nil
-	}
-
 	action, ok := args["action"].(string)
 	if !ok {
 		return &Result{
@@ -120,184 +109,71 @@ func (t *NotionTool) Execute(ctx context.Context, args map[string]interface{}) (
 	}
 }
 
-// ensureStarted starts the MCP server if not already running
-func (t *NotionTool) ensureStarted(ctx context.Context) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	if t.started {
-		return nil
-	}
-
-	// Get API key from TokenManager (NEVER exposed to LLM)
-	var apiKey string
-	var err error
+// getAPIKey retrieves the Notion API key
+func (t *NotionTool) getAPIKey(ctx context.Context) (string, error) {
+	// Try TokenManager first
 	if t.tokenManager != nil {
-		apiKey, err = t.tokenManager.GetToken(ctx, "notion", "database")
+		apiKey, err := t.tokenManager.GetToken(ctx, "notion", "database")
+		if err == nil && apiKey != "" {
+			return apiKey, nil
+		}
+	}
+
+	// Fall back to config
+	if t.config.Podcast.Notion.APIKey != "" {
+		return t.config.Podcast.Notion.APIKey, nil
+	}
+
+	return "", fmt.Errorf("Notion API key not configured")
+}
+
+// makeRequest makes an HTTP request to the Notion API
+func (t *NotionTool) makeRequest(ctx context.Context, method, path string, body interface{}) (map[string]interface{}, error) {
+	apiKey, err := t.getAPIKey(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var reqBody io.Reader
+	if body != nil {
+		bodyBytes, err := json.Marshal(body)
 		if err != nil {
-			return fmt.Errorf("failed to retrieve Notion API key: %w", err)
+			return nil, fmt.Errorf("failed to marshal request body: %w", err)
 		}
-	} else {
-		// Fallback to config (for backwards compatibility)
-		apiKey = t.config.Podcast.Notion.APIKey
-		if apiKey == "" {
-			return fmt.Errorf("Notion API key not configured")
-		}
+		reqBody = bytes.NewReader(bodyBytes)
 	}
 
-	// Parse command and args
-	cmdParts := strings.Fields(t.config.Podcast.Notion.Command)
-	if len(cmdParts) == 0 {
-		return fmt.Errorf("no Notion MCP command configured")
-	}
-
-	// Set up environment with API key (used only for subprocess authentication, never logged or exposed)
-	cmd := exec.CommandContext(ctx, cmdParts[0], cmdParts[1:]...)
-	cmd.Env = append(cmd.Environ(), fmt.Sprintf("NOTION_API_KEY=%s", apiKey))
-
-	// Set up pipes
-	stdin, err := cmd.StdinPipe()
+	url := notionAPIBase + path
+	req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
 	if err != nil {
-		return fmt.Errorf("failed to create stdin pipe: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	stdout, err := cmd.StdoutPipe()
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Notion-Version", notionAPIVersion)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := t.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to create stdout pipe: %w", err)
+		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
+	defer resp.Body.Close()
 
-	// Start the process
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start Notion MCP server: %w", err)
-	}
-
-	t.cmd = cmd
-	t.stdin = stdin
-	t.stdout = bufio.NewReader(stdout)
-	t.started = true
-
-	// Initialize the MCP server
-	if err := t.initialize(ctx); err != nil {
-		t.stop()
-		return fmt.Errorf("failed to initialize Notion MCP server: %w", err)
-	}
-
-	return nil
-}
-
-// stop stops the MCP server
-func (t *NotionTool) stop() {
-	if t.stdin != nil {
-		t.stdin.Close()
-	}
-	if t.cmd != nil && t.cmd.Process != nil {
-		t.cmd.Process.Kill()
-	}
-	t.started = false
-}
-
-// initialize sends the initialize request to the MCP server
-func (t *NotionTool) initialize(ctx context.Context) error {
-	req := map[string]interface{}{
-		"jsonrpc": "2.0",
-		"id":      t.nextID(),
-		"method":  "initialize",
-		"params": map[string]interface{}{
-			"protocolVersion": "2024-11-05",
-			"capabilities":    map[string]interface{}{},
-			"clientInfo": map[string]interface{}{
-				"name":    "pedrocli",
-				"version": "1.0.0",
-			},
-		},
-	}
-
-	_, err := t.sendRequest(ctx, req)
-	return err
-}
-
-// sendRequest sends a JSON-RPC request and waits for response
-func (t *NotionTool) sendRequest(ctx context.Context, req map[string]interface{}) (map[string]interface{}, error) {
-	// Marshal request
-	data, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	// Send request
-	if _, err := t.stdin.Write(append(data, '\n')); err != nil {
-		return nil, fmt.Errorf("failed to write request: %w", err)
-	}
-
-	// Read response
-	line, err := t.stdout.ReadString('\n')
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	// Parse response
-	var resp map[string]interface{}
-	if err := json.Unmarshal([]byte(line), &resp); err != nil {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("Notion API error (%d): %s", resp.StatusCode, string(respBody))
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(respBody, &result); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
-	// Check for error
-	if errObj, ok := resp["error"]; ok {
-		return nil, fmt.Errorf("MCP error: %v", errObj)
-	}
-
-	return resp, nil
-}
-
-// nextID returns the next message ID
-func (t *NotionTool) nextID() int {
-	t.msgID++
-	return t.msgID
-}
-
-// callTool calls an MCP tool
-func (t *NotionTool) callTool(ctx context.Context, toolName string, toolArgs map[string]interface{}) (*Result, error) {
-	if err := t.ensureStarted(ctx); err != nil {
-		return &Result{
-			Success: false,
-			Error:   err.Error(),
-		}, nil
-	}
-
-	req := map[string]interface{}{
-		"jsonrpc": "2.0",
-		"id":      t.nextID(),
-		"method":  "tools/call",
-		"params": map[string]interface{}{
-			"name":      toolName,
-			"arguments": toolArgs,
-		},
-	}
-
-	resp, err := t.sendRequest(ctx, req)
-	if err != nil {
-		return &Result{
-			Success: false,
-			Error:   err.Error(),
-		}, nil
-	}
-
-	// Extract result
-	result, ok := resp["result"]
-	if !ok {
-		return &Result{
-			Success: false,
-			Error:   "no result in response",
-		}, nil
-	}
-
-	// Format result as JSON for output
-	resultJSON, _ := json.MarshalIndent(result, "", "  ")
-
-	return &Result{
-		Success: true,
-		Output:  string(resultJSON),
-	}, nil
+	return result, nil
 }
 
 // queryDatabase queries a Notion database
@@ -315,18 +191,30 @@ func (t *NotionTool) queryDatabase(ctx context.Context, args map[string]interfac
 		}
 	}
 
-	toolArgs := map[string]interface{}{
-		"database_id": databaseID,
-	}
+	// Remove hyphens from database ID if present
+	databaseID = strings.ReplaceAll(databaseID, "-", "")
 
+	reqBody := make(map[string]interface{})
 	if filter, ok := args["filter"]; ok {
-		toolArgs["filter"] = filter
+		reqBody["filter"] = filter
 	}
 	if sorts, ok := args["sorts"]; ok {
-		toolArgs["sorts"] = sorts
+		reqBody["sorts"] = sorts
 	}
 
-	return t.callTool(ctx, "notion_query_database", toolArgs)
+	result, err := t.makeRequest(ctx, "POST", "/databases/"+databaseID+"/query", reqBody)
+	if err != nil {
+		return &Result{
+			Success: false,
+			Error:   err.Error(),
+		}, nil
+	}
+
+	resultJSON, _ := json.MarshalIndent(result, "", "  ")
+	return &Result{
+		Success: true,
+		Output:  string(resultJSON),
+	}, nil
 }
 
 // createPage creates a new page in a database
@@ -351,16 +239,110 @@ func (t *NotionTool) createPage(ctx context.Context, args map[string]interface{}
 		}, nil
 	}
 
-	toolArgs := map[string]interface{}{
-		"database_id": databaseID,
-		"properties":  properties,
+	// Remove hyphens from database ID
+	databaseID = strings.ReplaceAll(databaseID, "-", "")
+
+	// Convert properties to Notion format
+	notionProps := make(map[string]interface{})
+	for key, value := range properties {
+		notionProps[key] = t.convertToNotionProperty(key, value)
 	}
 
-	if content, ok := args["content"].(string); ok {
-		toolArgs["content"] = content
+	reqBody := map[string]interface{}{
+		"parent": map[string]interface{}{
+			"database_id": databaseID,
+		},
+		"properties": notionProps,
 	}
 
-	return t.callTool(ctx, "notion_create_page", toolArgs)
+	// Add content/children if provided
+	if content, ok := args["content"].(string); ok && content != "" {
+		reqBody["children"] = []interface{}{
+			map[string]interface{}{
+				"object": "block",
+				"type":   "paragraph",
+				"paragraph": map[string]interface{}{
+					"rich_text": []interface{}{
+						map[string]interface{}{
+							"type": "text",
+							"text": map[string]interface{}{
+								"content": content,
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	result, err := t.makeRequest(ctx, "POST", "/pages", reqBody)
+	if err != nil {
+		return &Result{
+			Success: false,
+			Error:   err.Error(),
+		}, nil
+	}
+
+	// Extract page URL for easy access
+	pageURL, _ := result["url"].(string)
+	pageID, _ := result["id"].(string)
+
+	// Create a summary message with the URL prominently displayed
+	outputMsg := fmt.Sprintf("✓ Page created successfully!\n\nPage URL: %s\nPage ID: %s\n\n", pageURL, pageID)
+	resultJSON, _ := json.MarshalIndent(result, "", "  ")
+	outputMsg += "Full response:\n" + string(resultJSON)
+
+	return &Result{
+		Success: true,
+		Output:  outputMsg,
+	}, nil
+}
+
+// convertToNotionProperty converts a simple value to Notion property format
+// propertyName is used to determine if this is a title property (only one per database)
+func (t *NotionTool) convertToNotionProperty(propertyName string, value interface{}) map[string]interface{} {
+	switch v := value.(type) {
+	case string:
+		// Check if this is likely a title property
+		// Title properties typically have names like "Name", "Title", "Episode #", etc.
+		if strings.Contains(strings.ToLower(propertyName), "#") ||
+			strings.ToLower(propertyName) == "name" ||
+			strings.ToLower(propertyName) == "title" {
+			return map[string]interface{}{
+				"title": []interface{}{
+					map[string]interface{}{
+						"text": map[string]interface{}{
+							"content": v,
+						},
+					},
+				},
+			}
+		}
+		// Otherwise, use rich_text for string properties
+		return map[string]interface{}{
+			"rich_text": []interface{}{
+				map[string]interface{}{
+					"text": map[string]interface{}{
+						"content": v,
+					},
+				},
+			},
+		}
+	case float64, int:
+		return map[string]interface{}{
+			"number": v,
+		}
+	case bool:
+		return map[string]interface{}{
+			"checkbox": v,
+		}
+	default:
+		// Return as-is if already in Notion format
+		if m, ok := v.(map[string]interface{}); ok {
+			return m
+		}
+		return map[string]interface{}{}
+	}
 }
 
 // updatePage updates an existing page
@@ -381,12 +363,32 @@ func (t *NotionTool) updatePage(ctx context.Context, args map[string]interface{}
 		}, nil
 	}
 
-	toolArgs := map[string]interface{}{
-		"page_id":    pageID,
-		"properties": properties,
+	// Remove hyphens
+	pageID = strings.ReplaceAll(pageID, "-", "")
+
+	// Convert properties
+	notionProps := make(map[string]interface{})
+	for key, value := range properties {
+		notionProps[key] = t.convertToNotionProperty(key, value)
 	}
 
-	return t.callTool(ctx, "notion_update_page", toolArgs)
+	reqBody := map[string]interface{}{
+		"properties": notionProps,
+	}
+
+	result, err := t.makeRequest(ctx, "PATCH", "/pages/"+pageID, reqBody)
+	if err != nil {
+		return &Result{
+			Success: false,
+			Error:   err.Error(),
+		}, nil
+	}
+
+	resultJSON, _ := json.MarshalIndent(result, "", "  ")
+	return &Result{
+		Success: true,
+		Output:  string(resultJSON),
+	}, nil
 }
 
 // getPage gets a page by ID
@@ -399,11 +401,22 @@ func (t *NotionTool) getPage(ctx context.Context, args map[string]interface{}) (
 		}, nil
 	}
 
-	toolArgs := map[string]interface{}{
-		"page_id": pageID,
+	// Remove hyphens
+	pageID = strings.ReplaceAll(pageID, "-", "")
+
+	result, err := t.makeRequest(ctx, "GET", "/pages/"+pageID, nil)
+	if err != nil {
+		return &Result{
+			Success: false,
+			Error:   err.Error(),
+		}, nil
 	}
 
-	return t.callTool(ctx, "notion_get_page", toolArgs)
+	resultJSON, _ := json.MarshalIndent(result, "", "  ")
+	return &Result{
+		Success: true,
+		Output:  string(resultJSON),
+	}, nil
 }
 
 // appendBlocks appends content blocks to a page
@@ -424,12 +437,41 @@ func (t *NotionTool) appendBlocks(ctx context.Context, args map[string]interface
 		}, nil
 	}
 
-	toolArgs := map[string]interface{}{
-		"page_id": pageID,
-		"content": content,
+	// Remove hyphens
+	pageID = strings.ReplaceAll(pageID, "-", "")
+
+	reqBody := map[string]interface{}{
+		"children": []interface{}{
+			map[string]interface{}{
+				"object": "block",
+				"type":   "paragraph",
+				"paragraph": map[string]interface{}{
+					"rich_text": []interface{}{
+						map[string]interface{}{
+							"type": "text",
+							"text": map[string]interface{}{
+								"content": content,
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
-	return t.callTool(ctx, "notion_append_blocks", toolArgs)
+	result, err := t.makeRequest(ctx, "PATCH", "/blocks/"+pageID+"/children", reqBody)
+	if err != nil {
+		return &Result{
+			Success: false,
+			Error:   err.Error(),
+		}, nil
+	}
+
+	resultJSON, _ := json.MarshalIndent(result, "", "  ")
+	return &Result{
+		Success: true,
+		Output:  string(resultJSON),
+	}, nil
 }
 
 // search searches across all accessible pages
@@ -442,11 +484,23 @@ func (t *NotionTool) search(ctx context.Context, args map[string]interface{}) (*
 		}, nil
 	}
 
-	toolArgs := map[string]interface{}{
+	reqBody := map[string]interface{}{
 		"query": query,
 	}
 
-	return t.callTool(ctx, "notion_search", toolArgs)
+	result, err := t.makeRequest(ctx, "POST", "/search", reqBody)
+	if err != nil {
+		return &Result{
+			Success: false,
+			Error:   err.Error(),
+		}, nil
+	}
+
+	resultJSON, _ := json.MarshalIndent(result, "", "  ")
+	return &Result{
+		Success: true,
+		Output:  string(resultJSON),
+	}, nil
 }
 
 // getDatabaseID returns the database ID for a given name from config
