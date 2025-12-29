@@ -192,7 +192,8 @@ type PodcastConfig struct {
 // NotionMCPConfig contains Notion MCP server configuration
 type NotionMCPConfig struct {
 	Enabled bool   `json:"enabled"`
-	Command string `json:"command,omitempty"` // e.g., "npx @notionhq/notion-mcp-server"
+	Command string `json:"command,omitempty"` // e.g., "npx @notionhq/notion-mcp-server" (stdio transport)
+	URL     string `json:"url,omitempty"`     // e.g., "https://mcp.notion.com/mcp" (HTTP transport)
 	// TODO: Add your Notion API key here
 	APIKey string `json:"api_key,omitempty"`
 	// Database IDs for different content types

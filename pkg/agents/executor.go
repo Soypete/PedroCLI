@@ -123,42 +123,116 @@ func (e *InferenceExecutor) Execute(ctx context.Context, initialPrompt string) e
 }
 
 // parseToolCalls parses tool calls from the LLM response
-// Expected format: JSON objects or JSON code blocks
+// Expected format: JSON objects, arrays, or code blocks
+// Supports both "tool" and "name" field names for backwards compatibility
 func (e *InferenceExecutor) parseToolCalls(text string) []llm.ToolCall {
-	var calls []llm.ToolCall
-
-	// Try to find JSON code blocks first (```json ... ```)
-	jsonBlockRegex := regexp.MustCompile("(?s)```json\\s*\\n(.*?)\\n```")
-	matches := jsonBlockRegex.FindAllStringSubmatch(text, -1)
-
-	for _, match := range matches {
-		if len(match) > 1 {
-			var call llm.ToolCall
-			if err := json.Unmarshal([]byte(match[1]), &call); err == nil {
-				if call.Name != "" {
-					calls = append(calls, call)
-				}
-			}
-		}
+	if e.agent.config.Debug.Enabled {
+		fmt.Fprintf(os.Stderr, "  🔍 Parsing tool calls from %d bytes of text\n", len(text))
 	}
 
-	// If no code blocks, try to find inline JSON objects
-	if len(calls) == 0 {
-		// Look for {\"tool\": \"...\", \"args\": {...}} pattern
-		inlineRegex := regexp.MustCompile(`\{[^}]*"tool"[^}]*"args"[^}]*\}`)
-		matches := inlineRegex.FindAllString(text, -1)
+	var calls []llm.ToolCall
 
-		for _, match := range matches {
-			var call llm.ToolCall
-			if err := json.Unmarshal([]byte(match), &call); err == nil {
-				if call.Name != "" {
-					calls = append(calls, call)
-				}
-			}
+	// Strategy 1: Try parsing entire response as JSON array
+	var arrayOfCalls []llm.ToolCall
+	if err := json.Unmarshal([]byte(text), &arrayOfCalls); err == nil && len(arrayOfCalls) > 0 {
+		calls = e.filterValidCalls(arrayOfCalls)
+		if e.agent.config.Debug.Enabled {
+			fmt.Fprintf(os.Stderr, "  📋 Parsed %d tool call(s) from JSON array\n", len(calls))
+		}
+		return calls
+	}
+
+	// Strategy 2: Try parsing as single JSON object
+	var singleCall llm.ToolCall
+	if err := json.Unmarshal([]byte(text), &singleCall); err == nil && singleCall.Name != "" {
+		if e.agent.config.Debug.Enabled {
+			fmt.Fprintf(os.Stderr, "  📋 Parsed 1 tool call from JSON object: %s\n", singleCall.Name)
+		}
+		return []llm.ToolCall{singleCall}
+	}
+
+	// Strategy 3: Extract from markdown code blocks
+	calls = e.extractFromCodeBlocks(text)
+	if len(calls) > 0 {
+		if e.agent.config.Debug.Enabled {
+			fmt.Fprintf(os.Stderr, "  📋 Parsed %d tool call(s) from code blocks\n", len(calls))
+		}
+		return calls
+	}
+
+	// Strategy 4: Line-by-line JSON parsing
+	calls = e.extractFromLines(text)
+	if e.agent.config.Debug.Enabled {
+		fmt.Fprintf(os.Stderr, "  📋 Parsed %d tool call(s) from lines\n", len(calls))
+		for i, call := range calls {
+			fmt.Fprintf(os.Stderr, "    %d. %s\n", i+1, call.Name)
 		}
 	}
 
 	return calls
+}
+
+// extractFromCodeBlocks extracts tool calls from markdown code blocks
+func (e *InferenceExecutor) extractFromCodeBlocks(text string) []llm.ToolCall {
+	var calls []llm.ToolCall
+
+	// Match ```json...``` or ```...``` blocks
+	re := regexp.MustCompile("(?s)```(?:json)?\\s*\\n(.*?)\\n```")
+	matches := re.FindAllStringSubmatch(text, -1)
+
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+
+		// Try as array first
+		var arrayCalls []llm.ToolCall
+		if err := json.Unmarshal([]byte(match[1]), &arrayCalls); err == nil {
+			calls = append(calls, e.filterValidCalls(arrayCalls)...)
+			continue
+		}
+
+		// Try as single object
+		var call llm.ToolCall
+		if err := json.Unmarshal([]byte(match[1]), &call); err == nil && call.Name != "" {
+			calls = append(calls, call)
+		}
+	}
+
+	return calls
+}
+
+// extractFromLines extracts tool calls from individual lines
+func (e *InferenceExecutor) extractFromLines(text string) []llm.ToolCall {
+	var calls []llm.ToolCall
+	lines := strings.Split(text, "\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// Must start with { to be JSON
+		if !strings.HasPrefix(line, "{") {
+			continue
+		}
+
+		var call llm.ToolCall
+		if err := json.Unmarshal([]byte(line), &call); err == nil && call.Name != "" {
+			calls = append(calls, call)
+		}
+	}
+
+	return calls
+}
+
+// filterValidCalls filters out invalid tool calls (empty names)
+func (e *InferenceExecutor) filterValidCalls(calls []llm.ToolCall) []llm.ToolCall {
+	var valid []llm.ToolCall
+	for _, call := range calls {
+		if call.Name != "" {
+			valid = append(valid, call)
+		}
+	}
+	return valid
 }
 
 // executeTools executes a list of tool calls

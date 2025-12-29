@@ -76,13 +76,8 @@ func (t *CalendarTool) Execute(ctx context.Context, args map[string]interface{})
 		}, nil
 	}
 
-	// Check for credentials
-	if t.config.Podcast.Calendar.CredentialsPath == "" {
-		return &Result{
-			Success: false,
-			Error:   "Google Calendar credentials not configured. Set podcast.calendar.credentials_path in config. TODO: Add path to OAuth credentials.",
-		}, nil
-	}
+	// Note: Credentials validation happens in ensureStarted() via TokenManager
+	// Don't check config.Podcast.Calendar.CredentialsPath here - tokens may be retrieved from token storage
 
 	action, ok := args["action"].(string)
 	if !ok {
