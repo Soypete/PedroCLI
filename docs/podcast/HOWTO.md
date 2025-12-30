@@ -53,21 +53,26 @@ Add your Notion configuration to `.pedrocli.json`:
 
 ### 3. Store Notion Token
 
-Store your Notion token securely in the token database:
+Store your Notion token securely using one of these methods:
 
 ```bash
-# Manual storage (for testing):
-echo "your_token_here" > /tmp/notion_token.txt
+# Option 1: Environment variable (supports 1Password CLI)
+export NOTION_TOKEN="your_token_here"
+# Or with op run:
+op run --env-file=.env -- ./pedrocli-http-server
 
-# Or use the OAuth storage system (recommended):
+# Option 2: Config file
+# Add to .pedrocli.json: "podcast.notion.api_key": "your_token_here"
+
+# Option 3: Token storage system (for OAuth flows)
 # pedrocli will prompt for tokens when needed
 ```
 
 ## Commands
 
-### Create a Podcast Script
+### Create a Podcast Script & Outline
 
-Create a structured episode script for your podcast:
+Create a structured episode script and outline for your podcast:
 
 ```bash
 ./pedrocli podcast create-script \
@@ -127,16 +132,6 @@ Add guest information to your podcast guests database:
 - Fills in name, bio, email, and other provided fields
 - Sets status to "Potential"
 
-### Create an Episode Outline
-
-Generate a high-level outline without full script details:
-
-```bash
-./pedrocli podcast create-outline \
-  -topic "Kubernetes Basics" \
-  -duration "45min"
-```
-
 ### Review News Items
 
 Summarize recent news for episode prep:
@@ -172,7 +167,7 @@ The "Episode Planner" (aka "scripts") database should have these properties:
 ### Common Issues
 
 **Problem**: "Notion API key not configured"
-- **Solution**: Store your token using the token storage system or in `/tmp/notion_token.txt` for testing
+- **Solution**: Set NOTION_TOKEN env var, add podcast.notion.api_key to config, or use token storage
 
 **Problem**: "Could not find property with name or id: Status"
 - **Solution**: The property is called "Status 🎛" (with emoji). Ensure your database has this exact property name.
@@ -204,7 +199,7 @@ Test your Notion connection directly:
 ```bash
 # Query a database
 curl -X POST "https://api.notion.com/v1/databases/<DB_ID>/query" \
-  -H "Authorization: Bearer $(cat /tmp/notion_token.txt)" \
+  -H "Authorization: Bearer $NOTION_TOKEN" \
   -H "Notion-Version: 2022-06-28" \
   -H "Content-Type: application/json"
 ```

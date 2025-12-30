@@ -27,7 +27,8 @@ coverage.out
 .DS_Store
 
 # Job state directory
-/tmp/pedroceli-jobs/
+/tmp/pedrocli-jobs/
 
 # Config files (don't commit actual configs, only examples)
-.pedroceli.json
+.pedrocli.json
+.env

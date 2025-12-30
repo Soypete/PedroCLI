@@ -71,6 +71,19 @@ func (s *Server) handleVoiceTranscribe(w http.ResponseWriter, r *http.Request) {
 		language = s.config.Voice.Language
 	}
 
+	// Convert audio to WAV if needed (whisper.cpp only accepts WAV)
+	if voice.NeedsConversion(format) {
+		wavData, err := voice.ConvertToWav(r.Context(), audioData, format)
+		if err != nil {
+			respondJSON(w, http.StatusInternalServerError, map[string]string{
+				"error": fmt.Sprintf("Failed to convert audio: %v", err),
+			})
+			return
+		}
+		audioData = wavData
+		format = "wav"
+	}
+
 	// Create voice client
 	voiceClient := voice.NewClient(s.config.Voice.WhisperURL)
 

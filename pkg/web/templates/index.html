@@ -54,10 +54,9 @@
                                 name="type"
                                 class="podcast-mode-only hidden w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                                 onchange="updateFormFields(this.value)">
-                            <option value="create_podcast_script">Create Script - Generate episode scripts</option>
+                            <option value="create_podcast_script">Create Script - Generate episode script & outline</option>
                             <option value="add_notion_link">Add Link - Add article/news to review</option>
                             <option value="add_guest">Add Guest - Add guest information</option>
-                            <option value="create_episode_outline">Create Outline - Generate episode structure</option>
                             <option value="review_news_summary">Review News - Summarize news for prep</option>
                         </select>
                     </div>
@@ -137,9 +136,22 @@
 
                     <!-- Podcast: Topic field -->
                     <div id="topic-field" class="hidden">
-                        <label for="topic" class="block text-sm font-medium text-gray-700 mb-2">
-                            Episode Topic
-                        </label>
+                        <div class="flex items-center justify-between mb-2">
+                            <label for="topic" class="block text-sm font-medium text-gray-700">
+                                Episode Topic
+                            </label>
+                            <!-- Voice input button -->
+                            <button type="button"
+                                    id="voice-btn-topic"
+                                    onclick="VoiceRecorder.toggle('topic')"
+                                    class="voice-btn inline-flex items-center px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded-md transition-colors">
+                                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z"/>
+                                    <path d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z"/>
+                                </svg>
+                                <span class="ml-2">Voice</span>
+                            </button>
+                        </div>
                         <textarea id="topic"
                                   name="topic"
                                   rows="3"
@@ -149,9 +161,22 @@
 
                     <!-- Podcast: Notes field -->
                     <div id="notes-field" class="hidden">
-                        <label for="notes" class="block text-sm font-medium text-gray-700 mb-2">
-                            Notes (optional)
-                        </label>
+                        <div class="flex items-center justify-between mb-2">
+                            <label for="notes" class="block text-sm font-medium text-gray-700">
+                                Notes (optional)
+                            </label>
+                            <!-- Voice input button -->
+                            <button type="button"
+                                    id="voice-btn-notes"
+                                    onclick="VoiceRecorder.toggle('notes')"
+                                    class="voice-btn inline-flex items-center px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded-md transition-colors">
+                                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z"/>
+                                    <path d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z"/>
+                                </svg>
+                                <span class="ml-2">Voice</span>
+                            </button>
+                        </div>
                         <textarea id="notes"
                                   name="notes"
                                   rows="2"
@@ -185,9 +210,22 @@
 
                     <!-- Podcast: Guest Bio field -->
                     <div id="guest-bio-field" class="hidden">
-                        <label for="guest-bio" class="block text-sm font-medium text-gray-700 mb-2">
-                            Guest Bio
-                        </label>
+                        <div class="flex items-center justify-between mb-2">
+                            <label for="guest-bio" class="block text-sm font-medium text-gray-700">
+                                Guest Bio
+                            </label>
+                            <!-- Voice input button -->
+                            <button type="button"
+                                    id="voice-btn-bio"
+                                    onclick="VoiceRecorder.toggle('guest-bio')"
+                                    class="voice-btn inline-flex items-center px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded-md transition-colors">
+                                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z"/>
+                                    <path d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z"/>
+                                </svg>
+                                <span class="ml-2">Voice</span>
+                            </button>
+                        </div>
                         <textarea id="guest-bio"
                                   name="bio"
                                   rows="2"
@@ -365,10 +403,6 @@ function updateFormFields(type) {
             document.getElementById('guest-name-field').classList.remove('hidden');
             document.getElementById('guest-bio-field').classList.remove('hidden');
             document.getElementById('guest-email-field').classList.remove('hidden');
-            break;
-        case 'create_episode_outline':
-            document.getElementById('topic-field').classList.remove('hidden');
-            document.getElementById('notes-field').classList.remove('hidden');
             break;
         case 'review_news_summary':
             document.getElementById('focus-topic-field').classList.remove('hidden');
