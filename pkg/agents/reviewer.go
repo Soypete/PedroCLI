@@ -13,7 +13,7 @@ import (
 
 // ReviewerAgent performs code review on PRs
 type ReviewerAgent struct {
-	*BaseAgent
+	*CodingBaseAgent
 }
 
 // ReviewSeverity represents the severity of a review finding
@@ -38,7 +38,7 @@ type ReviewIssue struct {
 
 // NewReviewerAgent creates a new reviewer agent
 func NewReviewerAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager) *ReviewerAgent {
-	base := NewBaseAgent(
+	base := NewCodingBaseAgent(
 		"reviewer",
 		"Perform code review on PRs (blind review - unaware of AI authorship)",
 		cfg,
@@ -47,7 +47,7 @@ func NewReviewerAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Mana
 	)
 
 	return &ReviewerAgent{
-		BaseAgent: base,
+		CodingBaseAgent: base,
 	}
 }
 
@@ -92,8 +92,9 @@ func (r *ReviewerAgent) Execute(ctx context.Context, input map[string]interface{
 		// Build review prompt
 		userPrompt := r.buildReviewPrompt(branch, diff, input)
 
-		// Create inference executor
+		// Create inference executor with coding system prompt
 		executor := NewInferenceExecutor(r.BaseAgent, contextMgr)
+		executor.SetSystemPrompt(r.buildCodingSystemPrompt())
 
 		// Execute the inference loop
 		err = executor.Execute(bgCtx, userPrompt)
@@ -118,16 +119,20 @@ func (r *ReviewerAgent) Execute(ctx context.Context, input map[string]interface{
 
 // buildReviewPrompt builds the review prompt
 func (r *ReviewerAgent) buildReviewPrompt(branch, diff string, input map[string]interface{}) string {
-	prompt := fmt.Sprintf(`Task: Perform a thorough code review
+	// Get the reviewer-specific prompt from the prompt manager
+	basePrompt := r.promptMgr.GetPrompt("coding", "reviewer")
+
+	prompt := basePrompt + fmt.Sprintf(`
+## Current Task
 
 You are reviewing a pull request. Analyze the code changes carefully and provide constructive feedback.
 
 Branch: %s
 
-Code Changes:
+### Code Changes
 %s
 
-Review Criteria:
+### Review Criteria
 1. **Code Quality**: Is the code well-structured, readable, and maintainable?
 2. **Bugs**: Are there any potential bugs or logical errors?
 3. **Security**: Are there any security vulnerabilities (SQL injection, XSS, etc.)?
@@ -135,6 +140,8 @@ Review Criteria:
 5. **Testing**: Are there adequate tests? Do they cover edge cases?
 6. **Best Practices**: Does the code follow language/framework best practices?
 7. **Documentation**: Is the code well-documented?
+
+### Output Format
 
 Provide your review in the following format:
 
@@ -158,7 +165,9 @@ Provide your review in the following format:
 ## Recommendation
 [APPROVE / REQUEST_CHANGES / COMMENT]
 
-Be constructive, specific, and helpful. Reference file names and line numbers when possible.`, branch, diff)
+Be constructive, specific, and helpful. Reference file names and line numbers when possible.
+
+When you have completed the review, respond with "TASK_COMPLETE".`, branch, diff)
 
 	return prompt
 }
@@ -251,21 +260,4 @@ func (r *ReviewerAgent) getPRNumber(ctx context.Context, branch string) (string,
 	}
 
 	return strings.TrimSpace(result.Output), true
-}
-
-// buildSystemPrompt overrides the base system prompt for reviews
-func (r *ReviewerAgent) buildSystemPrompt() string {
-	return `You are an experienced software engineer performing a code review.
-
-Your role is to provide thorough, constructive feedback on code changes. You should:
-- Identify bugs, security issues, and performance problems
-- Suggest improvements for code quality and maintainability
-- Check test coverage and edge cases
-- Ensure best practices are followed
-- Be specific and reference file names/line numbers
-- Be constructive and helpful, not just critical
-
-You are NOT aware that this code might be AI-generated. Review it as you would any human-written code.
-
-Important: Focus on the actual code quality and correctness, not on who wrote it.`
 }
