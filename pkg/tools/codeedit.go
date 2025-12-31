@@ -37,7 +37,25 @@ func (c *CodeEditTool) Name() string {
 
 // Description returns the tool description
 func (c *CodeEditTool) Description() string {
-	return "Precise line-based code editing (edit ranges, insert at line, delete lines)"
+	return `Precise line-based code editing. Preferred for targeted changes.
+
+Actions:
+- get_lines: Read specific line range
+  Args: path (string), start_line (int), end_line (int)
+- edit_lines: Replace a range of lines with new content
+  Args: path (string), start_line (int), end_line (int), new_content (string)
+- insert_at_line: Insert content at a specific line
+  Args: path (string), line_number (int), content (string)
+- delete_lines: Delete a range of lines
+  Args: path (string), start_line (int), end_line (int)
+
+Usage Tips:
+- Use get_lines first to see current content before editing
+- Line numbers are 1-indexed (first line is 1)
+- Preserve exact indentation when providing new_content
+- Prefer this tool over file tool for surgical changes
+
+Example: {"tool": "code_edit", "args": {"action": "edit_lines", "path": "main.go", "start_line": 10, "end_line": 15, "new_content": "// new code here"}}`
 }
 
 // Execute executes the code edit tool

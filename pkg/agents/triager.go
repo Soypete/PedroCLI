@@ -121,49 +121,78 @@ func (t *TriagerAgent) buildTriagePrompt(input map[string]interface{}) string {
 	prompt := basePrompt + fmt.Sprintf(`
 ## Current Task
 
-Issue Description: %s
+**IMPORTANT: DO NOT implement any fixes. Your job is diagnosis only.**
 
-Your goal is to provide a comprehensive diagnostic report WITHOUT implementing any fixes.
+## Issue Description
+%s
 
-### Triage Report Should Include
+## Investigation Process
 
-## 1. Issue Summary
-- Brief description of the problem
-- Impact and affected components
+### 1. Gather Evidence
+- Search for related code using the search tool
+- Read error messages and stack traces carefully
+- Check git history for recent changes that might be related
+- Run tests to see current state of failures
 
-## 2. Severity Assessment
-Choose one: critical, high, medium, low, info
-- Explain your severity rating
+### 2. Reproduce the Issue
+- Understand exactly what triggers the problem
+- Note any specific conditions required to reproduce
 
-## 3. Category
-Choose primary category: bug, performance, security, dependency, infrastructure, test, documentation
-- List any secondary categories
+### 3. Trace the Root Cause
+- Follow the code path from trigger to failure
+- Identify the exact component and lines causing issues
+- Distinguish between symptoms and actual root cause
 
-## 4. Root Cause Analysis
-- Identify the likely root cause
-- Explain the chain of events leading to the issue
-- Reference specific files and line numbers if possible
+## Required Output Format
 
-## 5. Affected Components
-- List all affected files, modules, or services
-- Describe the scope of the issue
+### 1. Issue Summary
+Brief 1-2 sentence description of the problem and its user impact.
 
-## 6. Diagnostic Evidence
+### 2. Severity Assessment
+Choose ONE: **critical** | **high** | **medium** | **low** | **info**
+
+Severity Guide:
+- **Critical**: System down, data loss, security breach, production outage
+- **High**: Major functionality broken, widespread user impact
+- **Medium**: Significant issue affecting some users/features
+- **Low**: Minor issue with available workarounds
+- **Info**: Enhancement, refactoring, or documentation improvement
+
+Explain your reasoning for the severity rating.
+
+### 3. Category
+Primary: **bug** | **performance** | **security** | **dependency** | **infrastructure** | **test** | **documentation**
+
+List any secondary categories that apply.
+
+### 4. Root Cause Analysis
+- What is the actual root cause (not just symptoms)?
+- What chain of events leads to the issue?
+- Reference specific files and line numbers
+
+### 5. Affected Components
+- List all files, modules, and services affected
+- Describe the scope (isolated vs widespread)
+
+### 6. Evidence Collected
 - Error messages and stack traces
 - Relevant log entries
-- Test failures
-- Performance metrics (if applicable)
+- Test failures and their output
+- Performance metrics if applicable
 
-## 7. Recommended Fix Approach
-- Suggest 2-3 possible approaches to fix the issue
-- Estimate complexity (simple, moderate, complex)
-- List any risks or considerations
+### 7. Recommended Fix Approaches
+Suggest 2-3 approaches with:
+- Brief description of each approach
+- Complexity estimate (simple/moderate/complex)
+- Pros and cons
+- Any risks or considerations
 
-## 8. Related Issues
-- Check if this is related to other known issues
-- Identify any blockers or dependencies
+### 8. Related Issues & Dependencies
+- Related known issues
+- Blockers or dependencies for fixing
+- Potential regression risks
 
-### Important Instructions
+## Important Instructions
 - Use tools to investigate: search, file, git, test, bash
 - Use tools by providing JSON objects: {"tool": "tool_name", "args": {"key": "value"}}
 - DO NOT implement any fixes - your job is only to diagnose and recommend

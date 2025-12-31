@@ -97,34 +97,58 @@ func (d *DebuggerAgent) buildDebugPrompt(input map[string]interface{}) string {
 	prompt := basePrompt + fmt.Sprintf(`
 ## Current Task
 
-Issue Description: %s
+## Issue Description
+%s
 
-### Your Goals
-1. **Analyze Symptoms**: Understand what's wrong by examining error messages, logs, and failing tests
-2. **Identify Root Cause**: Trace the issue to its source in the codebase
-3. **Develop a Fix**: Create a minimal, targeted fix for the issue
-4. **Verify the Fix**: Run tests to ensure the fix works and doesn't break anything else
-5. **Document the Solution**: Add comments or documentation if needed
+## Debugging Process
 
-### Debugging Steps
-1. Search for relevant files using the search tool
-2. Read error messages and stack traces
-3. Examine relevant code files
-4. Run failing tests to reproduce the issue using the test tool
-5. Identify the root cause
-6. Implement a fix using code_edit tool
-7. Run tests to verify - if they still fail, analyze and fix again
-8. Keep iterating until all tests pass
-9. Commit the fix with a clear message using git tool
+### 1. Reproduce the Issue
+- Run the failing test or trigger the error condition
+- Confirm you can consistently reproduce the problem
+- Note the exact error messages and behavior
 
-### Important Instructions
-- Use tools by providing JSON objects: {"tool": "tool_name", "args": {"key": "value"}}
-- If tests fail, don't give up - analyze the failure and try a different approach
-- Keep trying until you get it right!
-- When the bug is fixed and all tests pass, respond with "TASK_COMPLETE"
-- Only indicate completion when you're confident the fix works
+### 2. Gather Evidence
+- Read error messages and stack traces carefully - they often point to the exact location
+- Use search tool to find related code
+- Use git tool to check recent changes that might have introduced the bug
+- NEVER modify code without reading it first
 
-Be systematic and thorough. Always verify your fix with tests before committing.`, description)
+### 3. Narrow Down the Root Cause
+- Use binary search approach: isolate which component is failing
+- Read the relevant code to understand the logic flow
+- Identify the exact line(s) causing the issue
+- Distinguish between symptoms and root cause
+
+### 4. Develop a Fix
+- Create a minimal, targeted fix - only change what's necessary
+- Don't fix multiple unrelated issues at once
+- Don't refactor surrounding code
+- Follow existing code patterns and style
+
+### 5. Verify the Fix
+- Run tests to confirm the fix works
+- Check that no new failures were introduced
+- If tests still fail, analyze why and iterate
+- Keep trying until all tests pass
+
+### 6. Commit the Fix
+- Write a clear commit message explaining what was fixed and why
+- Reference any issue numbers if applicable
+
+## Debugging Principles
+- **Read Error Messages Carefully**: They usually contain the exact location and cause
+- **Check Recent Changes**: Bugs often come from recent modifications (use git diff/log)
+- **Fix One Thing at a Time**: Don't attempt multiple fixes simultaneously
+- **Test Before and After**: Always verify the fix with tests
+
+## Tool Usage
+Use JSON format: {"tool": "tool_name", "args": {"key": "value"}}
+
+## Completion
+When the bug is fixed and all tests pass, respond with "TASK_COMPLETE".
+Only indicate completion when you're confident the fix works correctly.
+
+Begin by reproducing the issue and gathering evidence about the root cause.`, description)
 
 	// Add optional context
 	if errorLog, ok := input["error_log"].(string); ok {

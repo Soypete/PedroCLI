@@ -29,7 +29,26 @@ func (n *NavigateTool) Name() string {
 
 // Description returns the tool description
 func (n *NavigateTool) Description() string {
-	return "Navigate code structure: list files, get file outline, find imports"
+	return `Navigate and understand code structure.
+
+Actions:
+- list_directory: List files and directories
+  Args: directory (optional), show_hidden (optional bool), extension (optional filter)
+- get_file_outline: Get function/class/type structure of a file
+  Args: path (string)
+- find_imports: Find import statements in a file
+  Args: path (string)
+- get_tree: Get directory tree structure
+  Args: directory (optional), max_depth (optional int, default 3)
+
+Usage Tips:
+- Use get_tree to understand project structure
+- Use get_file_outline to see functions/types in a file without reading all content
+- Automatically skips .git, node_modules, vendor directories
+
+Examples:
+{"tool": "navigate", "args": {"action": "list_directory", "directory": "pkg"}}
+{"tool": "navigate", "args": {"action": "get_file_outline", "path": "pkg/agents/base.go"}}`
 }
 
 // Execute executes the navigate tool

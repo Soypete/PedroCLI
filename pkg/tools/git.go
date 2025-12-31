@@ -26,7 +26,35 @@ func (g *GitTool) Name() string {
 
 // Description returns the tool description
 func (g *GitTool) Description() string {
-	return "Execute git commands for version control"
+	return `Execute git commands for version control.
+
+Actions:
+- status: Get git status (modified/staged files)
+  Args: none
+- diff: Show differences
+  Args: base (optional branch), branch (optional), files (optional array)
+- add: Stage files for commit
+  Args: files (array of paths)
+- commit: Create a commit
+  Args: message (string)
+- push: Push to remote
+  Args: branch (string), remote (optional, default "origin")
+- checkout: Switch branches
+  Args: branch (string)
+- create_branch: Create and checkout a new branch
+  Args: branch (string)
+
+Git Best Practices:
+- Always check status before committing
+- Use descriptive commit messages
+- Create feature branches for new work
+- Don't commit sensitive data (secrets, credentials)
+
+Examples:
+{"tool": "git", "args": {"action": "status"}}
+{"tool": "git", "args": {"action": "diff", "base": "main"}}
+{"tool": "git", "args": {"action": "add", "files": ["pkg/new_file.go"]}}
+{"tool": "git", "args": {"action": "commit", "message": "Add new feature"}}`
 }
 
 // Execute executes the git tool

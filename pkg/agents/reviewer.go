@@ -125,47 +125,76 @@ func (r *ReviewerAgent) buildReviewPrompt(branch, diff string, input map[string]
 	prompt := basePrompt + fmt.Sprintf(`
 ## Current Task
 
-You are reviewing a pull request. Analyze the code changes carefully and provide constructive feedback.
+## Context
+You are reviewing a pull request. Analyze the code changes carefully and provide constructive, actionable feedback.
 
-Branch: %s
+**Branch:** %s
 
-### Code Changes
+## Code Changes
 %s
 
-### Review Criteria
-1. **Code Quality**: Is the code well-structured, readable, and maintainable?
-2. **Bugs**: Are there any potential bugs or logical errors?
-3. **Security**: Are there any security vulnerabilities (SQL injection, XSS, etc.)?
-4. **Performance**: Are there any performance concerns or inefficiencies?
-5. **Testing**: Are there adequate tests? Do they cover edge cases?
-6. **Best Practices**: Does the code follow language/framework best practices?
-7. **Documentation**: Is the code well-documented?
+## Review Checklist
 
-### Output Format
+### 1. Correctness & Bugs
+- Are there logical errors or bugs?
+- Are edge cases handled properly?
+- Could this code cause runtime errors or panics?
+- Are there race conditions or concurrency issues?
 
-Provide your review in the following format:
+### 2. Security
+- SQL injection vulnerabilities?
+- XSS or other injection attacks?
+- Hardcoded credentials or secrets?
+- Proper input validation?
+- Secure handling of sensitive data?
 
-## Summary
-[Brief overview of the changes and overall assessment]
+### 3. Performance
+- Inefficient algorithms or data structures?
+- Unnecessary database queries or API calls?
+- Memory leaks or excessive allocations?
+- Missing caching opportunities?
 
-## Issues Found
+### 4. Code Quality
+- Is the code readable and well-structured?
+- Are names clear and descriptive?
+- Is the code DRY (Don't Repeat Yourself)?
+- Does it follow existing patterns in the codebase?
+
+### 5. Testing
+- Are there adequate tests for new functionality?
+- Do tests cover edge cases and error conditions?
+- Are tests well-written and maintainable?
+
+### 6. Documentation
+- Are complex logic sections documented?
+- Are public APIs documented?
+- Are there any misleading or outdated comments?
+
+## Output Format
+
+### Summary
+[1-2 sentence overview of the changes and overall assessment]
 
 ### Critical Issues
-[List critical issues that must be fixed before merging]
+[Issues that MUST be fixed before merging - bugs, security vulnerabilities, etc.]
 
 ### Warnings
-[List important issues that should be addressed]
+[Important issues that should be addressed - performance, maintainability, etc.]
 
 ### Suggestions
-[List optional improvements and best practices]
+[Optional improvements - style, best practices, minor enhancements]
 
-## Positive Feedback
-[Highlight what was done well]
+### What's Good
+[Highlight positive aspects - good patterns, clean code, thorough tests]
 
-## Recommendation
-[APPROVE / REQUEST_CHANGES / COMMENT]
+### Recommendation
+**[APPROVE / REQUEST_CHANGES / COMMENT]**
 
-Be constructive, specific, and helpful. Reference file names and line numbers when possible.
+## Guidelines
+- Be specific: reference file names and line numbers
+- Be constructive: suggest solutions, not just problems
+- Be objective: focus on code quality, not personal preferences
+- Be thorough: check for security and performance issues
 
 When you have completed the review, respond with "TASK_COMPLETE".`, branch, diff)
 
