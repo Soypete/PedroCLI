@@ -28,9 +28,9 @@ func TestNewSQLiteStore(t *testing.T) {
 		t.Fatalf("failed to get migration version: %v", err)
 	}
 
-	// Should have version 2 (two migrations applied)
-	if version != 2 {
-		t.Errorf("expected migration version 2, got %d", version)
+	// Should have version 5 (five migrations applied: initial_schema, oauth_tokens, blog_posts, training_pairs, newsletter_assets)
+	if version != 5 {
+		t.Errorf("expected migration version 5, got %d", version)
 	}
 }
 
@@ -60,14 +60,14 @@ func TestNewSQLiteStoreWithoutAutoMigration(t *testing.T) {
 		t.Fatalf("failed to run migrations: %v", err)
 	}
 
-	// Version should now be 2
+	// Version should now be 5
 	version, err = store.MigrationVersion()
 	if err != nil {
 		t.Fatalf("failed to get migration version: %v", err)
 	}
 
-	if version != 2 {
-		t.Errorf("expected migration version 2 after migration, got %d", version)
+	if version != 5 {
+		t.Errorf("expected migration version 5 after migration, got %d", version)
 	}
 }
 
@@ -81,13 +81,13 @@ func TestMigrationRollback(t *testing.T) {
 	}
 	defer store.Close()
 
-	// Should be at version 2
+	// Should be at version 5
 	version, err := store.MigrationVersion()
 	if err != nil {
 		t.Fatalf("failed to get migration version: %v", err)
 	}
-	if version != 2 {
-		t.Fatalf("expected version 2, got %d", version)
+	if version != 5 {
+		t.Fatalf("expected version 5, got %d", version)
 	}
 
 	// Rollback one migration
@@ -95,13 +95,13 @@ func TestMigrationRollback(t *testing.T) {
 		t.Fatalf("failed to rollback migration: %v", err)
 	}
 
-	// Should now be at version 1
+	// Should now be at version 4
 	version, err = store.MigrationVersion()
 	if err != nil {
 		t.Fatalf("failed to get migration version: %v", err)
 	}
-	if version != 1 {
-		t.Errorf("expected version 1 after rollback, got %d", version)
+	if version != 4 {
+		t.Errorf("expected version 4 after rollback, got %d", version)
 	}
 
 	// Re-apply migrations
@@ -109,13 +109,13 @@ func TestMigrationRollback(t *testing.T) {
 		t.Fatalf("failed to re-apply migrations: %v", err)
 	}
 
-	// Should be back at version 2
+	// Should be back at version 5
 	version, err = store.MigrationVersion()
 	if err != nil {
 		t.Fatalf("failed to get migration version: %v", err)
 	}
-	if version != 2 {
-		t.Errorf("expected version 2 after re-migration, got %d", version)
+	if version != 5 {
+		t.Errorf("expected version 5 after re-migration, got %d", version)
 	}
 }
 
@@ -134,13 +134,13 @@ func TestMigrationRedo(t *testing.T) {
 		t.Fatalf("failed to redo migration: %v", err)
 	}
 
-	// Should still be at version 2
+	// Should still be at version 5
 	version, err := store.MigrationVersion()
 	if err != nil {
 		t.Fatalf("failed to get migration version: %v", err)
 	}
-	if version != 2 {
-		t.Errorf("expected version 2 after redo, got %d", version)
+	if version != 5 {
+		t.Errorf("expected version 5 after redo, got %d", version)
 	}
 }
 
@@ -173,13 +173,13 @@ func TestMigrationReset(t *testing.T) {
 		t.Fatalf("failed to re-apply migrations: %v", err)
 	}
 
-	// Should be back at version 2
+	// Should be back at version 5
 	version, err = store.MigrationVersion()
 	if err != nil {
 		t.Fatalf("failed to get migration version: %v", err)
 	}
-	if version != 2 {
-		t.Errorf("expected version 2 after re-migration, got %d", version)
+	if version != 5 {
+		t.Errorf("expected version 5 after re-migration, got %d", version)
 	}
 }
 
@@ -203,6 +203,9 @@ func TestTablesExist(t *testing.T) {
 		"git_credentials",
 		"oauth_tokens",
 		"goose_db_version",
+		"blog_posts",
+		"training_pairs",
+		"newsletter_assets",
 	}
 
 	for _, table := range expectedTables {
@@ -306,12 +309,12 @@ func TestIdempotentMigrations(t *testing.T) {
 	}
 	defer store2.Close()
 
-	// Should still be at version 2
+	// Should still be at version 5
 	version, err := store2.MigrationVersion()
 	if err != nil {
 		t.Fatalf("failed to get migration version: %v", err)
 	}
-	if version != 2 {
-		t.Errorf("expected version 2, got %d", version)
+	if version != 5 {
+		t.Errorf("expected version 5, got %d", version)
 	}
 }

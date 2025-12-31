@@ -3,10 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
+	_ "net/http/pprof" // Import pprof for debugging
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
-	"time"
+	"syscall"
 
 	"github.com/soypete/pedrocli/pkg/config"
 	"github.com/soypete/pedrocli/pkg/httpbridge"
@@ -64,6 +67,27 @@ func main() {
 	fmt.Printf("🚀 PedroCLI HTTP Server v%s\n", version)
 	fmt.Printf("📡 Listening on http://%s\n", addr)
 	fmt.Printf("🔧 MCP Server: Running\n")
+	fmt.Printf("📊 pprof available at http://%s/debug/pprof/\n", addr)
+
+	// Start pprof server on a separate port for debugging
+	go func() {
+		pprofAddr := fmt.Sprintf("%s:6060", host)
+		fmt.Printf("📊 pprof debug server on http://%s/debug/pprof/\n", pprofAddr)
+		if err := http.ListenAndServe(pprofAddr, nil); err != nil {
+			fmt.Fprintf(os.Stderr, "pprof server error: %v\n", err)
+		}
+	}()
+
+	// Handle graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-sigChan
+		fmt.Println("\n🛑 Shutting down...")
+		cancel()
+		os.Exit(0)
+	}()
 
 	if err := server.Run(addr); err != nil {
 		fmt.Fprintf(os.Stderr, "Server error: %v\n", err)
@@ -82,8 +106,9 @@ func startMCPClient(cfg *config.Config) (*mcp.Client, context.Context, context.C
 	// Create client
 	client := mcp.NewClient(serverPath, []string{})
 
-	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	// Create context WITHOUT timeout - the HTTP server should run indefinitely
+	// Individual requests can have their own timeouts
+	ctx, cancel := context.WithCancel(context.Background())
 
 	// Start server
 	if err := client.Start(ctx); err != nil {

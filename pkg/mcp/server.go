@@ -165,7 +165,7 @@ func (s *Server) handleToolCall(ctx context.Context, req *Request) {
 		}
 	}
 
-	s.sendResponse(req.ID, map[string]interface{}{
+	response := map[string]interface{}{
 		"content": []map[string]interface{}{
 			{
 				"type": "text",
@@ -173,7 +173,14 @@ func (s *Server) handleToolCall(ctx context.Context, req *Request) {
 			},
 		},
 		"isError": !result.Success,
-	})
+	}
+
+	// Include structured data if available
+	if result.Data != nil {
+		response["data"] = result.Data
+	}
+
+	s.sendResponse(req.ID, response)
 }
 
 // sendResponse sends a success response

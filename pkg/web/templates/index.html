@@ -2,290 +2,256 @@
 
 {{define "content"}}
 <div class="max-w-6xl mx-auto">
-    <!-- Mode switcher -->
-    <div class="mb-4 sm:mb-6">
+    <!-- Tab Navigation -->
+    <div class="mb-6">
         <div class="inline-flex rounded-lg border border-gray-200 bg-white p-1">
-            <button id="mode-coding" onclick="switchMode('coding')"
-                    class="mode-btn px-4 py-2 text-sm font-medium rounded-md transition-colors bg-blue-600 text-white">
+            <button onclick="switchTab('coding')" id="tab-coding"
+                    class="tab-button px-4 py-2 text-sm font-medium rounded-md transition-colors">
                 Coding Tools
             </button>
-            <button id="mode-podcast" onclick="switchMode('podcast')"
-                    class="mode-btn px-4 py-2 text-sm font-medium rounded-md transition-colors text-gray-700 hover:bg-gray-100">
+            <button onclick="switchTab('podcast')" id="tab-podcast"
+                    class="tab-button px-4 py-2 text-sm font-medium rounded-md transition-colors">
                 Podcast Tools
+            </button>
+            <button onclick="switchTab('blog')" id="tab-blog"
+                    class="tab-button px-4 py-2 text-sm font-medium rounded-md transition-colors">
+                Blog Tools
             </button>
         </div>
     </div>
 
-    <!-- Page header -->
-    <div class="mb-6 sm:mb-8">
-        <h1 id="page-title" class="text-2xl sm:text-3xl font-bold text-gray-900">Coding Jobs</h1>
-        <p id="page-subtitle" class="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600">Create and manage autonomous coding tasks</p>
-    </div>
-
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-        <!-- Job creation form (left column on desktop, top on mobile) -->
-        <div class="lg:col-span-1 order-1 lg:order-1">
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6 lg:sticky lg:top-4">
-                <h2 class="text-xl font-semibold text-gray-900 mb-4">Create New Job</h2>
-
-                <form id="create-job-form"
-                      hx-post="/api/jobs"
-                      hx-target="#job-list"
-                      hx-swap="afterbegin"
-                      class="space-y-4">
-
-                    <!-- Job type selector -->
-                    <div>
-                        <label for="type" class="block text-sm font-medium text-gray-700 mb-2">
-                            Job Type
-                        </label>
-                        <!-- Coding mode job types -->
-                        <select id="type"
-                                name="type"
-                                class="coding-mode-only w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                                onchange="updateFormFields(this.value)">
-                            <option value="builder">Builder - Build new features</option>
-                            <option value="debugger">Debugger - Fix issues</option>
-                            <option value="reviewer">Reviewer - Review code</option>
-                            <option value="triager">Triager - Diagnose issues</option>
-                        </select>
-                        <!-- Podcast mode job types -->
-                        <select id="type-podcast"
-                                name="type"
-                                class="podcast-mode-only hidden w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                                onchange="updateFormFields(this.value)">
-                            <option value="create_podcast_script">Create Script - Generate episode script & outline</option>
-                            <option value="add_notion_link">Add Link - Add article/news to review</option>
-                            <option value="add_guest">Add Guest - Add guest information</option>
-                            <option value="review_news_summary">Review News - Summarize news for prep</option>
-                        </select>
-                    </div>
-
-                    <!-- Description field (for builder, triager) -->
-                    <div id="description-field">
-                        <div class="flex items-center justify-between mb-2">
-                            <label for="description" class="block text-sm font-medium text-gray-700">
-                                Description
-                            </label>
-                            <!-- Voice input button -->
-                            <button type="button"
-                                    id="voice-btn"
-                                    onclick="VoiceRecorder.toggle('description')"
-                                    class="inline-flex items-center px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded-md transition-colors">
-                                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                    <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z"/>
-                                    <path d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z"/>
-                                </svg>
-                                <span class="ml-2">Voice</span>
-                            </button>
-                        </div>
-                        <textarea id="description"
-                                  name="description"
-                                  rows="4"
-                                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                                  placeholder="Describe what you want to build..."></textarea>
-                    </div>
-
-                    <!-- Issue field (optional for builder) -->
-                    <div id="issue-field">
-                        <label for="issue" class="block text-sm font-medium text-gray-700 mb-2">
-                            Issue # (optional)
-                        </label>
-                        <input type="text"
-                               id="issue"
-                               name="issue"
-                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                               placeholder="GH-123">
-                    </div>
-
-                    <!-- Symptoms field (for debugger) -->
-                    <div id="symptoms-field" class="hidden">
-                        <label for="symptoms" class="block text-sm font-medium text-gray-700 mb-2">
-                            Symptoms
-                        </label>
-                        <textarea id="symptoms"
-                                  name="symptoms"
-                                  rows="3"
-                                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                                  placeholder="Describe the problem..."></textarea>
-                    </div>
-
-                    <!-- Logs field (for debugger) -->
-                    <div id="logs-field" class="hidden">
-                        <label for="logs" class="block text-sm font-medium text-gray-700 mb-2">
-                            Logs (optional)
-                        </label>
-                        <textarea id="logs"
-                                  name="logs"
-                                  rows="3"
-                                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                                  placeholder="Paste error logs..."></textarea>
-                    </div>
-
-                    <!-- Branch field (for reviewer) -->
-                    <div id="branch-field" class="hidden">
-                        <label for="branch" class="block text-sm font-medium text-gray-700 mb-2">
-                            Branch
-                        </label>
-                        <input type="text"
-                               id="branch"
-                               name="branch"
-                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                               placeholder="feature/my-feature">
-                    </div>
-
-                    <!-- Podcast: Topic field -->
-                    <div id="topic-field" class="hidden">
-                        <div class="flex items-center justify-between mb-2">
-                            <label for="topic" class="block text-sm font-medium text-gray-700">
-                                Episode Topic
-                            </label>
-                            <!-- Voice input button -->
-                            <button type="button"
-                                    id="voice-btn-topic"
-                                    onclick="VoiceRecorder.toggle('topic')"
-                                    class="voice-btn inline-flex items-center px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded-md transition-colors">
-                                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                    <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z"/>
-                                    <path d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z"/>
-                                </svg>
-                                <span class="ml-2">Voice</span>
-                            </button>
-                        </div>
-                        <textarea id="topic"
-                                  name="topic"
-                                  rows="3"
-                                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                                  placeholder="What is the episode about?"></textarea>
-                    </div>
-
-                    <!-- Podcast: Notes field -->
-                    <div id="notes-field" class="hidden">
-                        <div class="flex items-center justify-between mb-2">
-                            <label for="notes" class="block text-sm font-medium text-gray-700">
-                                Notes (optional)
-                            </label>
-                            <!-- Voice input button -->
-                            <button type="button"
-                                    id="voice-btn-notes"
-                                    onclick="VoiceRecorder.toggle('notes')"
-                                    class="voice-btn inline-flex items-center px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded-md transition-colors">
-                                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                    <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z"/>
-                                    <path d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z"/>
-                                </svg>
-                                <span class="ml-2">Voice</span>
-                            </button>
-                        </div>
-                        <textarea id="notes"
-                                  name="notes"
-                                  rows="2"
-                                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                                  placeholder="Additional notes or context..."></textarea>
-                    </div>
-
-                    <!-- Podcast: URL field -->
-                    <div id="url-field" class="hidden">
-                        <label for="url" class="block text-sm font-medium text-gray-700 mb-2">
-                            URL
-                        </label>
-                        <input type="url"
-                               id="url"
-                               name="url"
-                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                               placeholder="https://example.com/article">
-                    </div>
-
-                    <!-- Podcast: Guest Name field -->
-                    <div id="guest-name-field" class="hidden">
-                        <label for="guest-name" class="block text-sm font-medium text-gray-700 mb-2">
-                            Guest Name
-                        </label>
-                        <input type="text"
-                               id="guest-name"
-                               name="name"
-                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                               placeholder="Jane Smith">
-                    </div>
-
-                    <!-- Podcast: Guest Bio field -->
-                    <div id="guest-bio-field" class="hidden">
-                        <div class="flex items-center justify-between mb-2">
-                            <label for="guest-bio" class="block text-sm font-medium text-gray-700">
-                                Guest Bio
-                            </label>
-                            <!-- Voice input button -->
-                            <button type="button"
-                                    id="voice-btn-bio"
-                                    onclick="VoiceRecorder.toggle('guest-bio')"
-                                    class="voice-btn inline-flex items-center px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded-md transition-colors">
-                                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                    <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z"/>
-                                    <path d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z"/>
-                                </svg>
-                                <span class="ml-2">Voice</span>
-                            </button>
-                        </div>
-                        <textarea id="guest-bio"
-                                  name="bio"
-                                  rows="2"
-                                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                                  placeholder="Brief bio or description..."></textarea>
-                    </div>
-
-                    <!-- Podcast: Guest Email field -->
-                    <div id="guest-email-field" class="hidden">
-                        <label for="guest-email" class="block text-sm font-medium text-gray-700 mb-2">
-                            Guest Email (optional)
-                        </label>
-                        <input type="email"
-                               id="guest-email"
-                               name="email"
-                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                               placeholder="guest@example.com">
-                    </div>
-
-                    <!-- Podcast: Focus Topic field -->
-                    <div id="focus-topic-field" class="hidden">
-                        <label for="focus-topic" class="block text-sm font-medium text-gray-700 mb-2">
-                            Focus Topic (optional)
-                        </label>
-                        <input type="text"
-                               id="focus-topic"
-                               name="focus_topic"
-                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                               placeholder="AI, machine learning, etc.">
-                    </div>
-
-                    <!-- Submit button (larger touch target on mobile) -->
-                    <button type="submit"
-                            class="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-base sm:text-sm">
-                        Create Job
-                    </button>
-                </form>
-            </div>
+    <!-- Coding Tools Section -->
+    <div id="section-coding" class="tab-section hidden">
+        <div class="mb-6 sm:mb-8">
+            <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Coding Tools</h1>
+            <p class="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600">Create and manage autonomous coding tasks</p>
         </div>
 
-        <!-- Job list (right column on desktop, below form on mobile) -->
-        <div class="lg:col-span-2 order-2 lg:order-2">
-            <div class="flex items-center justify-between mb-3 sm:mb-4">
-                <h2 class="text-lg sm:text-xl font-semibold text-gray-900">Active Jobs</h2>
-                <button hx-get="/api/jobs"
-                        hx-target="#job-list"
-                        hx-swap="innerHTML"
-                        class="text-sm text-blue-600 hover:text-blue-700 py-2 px-3">
-                    Refresh
-                </button>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+            <div class="lg:col-span-1 order-1 lg:order-1">
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6 lg:sticky lg:top-4">
+                    <h2 class="text-xl font-semibold text-gray-900 mb-4">Create New Job</h2>
+
+                    <form id="create-job-form"
+                          hx-post="/api/jobs"
+                          hx-target="#job-list"
+                          hx-swap="afterbegin"
+                          class="space-y-4">
+
+                        <div>
+                            <label for="type" class="block text-sm font-medium text-gray-700 mb-2">Job Type</label>
+                            <select id="type" name="type"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                    onchange="updateFormFields(this.value)">
+                                <option value="builder">Builder - Build new features</option>
+                                <option value="debugger">Debugger - Fix issues</option>
+                                <option value="reviewer">Reviewer - Review code</option>
+                                <option value="triager">Triager - Diagnose issues</option>
+                            </select>
+                        </div>
+
+                        <div id="description-field">
+                            <label for="description" class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                            <textarea id="description" name="description" rows="4"
+                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                      placeholder="Describe what you want to build..."></textarea>
+                        </div>
+
+                        <div id="issue-field">
+                            <label for="issue" class="block text-sm font-medium text-gray-700 mb-2">Issue # (optional)</label>
+                            <input type="text" id="issue" name="issue"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                   placeholder="GH-123">
+                        </div>
+
+                        <div id="symptoms-field" class="hidden">
+                            <label for="symptoms" class="block text-sm font-medium text-gray-700 mb-2">Symptoms</label>
+                            <textarea id="symptoms" name="symptoms" rows="3"
+                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                      placeholder="Describe the problem..."></textarea>
+                        </div>
+
+                        <div id="logs-field" class="hidden">
+                            <label for="logs" class="block text-sm font-medium text-gray-700 mb-2">Logs (optional)</label>
+                            <textarea id="logs" name="logs" rows="3"
+                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                      placeholder="Paste error logs..."></textarea>
+                        </div>
+
+                        <div id="branch-field" class="hidden">
+                            <label for="branch" class="block text-sm font-medium text-gray-700 mb-2">Branch</label>
+                            <input type="text" id="branch" name="branch"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                   placeholder="feature/my-feature">
+                        </div>
+
+                        <button type="submit"
+                                class="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
+                            Create Job
+                        </button>
+                    </form>
+                </div>
             </div>
 
-            <!-- Job list (auto-refresh will be added dynamically if jobs exist) -->
-            <div id="job-list"
-                 hx-get="/api/jobs"
-                 hx-trigger="load"
-                 hx-swap="innerHTML"
-                 class="space-y-4">
-                <div class="text-center py-12 text-gray-500">
-                    Loading jobs...
+            <div class="lg:col-span-2 order-2 lg:order-2">
+                <div class="flex items-center justify-between mb-3 sm:mb-4">
+                    <h2 class="text-lg sm:text-xl font-semibold text-gray-900">Active Jobs</h2>
+                    <button hx-get="/api/jobs" hx-target="#job-list" hx-swap="innerHTML"
+                            class="text-sm text-blue-600 hover:text-blue-700 py-2 px-3">Refresh</button>
+                </div>
+
+                <div id="job-list" hx-get="/api/jobs" hx-trigger="load" hx-swap="innerHTML" class="space-y-4">
+                    <div class="text-center py-12 text-gray-500">Loading jobs...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Podcast Tools Section -->
+    <div id="section-podcast" class="tab-section hidden">
+        <div class="mb-6 sm:mb-8">
+            <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Podcast Tools</h1>
+            <p class="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600">Manage content for Domesticating AI podcast</p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
+                    <h2 class="text-xl font-semibold text-gray-900 mb-4">Create New Job</h2>
+
+                    <form id="podcast-job-form" class="space-y-4">
+                        <div>
+                            <label for="podcast-type" class="block text-sm font-medium text-gray-700 mb-2">Job Type</label>
+                            <select id="podcast-type" name="type"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                                <option value="create_script">Create Script - Generate episode script</option>
+                                <option value="create_outline">Create Outline - Generate episode outline</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <label for="podcast-topic" class="block text-sm font-medium text-gray-700">Episode Topic</label>
+                                <button type="button" onclick="startVoiceInput('podcast-topic')"
+                                        class="inline-flex items-center px-3 py-1 bg-gray-800 text-white text-sm rounded-md hover:bg-gray-700">
+                                    🎤 Voice
+                                </button>
+                            </div>
+                            <textarea id="podcast-topic" name="topic" rows="3"
+                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                      placeholder="What is the episode about?"></textarea>
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <label for="podcast-notes" class="block text-sm font-medium text-gray-700">Notes (optional)</label>
+                                <button type="button" onclick="startVoiceInput('podcast-notes')"
+                                        class="inline-flex items-center px-3 py-1 bg-gray-800 text-white text-sm rounded-md hover:bg-gray-700">
+                                    🎤 Voice
+                                </button>
+                            </div>
+                            <textarea id="podcast-notes" name="notes" rows="3"
+                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                      placeholder="Additional notes or context..."></textarea>
+                        </div>
+
+                        <button type="submit"
+                                class="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
+                            Create Job
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="lg:col-span-2">
+                <div class="flex items-center justify-between mb-3 sm:mb-4">
+                    <h2 class="text-lg sm:text-xl font-semibold text-gray-900">Active Jobs</h2>
+                </div>
+                <div id="podcast-job-list" class="space-y-4">
+                    <div class="text-center py-12 text-gray-500">No podcast jobs yet</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Blog Tools Section -->
+    <div id="section-blog" class="tab-section hidden">
+        <div class="mb-6 sm:mb-8">
+            <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Blog Tools</h1>
+            <p class="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600">Dictate your thoughts - AI writes the post, suggests titles, tags, and social media content</p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
+                    <h2 class="text-xl font-semibold text-gray-900 mb-4">New Post</h2>
+
+                    <form id="blog-job-form" class="space-y-4">
+                        <div>
+                            <label for="blog-title" class="block text-sm font-medium text-gray-700 mb-2">Working Title (optional)</label>
+                            <input type="text" id="blog-title" name="title"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                   placeholder="AI will suggest titles based on content...">
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <label for="blog-content" class="block text-sm font-medium text-gray-700">Dictation</label>
+                                <button type="button" onclick="startVoiceInput('blog-content')"
+                                        class="inline-flex items-center px-3 py-1 bg-gray-800 text-white text-sm rounded-md hover:bg-gray-700">
+                                    🎤 Voice
+                                </button>
+                            </div>
+                            <textarea id="blog-content" name="content" rows="8"
+                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                      placeholder="Dictate or type your thoughts... AI will expand this into a full blog post"></textarea>
+                        </div>
+
+                        <div class="flex items-center">
+                            <input type="checkbox" id="skip-ai" name="skip_ai"
+                                   class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                            <label for="skip-ai" class="ml-2 block text-sm text-gray-700">
+                                Skip AI (post raw dictation directly)
+                            </label>
+                        </div>
+
+                        <button type="submit" id="blog-submit-btn"
+                                class="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
+                            Create Post
+                        </button>
+                    </form>
+
+                    <!-- AI Status Indicator -->
+                    <div id="ai-status" class="hidden mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <div class="flex items-center">
+                            <svg class="animate-spin h-5 w-5 text-blue-600 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <div>
+                                <p id="ai-status-text" class="text-sm font-medium text-blue-700">AI is writing...</p>
+                                <p class="text-xs text-blue-600">This may take 30-60 seconds</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="mt-4 text-xs text-gray-500 text-center">
+                        AI will: expand dictation → generate titles, tags & social posts → publish to Notion
+                    </p>
+                </div>
+            </div>
+
+            <div class="lg:col-span-2">
+                <div class="flex items-center justify-between mb-3 sm:mb-4">
+                    <h2 class="text-lg sm:text-xl font-semibold text-gray-900">Recent Posts</h2>
+                    <a href="https://www.notion.so/191a4c9f9845803bb008d16d6a025ba2" target="_blank"
+                       class="text-sm text-blue-600 hover:text-blue-700 py-2 px-3">
+                        View in Notion →
+                    </a>
+                </div>
+
+                <div id="blog-post-list" class="space-y-4">
+                    <div class="text-center py-12 text-gray-500">Posts will appear here after creation</div>
                 </div>
             </div>
         </div>
@@ -293,88 +259,38 @@
 </div>
 
 <script>
-// Current mode (coding or podcast)
-let currentMode = localStorage.getItem('pedrocli_mode') || 'coding';
+// Tab switching
+function switchTab(tabName) {
+    // Hide all sections
+    document.querySelectorAll('.tab-section').forEach(el => el.classList.add('hidden'));
 
-// Initialize mode on page load
-document.addEventListener('DOMContentLoaded', function() {
-    switchMode(currentMode, false);
-});
-
-// Switch between coding and podcast modes
-function switchMode(mode, save = true) {
-    currentMode = mode;
-    if (save) {
-        localStorage.setItem('pedrocli_mode', mode);
-    }
-
-    // Update button styles
-    const codingBtn = document.getElementById('mode-coding');
-    const podcastBtn = document.getElementById('mode-podcast');
-
-    if (mode === 'coding') {
-        codingBtn.classList.add('bg-blue-600', 'text-white');
-        codingBtn.classList.remove('text-gray-700', 'hover:bg-gray-100');
-        podcastBtn.classList.remove('bg-blue-600', 'text-white');
-        podcastBtn.classList.add('text-gray-700', 'hover:bg-gray-100');
-
-        // Update header
-        document.getElementById('page-title').textContent = 'Coding Jobs';
-        document.getElementById('page-subtitle').textContent = 'Create and manage autonomous coding tasks';
-
-        // Show/hide selectors
-        document.getElementById('type').classList.remove('hidden');
-        document.getElementById('type-podcast').classList.add('hidden');
-        document.getElementById('type').name = 'type';
-        document.getElementById('type-podcast').name = '';
-
-        // Show coding mode elements
-        document.querySelectorAll('.coding-mode-only').forEach(el => el.classList.remove('hidden'));
-        document.querySelectorAll('.podcast-mode-only').forEach(el => el.classList.add('hidden'));
-
-        // Update form fields for current selection
-        updateFormFields(document.getElementById('type').value);
-    } else {
-        podcastBtn.classList.add('bg-blue-600', 'text-white');
-        podcastBtn.classList.remove('text-gray-700', 'hover:bg-gray-100');
-        codingBtn.classList.remove('bg-blue-600', 'text-white');
-        codingBtn.classList.add('text-gray-700', 'hover:bg-gray-100');
-
-        // Update header
-        document.getElementById('page-title').textContent = 'Podcast Tools';
-        document.getElementById('page-subtitle').textContent = 'Manage content for Domesticating AI podcast';
-
-        // Show/hide selectors
-        document.getElementById('type').classList.add('hidden');
-        document.getElementById('type-podcast').classList.remove('hidden');
-        document.getElementById('type').name = '';
-        document.getElementById('type-podcast').name = 'type';
-
-        // Show podcast mode elements
-        document.querySelectorAll('.coding-mode-only').forEach(el => el.classList.add('hidden'));
-        document.querySelectorAll('.podcast-mode-only').forEach(el => el.classList.remove('hidden'));
-
-        // Update form fields for current selection
-        updateFormFields(document.getElementById('type-podcast').value);
-    }
-}
-
-// Update form fields based on job type
-function updateFormFields(type) {
-    // Hide all optional fields
-    const fields = [
-        'description-field', 'issue-field', 'symptoms-field', 'logs-field', 'branch-field',
-        'topic-field', 'notes-field', 'url-field', 'guest-name-field', 'guest-bio-field',
-        'guest-email-field', 'focus-topic-field'
-    ];
-    fields.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.add('hidden');
+    // Deactivate all tabs
+    document.querySelectorAll('.tab-button').forEach(el => {
+        el.classList.remove('bg-blue-600', 'text-white');
+        el.classList.add('text-gray-600', 'hover:bg-gray-100');
     });
 
-    // Show relevant fields based on type
+    // Show selected section
+    document.getElementById('section-' + tabName).classList.remove('hidden');
+
+    // Activate selected tab
+    const activeTab = document.getElementById('tab-' + tabName);
+    activeTab.classList.remove('text-gray-600', 'hover:bg-gray-100');
+    activeTab.classList.add('bg-blue-600', 'text-white');
+
+    // Save preference
+    localStorage.setItem('pedrocli_active_tab', tabName);
+}
+
+// Update form fields based on job type (coding)
+function updateFormFields(type) {
+    document.getElementById('description-field').classList.add('hidden');
+    document.getElementById('issue-field').classList.add('hidden');
+    document.getElementById('symptoms-field').classList.add('hidden');
+    document.getElementById('logs-field').classList.add('hidden');
+    document.getElementById('branch-field').classList.add('hidden');
+
     switch(type) {
-        // Coding mode types
         case 'builder':
             document.getElementById('description-field').classList.remove('hidden');
             document.getElementById('issue-field').classList.remove('hidden');
@@ -389,25 +305,231 @@ function updateFormFields(type) {
         case 'triager':
             document.getElementById('description-field').classList.remove('hidden');
             break;
-
-        // Podcast mode types
-        case 'create_podcast_script':
-            document.getElementById('topic-field').classList.remove('hidden');
-            document.getElementById('notes-field').classList.remove('hidden');
-            break;
-        case 'add_notion_link':
-            document.getElementById('url-field').classList.remove('hidden');
-            document.getElementById('notes-field').classList.remove('hidden');
-            break;
-        case 'add_guest':
-            document.getElementById('guest-name-field').classList.remove('hidden');
-            document.getElementById('guest-bio-field').classList.remove('hidden');
-            document.getElementById('guest-email-field').classList.remove('hidden');
-            break;
-        case 'review_news_summary':
-            document.getElementById('focus-topic-field').classList.remove('hidden');
-            break;
     }
 }
+
+
+// Voice input using local Whisper server
+let mediaRecorder = null;
+let audioChunks = [];
+let isRecording = false;
+
+function startVoiceInput(targetId) {
+    const btn = event.target.closest('button');
+
+    if (isRecording) {
+        // Stop recording
+        stopRecording(targetId, btn);
+    } else {
+        // Start recording
+        startRecording(targetId, btn);
+    }
+}
+
+async function startRecording(targetId, btn) {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = (event) => {
+            audioChunks.push(event.data);
+        };
+
+        mediaRecorder.onstop = async () => {
+            // Stop all tracks
+            stream.getTracks().forEach(track => track.stop());
+
+            // Create audio blob
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+
+            // Send to Whisper server
+            await transcribeAudio(audioBlob, targetId, btn);
+        };
+
+        mediaRecorder.start();
+        isRecording = true;
+        btn.innerHTML = '⏹️ Stop';
+        btn.classList.remove('bg-gray-800', 'hover:bg-gray-700');
+        btn.classList.add('bg-red-600', 'hover:bg-red-700');
+
+    } catch (error) {
+        console.error('Error starting recording:', error);
+        alert('Could not access microphone: ' + error.message);
+    }
+}
+
+function stopRecording(targetId, btn) {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+        isRecording = false;
+        btn.innerHTML = '⏳ Transcribing...';
+        btn.disabled = true;
+    }
+}
+
+async function transcribeAudio(audioBlob, targetId, btn) {
+    try {
+        const formData = new FormData();
+        formData.append('file', audioBlob, 'recording.webm');
+        formData.append('response_format', 'json');
+        formData.append('temperature', '0.0');
+
+        const response = await fetch('http://localhost:8081/inference', {
+            method: 'POST',
+            body: formData,
+        });
+
+        if (!response.ok) {
+            throw new Error(`Whisper server error: ${response.status}`);
+        }
+
+        const result = await response.json();
+        const transcript = result.text || '';
+
+        // Append to textarea
+        const target = document.getElementById(targetId);
+        if (target.value) {
+            target.value += ' ' + transcript.trim();
+        } else {
+            target.value = transcript.trim();
+        }
+
+    } catch (error) {
+        console.error('Transcription error:', error);
+        alert('Transcription failed: ' + error.message + '\n\nMake sure Whisper server is running on port 8081');
+    } finally {
+        // Reset button
+        btn.innerHTML = '🎤 Voice';
+        btn.disabled = false;
+        btn.classList.remove('bg-red-600', 'hover:bg-red-700');
+        btn.classList.add('bg-gray-800', 'hover:bg-gray-700');
+    }
+}
+
+// Blog form submission
+async function submitBlogPost(event) {
+    event.preventDefault();
+
+    const title = document.getElementById('blog-title').value.trim();
+    const dictation = document.getElementById('blog-content').value.trim();
+    const skipAI = document.getElementById('skip-ai').checked;
+    const submitBtn = document.getElementById('blog-submit-btn');
+    const aiStatus = document.getElementById('ai-status');
+    const aiStatusText = document.getElementById('ai-status-text');
+
+    if (!dictation) {
+        alert('Please provide some content to work with');
+        return;
+    }
+
+    // Disable button and show loading
+    submitBtn.disabled = true;
+    submitBtn.textContent = skipAI ? 'Posting...' : 'Starting AI...';
+
+    // Show AI status if not skipping
+    if (!skipAI) {
+        aiStatus.classList.remove('hidden');
+        aiStatusText.textContent = 'AI is expanding your dictation...';
+    }
+
+    try {
+        const response = await fetch('/api/blog', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                title: title,
+                dictation: dictation,
+                skip_ai: skipAI
+            }),
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            // Clear form
+            document.getElementById('blog-title').value = '';
+            document.getElementById('blog-content').value = '';
+            document.getElementById('skip-ai').checked = false;
+
+            // Add to recent posts list
+            const postList = document.getElementById('blog-post-list');
+
+            // Remove "no posts" placeholder if present
+            const placeholder = postList.querySelector('.text-center.py-12');
+            if (placeholder) {
+                placeholder.remove();
+            }
+
+            // Build display title (use first suggested title or original)
+            let displayTitle = title || 'Untitled';
+            if (data.suggested_titles && data.suggested_titles.length > 0) {
+                displayTitle = data.suggested_titles[0];
+            }
+
+            // Build tags display
+            let tagsHtml = '';
+            if (data.tags && data.tags.length > 0) {
+                tagsHtml = `<div class="flex flex-wrap gap-1 mt-2">
+                    ${data.tags.map(tag => `<span class="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">${tag}</span>`).join('')}
+                </div>`;
+            }
+
+            // Build alternate titles display
+            let altTitlesHtml = '';
+            if (data.suggested_titles && data.suggested_titles.length > 1) {
+                altTitlesHtml = `<div class="mt-2 text-xs text-gray-500">
+                    <span class="font-medium">Other titles:</span>
+                    ${data.suggested_titles.slice(1).join(' • ')}
+                </div>`;
+            }
+
+            const newPost = document.createElement('div');
+            newPost.className = 'bg-green-50 rounded-lg shadow-sm border border-green-200 p-4 transition-colors duration-1000';
+            newPost.innerHTML = `
+                <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                        <h3 class="font-medium text-gray-900">${displayTitle}</h3>
+                        <p class="text-sm text-gray-500 mt-1">Just now • Not Started</p>
+                        ${tagsHtml}
+                        ${altTitlesHtml}
+                    </div>
+                    <span class="text-green-600 text-sm whitespace-nowrap ml-2">✓ Created</span>
+                </div>
+            `;
+            postList.insertBefore(newPost, postList.firstChild);
+
+            // Fade the green highlight after 3 seconds
+            setTimeout(() => {
+                newPost.className = 'bg-white rounded-lg shadow-sm border border-gray-200 p-4 transition-colors duration-1000';
+            }, 3000);
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Error creating blog post:', error);
+        alert('Failed to create blog post: ' + error.message);
+    } finally {
+        // Re-enable button and hide status
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Create Post';
+        aiStatus.classList.add('hidden');
+    }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Restore saved tab preference
+    const savedTab = localStorage.getItem('pedrocli_active_tab') || 'coding';
+    switchTab(savedTab);
+
+    // Attach blog form handler
+    const blogForm = document.getElementById('blog-job-form');
+    if (blogForm) {
+        blogForm.addEventListener('submit', submitBlogPost);
+    }
+});
 </script>
 {{end}}

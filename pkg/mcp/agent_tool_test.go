@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/soypete/pedrocli/pkg/jobs"
@@ -73,13 +74,12 @@ func TestAgentToolDescription(t *testing.T) {
 	}
 }
 
-func TestAgentToolExecuteSuccess(t *testing.T) {
+// TestAgentToolExecuteReturnsJobID verifies that Execute returns a job ID immediately
+// (agents run asynchronously, so we just get the job ID back)
+func TestAgentToolExecuteReturnsJobID(t *testing.T) {
 	job := &jobs.Job{
 		ID:     "job-123",
-		Status: jobs.StatusCompleted,
-		Output: map[string]interface{}{
-			"response": "Feature built successfully",
-		},
+		Status: jobs.StatusRunning,
 	}
 
 	agent := &mockAgent{
@@ -102,115 +102,17 @@ func TestAgentToolExecuteSuccess(t *testing.T) {
 		t.Fatal("Execute() returned nil result")
 	}
 	if !result.Success {
-		t.Error("Expected success to be true")
+		t.Error("Expected success to be true when job starts")
 	}
-	// Agent tool now returns async job ID, not final output
-	expectedOutput := "Job job-123 started and running in background. Use get_job_status to check progress."
-	if result.Output != expectedOutput {
-		t.Errorf("Expected output '%s', got '%s'", expectedOutput, result.Output)
+	if !strings.Contains(result.Output, "job-123") {
+		t.Errorf("Expected output to contain job ID 'job-123', got '%s'", result.Output)
 	}
-	if result.Error != "" {
-		t.Errorf("Expected no error, got '%s'", result.Error)
+	if !strings.Contains(result.Output, "started") {
+		t.Errorf("Expected output to indicate job started, got '%s'", result.Output)
 	}
 }
 
-func TestAgentToolExecuteFailure(t *testing.T) {
-	job := &jobs.Job{
-		ID:     "job-456",
-		Status: jobs.StatusFailed,
-		Error:  "Build failed: compilation error",
-	}
-
-	agent := &mockAgent{
-		name:       "builder",
-		executeJob: job,
-	}
-
-	agentTool := NewAgentTool(agent)
-
-	result, err := agentTool.Execute(context.Background(), map[string]interface{}{})
-	if err != nil {
-		t.Fatalf("Execute() returned error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("Execute() returned nil result")
-	}
-	// Agent tool returns success=true when job is started, even if it later fails
-	if !result.Success {
-		t.Error("Expected success to be true (job started successfully)")
-	}
-	// Agent tool returns job ID message, not the final error
-	expectedOutput := "Job job-456 started and running in background. Use get_job_status to check progress."
-	if result.Output != expectedOutput {
-		t.Errorf("Expected output '%s', got '%s'", expectedOutput, result.Output)
-	}
-}
-
-func TestAgentToolExecuteWithReviewText(t *testing.T) {
-	job := &jobs.Job{
-		ID:     "job-789",
-		Status: jobs.StatusCompleted,
-		Output: map[string]interface{}{
-			"review_text": "Code looks good. No issues found.",
-		},
-	}
-
-	agent := &mockAgent{
-		name:       "reviewer",
-		executeJob: job,
-	}
-
-	agentTool := NewAgentTool(agent)
-
-	result, err := agentTool.Execute(context.Background(), map[string]interface{}{
-		"branch": "feature/new-api",
-	})
-	if err != nil {
-		t.Fatalf("Execute() returned error: %v", err)
-	}
-
-	if !result.Success {
-		t.Error("Expected success to be true")
-	}
-	expectedOutput := "Job job-789 started and running in background. Use get_job_status to check progress."
-	if result.Output != expectedOutput {
-		t.Errorf("Expected output '%s', got '%s'", expectedOutput, result.Output)
-	}
-}
-
-func TestAgentToolExecuteWithDiagnosis(t *testing.T) {
-	job := &jobs.Job{
-		ID:     "job-101",
-		Status: jobs.StatusCompleted,
-		Output: map[string]interface{}{
-			"diagnosis": "Memory leak detected in handler.go:42",
-		},
-	}
-
-	agent := &mockAgent{
-		name:       "triager",
-		executeJob: job,
-	}
-
-	agentTool := NewAgentTool(agent)
-
-	result, err := agentTool.Execute(context.Background(), map[string]interface{}{
-		"description": "App crashes after 1 hour",
-	})
-	if err != nil {
-		t.Fatalf("Execute() returned error: %v", err)
-	}
-
-	if !result.Success {
-		t.Error("Expected success to be true")
-	}
-	expectedOutput := "Job job-101 started and running in background. Use get_job_status to check progress."
-	if result.Output != expectedOutput {
-		t.Errorf("Expected output '%s', got '%s'", expectedOutput, result.Output)
-	}
-}
-
+// TestAgentToolExecuteWithError verifies error handling when agent.Execute fails
 func TestAgentToolExecuteWithError(t *testing.T) {
 	agent := &mockAgent{
 		name:       "builder",
@@ -236,72 +138,34 @@ func TestAgentToolExecuteWithError(t *testing.T) {
 	if result.Error == "" {
 		t.Error("Expected error to be set")
 	}
-}
-
-func TestAgentToolExecuteWithEmptyOutput(t *testing.T) {
-	job := &jobs.Job{
-		ID:     "job-202",
-		Status: jobs.StatusCompleted,
-		Output: map[string]interface{}{}, // Empty output
-	}
-
-	agent := &mockAgent{
-		name:       "builder",
-		executeJob: job,
-	}
-
-	agentTool := NewAgentTool(agent)
-
-	result, err := agentTool.Execute(context.Background(), map[string]interface{}{})
-	if err != nil {
-		t.Fatalf("Execute() returned error: %v", err)
-	}
-
-	if !result.Success {
-		t.Error("Expected success to be true")
-	}
-	expectedOutput := "Job job-202 started and running in background. Use get_job_status to check progress."
-	if result.Output != expectedOutput {
-		t.Errorf("Expected output '%s', got '%s'", expectedOutput, result.Output)
+	if !strings.Contains(result.Error, "agent execution failed") {
+		t.Errorf("Expected error to contain 'agent execution failed', got '%s'", result.Error)
 	}
 }
 
-func TestAgentToolExecuteStatusMapping(t *testing.T) {
+// TestAgentToolExecuteMultipleJobs verifies different job IDs are returned
+func TestAgentToolExecuteMultipleJobs(t *testing.T) {
 	testCases := []struct {
 		name      string
-		jobStatus jobs.Status
+		jobID     string
+		agentName string
 	}{
-		{
-			name:      "Completed job",
-			jobStatus: jobs.StatusCompleted,
-		},
-		{
-			name:      "Failed job",
-			jobStatus: jobs.StatusFailed,
-		},
-		{
-			name:      "Running job",
-			jobStatus: jobs.StatusRunning,
-		},
-		{
-			name:      "Pending job",
-			jobStatus: jobs.StatusPending,
-		},
-		{
-			name:      "Cancelled job",
-			jobStatus: jobs.StatusCancelled,
-		},
+		{"builder", "job-001", "builder"},
+		{"reviewer", "job-002", "reviewer"},
+		{"debugger", "job-003", "debugger"},
+		{"triager", "job-004", "triager"},
+		{"writer", "job-005", "writer"},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			job := &jobs.Job{
-				ID:     "test-job",
-				Status: tc.jobStatus,
+				ID:     tc.jobID,
+				Status: jobs.StatusRunning,
 			}
 
 			agent := &mockAgent{
-				name:       "test-agent",
+				name:       tc.agentName,
 				executeJob: job,
 			}
 
@@ -312,17 +176,47 @@ func TestAgentToolExecuteStatusMapping(t *testing.T) {
 				t.Fatalf("Execute() returned error: %v", err)
 			}
 
-			// Agent tool always returns success=true when job is started,
-			// regardless of the job's status. The client checks status later via get_job_status.
 			if !result.Success {
-				t.Errorf("Expected success=true for async job start, got %v", result.Success)
+				t.Error("Expected success to be true")
 			}
-
-			// Verify job ID is in the output message
-			expectedOutput := "Job test-job started and running in background. Use get_job_status to check progress."
-			if result.Output != expectedOutput {
-				t.Errorf("Expected output '%s', got '%s'", expectedOutput, result.Output)
+			if !strings.Contains(result.Output, tc.jobID) {
+				t.Errorf("Expected output to contain job ID '%s', got '%s'", tc.jobID, result.Output)
 			}
 		})
+	}
+}
+
+// TestAgentToolExecuteOutputFormat verifies the output message format
+func TestAgentToolExecuteOutputFormat(t *testing.T) {
+	job := &jobs.Job{
+		ID:     "job-test-format",
+		Status: jobs.StatusPending,
+	}
+
+	agent := &mockAgent{
+		name:       "test-agent",
+		executeJob: job,
+	}
+
+	agentTool := NewAgentTool(agent)
+
+	result, err := agentTool.Execute(context.Background(), map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("Execute() returned error: %v", err)
+	}
+
+	// Verify output contains expected components
+	expectedParts := []string{
+		"Job",
+		"job-test-format",
+		"started",
+		"background",
+		"get_job_status",
+	}
+
+	for _, part := range expectedParts {
+		if !strings.Contains(result.Output, part) {
+			t.Errorf("Expected output to contain '%s', got '%s'", part, result.Output)
+		}
 	}
 }

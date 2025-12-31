@@ -52,13 +52,26 @@ func (t *GetJobStatusTool) Execute(ctx context.Context, args map[string]interfac
 		statusMsg += fmt.Sprintf("\nError: %s", job.Error)
 	}
 
+	// Include job data in Result.Data for structured access
+	data := map[string]interface{}{
+		"job_id":      job.ID,
+		"type":        job.Type,
+		"status":      string(job.Status),
+		"description": job.Description,
+	}
+
 	if job.Output != nil {
-		statusMsg += fmt.Sprintf("\nOutput: %v", job.Output)
+		data["output"] = job.Output
+	}
+
+	if job.Error != "" {
+		data["error"] = job.Error
 	}
 
 	return &Result{
 		Success: true,
 		Output:  statusMsg,
+		Data:    data,
 	}, nil
 }
 
