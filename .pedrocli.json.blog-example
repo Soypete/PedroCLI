@@ -1,0 +1,71 @@
+{
+  "model": {
+    "type": "ollama",
+    "model_name": "qwen3:7b",
+    "temperature": 0.2
+  },
+  "project": {
+    "name": "SoyPete Tech Blog",
+    "workdir": "/path/to/your/workspace"
+  },
+  "limits": {
+    "max_task_duration_minutes": 60,
+    "max_inference_runs": 30
+  },
+  "web": {
+    "enabled": true,
+    "port": 8080,
+    "host": "0.0.0.0"
+  },
+  "blog": {
+    "enabled": true,
+    "default_model": "qwen3:7b",
+    "writer_auto_revise": false,
+    "editor_mode": "review",
+    "notion_api_key": "YOUR_NOTION_API_KEY_HERE",
+    "notion_drafts_db": "YOUR_NOTION_DRAFTS_DATABASE_ID",
+    "notion_published_db": "YOUR_NOTION_PUBLISHED_DATABASE_ID",
+    "notion_assets_db": "YOUR_NOTION_ASSETS_DATABASE_ID",
+    "notion_ideas_db": "YOUR_NOTION_IDEAS_DATABASE_ID",
+    "substack_enabled": false,
+    "paywall_days": 7
+  },
+  "database": {
+    "host": "localhost",
+    "port": 5432,
+    "user": "pedrocli",
+    "password": "YOUR_DATABASE_PASSWORD_HERE",
+    "database": "pedrocli_blog",
+    "ssl_mode": "disable"
+  },
+  "tools": {
+    "allowed_bash_commands": [
+      "git",
+      "gh",
+      "go",
+      "npm",
+      "cat",
+      "ls",
+      "head",
+      "tail",
+      "wc",
+      "sort",
+      "uniq"
+    ],
+    "forbidden_commands": [
+      "sed",
+      "grep",
+      "find",
+      "xargs",
+      "rm",
+      "mv",
+      "dd",
+      "sudo"
+    ]
+  },
+  "debug": {
+    "enabled": false,
+    "keep_temp_files": false,
+    "log_level": "info"
+  }
+}

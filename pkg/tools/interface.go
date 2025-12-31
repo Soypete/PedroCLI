@@ -16,8 +16,17 @@ type Tool interface {
 
 // Result represents a tool execution result
 type Result struct {
-	Success       bool     `json:"success"`
-	Output        string   `json:"output"`
-	Error         string   `json:"error,omitempty"`
-	ModifiedFiles []string `json:"modified_files,omitempty"`
+	Success       bool                   `json:"success"`
+	Output        string                 `json:"output"`
+	Error         string                 `json:"error,omitempty"`
+	ModifiedFiles []string               `json:"modified_files,omitempty"`
+	Data          map[string]interface{} `json:"data,omitempty"`
+}
+
+// ErrorResult creates an error result with the given message
+func ErrorResult(msg string) *Result {
+	return &Result{
+		Success: false,
+		Error:   msg,
+	}
 }

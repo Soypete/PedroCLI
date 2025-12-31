@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // CreateJobRequest represents the job creation request
@@ -382,4 +383,353 @@ func respondJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)
+}
+
+// BlogRequest represents a blog post creation request
+type BlogRequest struct {
+	Title     string `json:"title"`
+	Dictation string `json:"dictation"` // Raw voice dictation
+	Content   string `json:"content"`   // Legacy field for direct content
+	SkipAI    bool   `json:"skip_ai"`   // Skip AI expansion, post directly
+}
+
+// BlogResponse represents the blog post creation response
+type BlogResponse struct {
+	Success         bool     `json:"success"`
+	Message         string   `json:"message"`
+	Error           string   `json:"error,omitempty"`
+	JobID           string   `json:"job_id,omitempty"`
+	SuggestedTitles []string `json:"suggested_titles,omitempty"`
+	Tags            []string `json:"tags,omitempty"`
+}
+
+// handleBlog handles POST /api/blog for blog post creation
+// This is the full AI-powered workflow: dictation -> AI expansion -> Notion
+func (s *Server) handleBlog(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req BlogRequest
+
+	// Parse based on content type
+	contentType := r.Header.Get("Content-Type")
+	if strings.Contains(contentType, "application/json") {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondJSON(w, http.StatusBadRequest, BlogResponse{
+				Success: false,
+				Error:   fmt.Sprintf("Invalid request: %v", err),
+			})
+			return
+		}
+	} else {
+		// Form data
+		if err := r.ParseForm(); err != nil {
+			respondJSON(w, http.StatusBadRequest, BlogResponse{
+				Success: false,
+				Error:   fmt.Sprintf("Failed to parse form: %v", err),
+			})
+			return
+		}
+		req.Title = r.FormValue("title")
+		req.Dictation = r.FormValue("dictation")
+		req.Content = r.FormValue("content")
+		req.SkipAI = r.FormValue("skip_ai") == "true"
+	}
+
+	// Support legacy "content" field as dictation
+	if req.Dictation == "" && req.Content != "" {
+		req.Dictation = req.Content
+	}
+
+	// Validate
+	if req.Dictation == "" {
+		respondJSON(w, http.StatusBadRequest, BlogResponse{
+			Success: false,
+			Error:   "dictation is required",
+		})
+		return
+	}
+
+	// If skip_ai is true, just post directly to Notion without AI
+	if req.SkipAI {
+		s.handleBlogDirect(w, req)
+		return
+	}
+
+	// Step 1: Call the writer agent to expand dictation
+	writerResult, err := s.mcpClient.CallTool(s.ctx, "writer", map[string]interface{}{
+		"transcription": req.Dictation,
+		"title":         req.Title,
+	})
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, BlogResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Failed to start AI writer: %v", err),
+		})
+		return
+	}
+
+	// Extract job ID from writer response
+	jobID, err := extractJobID(writerResult.Content[0].Text)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, BlogResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Failed to extract job ID: %v", err),
+		})
+		return
+	}
+
+	// Step 2: Poll for job completion
+	var jobOutput map[string]interface{}
+	for i := 0; i < 60; i++ { // Poll for up to 60 seconds
+		time.Sleep(1 * time.Second)
+
+		statusResult, err := s.mcpClient.CallTool(s.ctx, "get_job_status", map[string]interface{}{
+			"job_id": jobID,
+		})
+		if err != nil {
+			continue // Keep polling
+		}
+
+		// Check status from structured data
+		if statusResult.Data != nil {
+			status, _ := statusResult.Data["status"].(string)
+
+			if status == "completed" {
+				// Get output from structured data
+				if output, ok := statusResult.Data["output"].(map[string]interface{}); ok {
+					jobOutput = output
+				}
+				break
+			}
+
+			if status == "failed" {
+				errorMsg, _ := statusResult.Data["error"].(string)
+				respondJSON(w, http.StatusInternalServerError, BlogResponse{
+					Success: false,
+					Error:   fmt.Sprintf("AI writer job failed: %s", errorMsg),
+					JobID:   jobID,
+				})
+				return
+			}
+		} else {
+			// Fallback to text parsing
+			statusText := statusResult.Content[0].Text
+
+			if strings.Contains(statusText, "completed") {
+				if err := json.Unmarshal([]byte(extractJSON(statusText)), &jobOutput); err != nil {
+					jobOutput = parseJobStatus(statusText)
+				}
+				break
+			}
+
+			if strings.Contains(statusText, "failed") {
+				respondJSON(w, http.StatusInternalServerError, BlogResponse{
+					Success: false,
+					Error:   fmt.Sprintf("AI writer job failed: %s", statusText),
+					JobID:   jobID,
+				})
+				return
+			}
+		}
+	}
+
+	if jobOutput == nil {
+		respondJSON(w, http.StatusInternalServerError, BlogResponse{
+			Success: false,
+			Error:   "AI writer job timed out after 60 seconds",
+			JobID:   jobID,
+		})
+		return
+	}
+
+	// Step 3: Get expanded content and publish to Notion
+	expandedDraft, _ := jobOutput["expanded_draft"].(string)
+	if expandedDraft == "" {
+		expandedDraft = req.Dictation // Fallback to original dictation
+	}
+
+	// Get suggested titles
+	suggestedTitles := []string{}
+	if titles, ok := jobOutput["suggested_titles"].([]interface{}); ok {
+		for _, t := range titles {
+			if s, ok := t.(string); ok {
+				suggestedTitles = append(suggestedTitles, s)
+			}
+		}
+	}
+
+	// Use first suggested title or original title
+	title := req.Title
+	if len(suggestedTitles) > 0 {
+		title = suggestedTitles[0]
+	}
+
+	// Prepare blog_publish arguments
+	publishArgs := map[string]interface{}{
+		"title":              title,
+		"expanded_draft":     expandedDraft,
+		"original_dictation": req.Dictation,
+		"suggested_titles":   jobOutput["suggested_titles"],
+		"substack_tags":      jobOutput["substack_tags"],
+		"twitter_post":       jobOutput["twitter_post"],
+		"linkedin_post":      jobOutput["linkedin_post"],
+		"bluesky_post":       jobOutput["bluesky_post"],
+		"key_takeaways":      jobOutput["key_takeaways"],
+		"target_audience":    jobOutput["target_audience"],
+		"read_time":          jobOutput["read_time"],
+	}
+
+	// Call blog_publish tool
+	publishResult, err := s.mcpClient.CallTool(s.ctx, "blog_publish", publishArgs)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, BlogResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Failed to publish to Notion: %v", err),
+			JobID:   jobID,
+		})
+		return
+	}
+
+	// Check for publish error
+	if publishResult.IsError {
+		errorMsg := "Unknown error"
+		if len(publishResult.Content) > 0 {
+			errorMsg = publishResult.Content[0].Text
+		}
+		respondJSON(w, http.StatusInternalServerError, BlogResponse{
+			Success: false,
+			Error:   errorMsg,
+			JobID:   jobID,
+		})
+		return
+	}
+
+	// Get tags for response
+	tags := []string{}
+	if t, ok := jobOutput["substack_tags"].([]interface{}); ok {
+		for _, tag := range t {
+			if s, ok := tag.(string); ok {
+				tags = append(tags, s)
+			}
+		}
+	}
+
+	// Return success response
+	message := "Blog post created"
+	if len(publishResult.Content) > 0 {
+		message = publishResult.Content[0].Text
+	}
+
+	respondJSON(w, http.StatusOK, BlogResponse{
+		Success:         true,
+		Message:         message,
+		JobID:           jobID,
+		SuggestedTitles: suggestedTitles,
+		Tags:            tags,
+	})
+}
+
+// handleBlogDirect posts content directly to Notion without AI expansion
+func (s *Server) handleBlogDirect(w http.ResponseWriter, req BlogRequest) {
+	title := req.Title
+	if title == "" {
+		title = "Untitled Draft"
+	}
+
+	// Call blog_publish tool directly with the raw dictation as content
+	result, err := s.mcpClient.CallTool(s.ctx, "blog_publish", map[string]interface{}{
+		"title":          title,
+		"expanded_draft": req.Dictation,
+	})
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, BlogResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Failed to create blog post: %v", err),
+		})
+		return
+	}
+
+	if result.IsError {
+		errorMsg := "Unknown error"
+		if len(result.Content) > 0 {
+			errorMsg = result.Content[0].Text
+		}
+		respondJSON(w, http.StatusInternalServerError, BlogResponse{
+			Success: false,
+			Error:   errorMsg,
+		})
+		return
+	}
+
+	message := "Blog post created"
+	if len(result.Content) > 0 {
+		message = result.Content[0].Text
+	}
+
+	respondJSON(w, http.StatusOK, BlogResponse{
+		Success: true,
+		Message: message,
+	})
+}
+
+// extractJSON tries to find a JSON object in text
+func extractJSON(text string) string {
+	start := strings.Index(text, "{")
+	end := strings.LastIndex(text, "}")
+	if start != -1 && end > start {
+		return text[start : end+1]
+	}
+	return "{}"
+}
+
+// parseJobStatus parses job status text into a map
+func parseJobStatus(text string) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	// Look for key-value patterns in the status text
+	lines := strings.Split(text, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, ":") {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				key := strings.TrimSpace(strings.ToLower(parts[0]))
+				value := strings.TrimSpace(parts[1])
+				result[key] = value
+			}
+		}
+	}
+
+	return result
+}
+
+// HealthResponse represents the health check response
+type HealthResponse struct {
+	Status     string `json:"status"`
+	MCPRunning bool   `json:"mcp_running"`
+	Timestamp  string `json:"timestamp"`
+}
+
+// handleHealth handles GET /api/health for health check
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Check if MCP client is running
+	mcpRunning := s.mcpClient.IsRunning()
+
+	status := "healthy"
+	if !mcpRunning {
+		status = "degraded"
+	}
+
+	respondJSON(w, http.StatusOK, HealthResponse{
+		Status:     status,
+		MCPRunning: mcpRunning,
+		Timestamp:  time.Now().Format(time.RFC3339),
+	})
 }

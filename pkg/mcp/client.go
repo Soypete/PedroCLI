@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"strings"
 	"sync"
 )
 
@@ -21,6 +22,8 @@ type Client struct {
 	scanner    *bufio.Scanner
 	mu         sync.Mutex
 	nextID     int
+	ctx        context.Context // Saved context for restarts
+	running    bool
 }
 
 // NewClient creates a new MCP client
@@ -65,13 +68,64 @@ func (c *Client) Start(ctx context.Context) error {
 	// Set up scanner for reading responses
 	c.scanner = bufio.NewScanner(c.stdout)
 
+	// Save context for potential restarts
+	c.ctx = ctx
+	c.running = true
+
+	// Start goroutine to log stderr (helps debugging)
+	go c.logStderr()
+
 	return nil
+}
+
+// logStderr reads and logs stderr from the MCP server
+func (c *Client) logStderr() {
+	if c.stderr == nil {
+		return
+	}
+	scanner := bufio.NewScanner(c.stderr)
+	for scanner.Scan() {
+		fmt.Printf("[MCP stderr] %s\n", scanner.Text())
+	}
+}
+
+// IsRunning checks if the MCP server process is still running
+func (c *Client) IsRunning() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.cmd == nil || c.cmd.Process == nil {
+		return false
+	}
+
+	// Check if process is still running by sending signal 0
+	// On Unix, this doesn't send a signal but checks if process exists
+	if c.cmd.ProcessState != nil {
+		return false // Process has exited
+	}
+
+	return c.running
+}
+
+// Restart stops and restarts the MCP server
+func (c *Client) Restart() error {
+	c.mu.Lock()
+	ctx := c.ctx
+	c.mu.Unlock()
+
+	// Stop current process (ignore error - we're restarting anyway)
+	_ = c.Stop()
+
+	// Start again
+	return c.Start(ctx)
 }
 
 // Stop stops the MCP server subprocess
 func (c *Client) Stop() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	c.running = false
 
 	if c.cmd == nil || c.cmd.Process == nil {
 		return nil
@@ -88,13 +142,15 @@ func (c *Client) Stop() error {
 
 // CallTool calls an MCP tool and returns the result
 func (c *Client) CallTool(ctx context.Context, name string, arguments map[string]interface{}) (*ToolResponse, error) {
-	// Hold lock for entire request-response cycle to prevent race conditions
-	// between concurrent goroutines (SSE broadcaster + HTTP handlers)
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	return c.callToolWithRetry(ctx, name, arguments, 1)
+}
 
+// callToolWithRetry calls a tool with automatic restart on broken pipe
+func (c *Client) callToolWithRetry(ctx context.Context, name string, arguments map[string]interface{}, retryCount int) (*ToolResponse, error) {
+	c.mu.Lock()
 	id := c.nextID
 	c.nextID++
+	c.mu.Unlock()
 
 	// Build JSON-RPC request
 	request := &JSONRPCRequest{
@@ -114,19 +170,41 @@ func (c *Client) CallTool(ctx context.Context, name string, arguments map[string
 	}
 
 	// Send request
+	c.mu.Lock()
 	_, err = c.stdin.Write(append(requestBytes, '\n'))
+	c.mu.Unlock()
 	if err != nil {
+		// Check for broken pipe - attempt restart
+		if retryCount > 0 && isBrokenPipeError(err) {
+			fmt.Printf("[MCP] Detected broken pipe, attempting restart...\n")
+			if restartErr := c.Restart(); restartErr != nil {
+				return nil, fmt.Errorf("failed to restart MCP server: %w (original error: %v)", restartErr, err)
+			}
+			return c.callToolWithRetry(ctx, name, arguments, retryCount-1)
+		}
 		return nil, fmt.Errorf("failed to write request: %w", err)
 	}
 
-	// Read response (must be in same lock to ensure we get OUR response)
+	// Read response
+	c.mu.Lock()
 	if !c.scanner.Scan() {
-		if err := c.scanner.Err(); err != nil {
-			return nil, fmt.Errorf("failed to read response: %w", err)
+		c.mu.Unlock()
+		scanErr := c.scanner.Err()
+		// Check for broken pipe on read - attempt restart
+		if retryCount > 0 && (scanErr != nil || !c.running) {
+			fmt.Printf("[MCP] Server not responding, attempting restart...\n")
+			if restartErr := c.Restart(); restartErr != nil {
+				return nil, fmt.Errorf("failed to restart MCP server: %w (original error: %v)", restartErr, scanErr)
+			}
+			return c.callToolWithRetry(ctx, name, arguments, retryCount-1)
+		}
+		if scanErr != nil {
+			return nil, fmt.Errorf("failed to read response: %w", scanErr)
 		}
 		return nil, fmt.Errorf("no response from server")
 	}
 	responseBytes := c.scanner.Bytes()
+	c.mu.Unlock()
 
 	// Parse response
 	var response JSONRPCResponse
@@ -153,14 +231,24 @@ func (c *Client) CallTool(ctx context.Context, name string, arguments map[string
 	return &toolResponse, nil
 }
 
+// isBrokenPipeError checks if an error is a broken pipe error
+func isBrokenPipeError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "broken pipe") ||
+		strings.Contains(errStr, "closed pipe") ||
+		strings.Contains(errStr, "connection reset") ||
+		strings.Contains(errStr, "EOF")
+}
+
 // ListTools lists available MCP tools
 func (c *Client) ListTools(ctx context.Context) ([]ToolInfo, error) {
-	// Hold lock for entire request-response cycle
 	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	id := c.nextID
 	c.nextID++
+	c.mu.Unlock()
 
 	// Build JSON-RPC request
 	request := &JSONRPCRequest{
@@ -177,19 +265,24 @@ func (c *Client) ListTools(ctx context.Context) ([]ToolInfo, error) {
 	}
 
 	// Send request
+	c.mu.Lock()
 	_, err = c.stdin.Write(append(requestBytes, '\n'))
+	c.mu.Unlock()
 	if err != nil {
 		return nil, fmt.Errorf("failed to write request: %w", err)
 	}
 
 	// Read response
+	c.mu.Lock()
 	if !c.scanner.Scan() {
+		c.mu.Unlock()
 		if err := c.scanner.Err(); err != nil {
 			return nil, fmt.Errorf("failed to read response: %w", err)
 		}
 		return nil, fmt.Errorf("no response from server")
 	}
 	responseBytes := c.scanner.Bytes()
+	c.mu.Unlock()
 
 	// Parse response
 	var response JSONRPCResponse
@@ -243,8 +336,9 @@ type RPCError struct {
 
 // ToolResponse represents the response from calling an MCP tool
 type ToolResponse struct {
-	Content []ContentBlock `json:"content"`
-	IsError bool           `json:"isError,omitempty"`
+	Content []ContentBlock         `json:"content"`
+	IsError bool                   `json:"isError,omitempty"`
+	Data    map[string]interface{} `json:"data,omitempty"`
 }
 
 // ContentBlock represents a content block in the tool response

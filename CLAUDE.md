@@ -245,6 +245,154 @@ Config files can be in:
 1. `./.pedroceli.json` (current directory)
 2. `~/.pedroceli.json` (home directory)
 
+## Development Environment Setup
+
+### Required Services
+
+To run PedroCLI with all features, start these services:
+
+```bash
+# 1. Build all binaries
+make build
+
+# 2. Start Ollama (LLM backend)
+ollama serve                    # In separate terminal, or runs as service
+
+# 3. Start HTTP server with secrets (includes MCP server)
+op run --env-file=.env -- ./pedrocli-http-server
+```
+
+### Environment Variables (.env)
+
+```bash
+# .env file - uses 1Password references
+NOTION_TOKEN="op://pedro/notion_api_key/credential"
+# Add other secrets as needed
+```
+
+### Quick Start (All Services)
+
+```bash
+# Terminal 1: Ollama (if not running as service)
+ollama serve
+
+# Terminal 2: Whisper server (for voice transcription)
+~/Code/ml/whisper.cpp/build/bin/whisper-server \
+  --model ~/Code/ml/whisper.cpp/models/ggml-base.en.bin \
+  --port 8081 \
+  --convert  # Uses ffmpeg to convert browser audio (WebM) to WAV
+
+# Terminal 3: HTTP server with all features
+cd /path/to/pedrocli
+op run --env-file=.env -- ./pedrocli-http-server
+```
+
+Then open http://localhost:8080
+
+### Blog Tools Setup
+
+For blog writing features:
+
+1. **Create a Notion Integration**:
+   - Go to https://www.notion.so/my-integrations
+   - Create a new integration (e.g., "PedroCLI Podcast Tools")
+   - Copy the "Internal Integration Secret"
+
+2. **Share your Notion database with the integration**:
+   - Open your Tasks database in Notion
+   - Click Share → Invite → Search for your integration name
+   - The integration needs direct access to the database (not just parent page)
+
+3. **Store the token in 1Password**:
+   ```bash
+   # .env file
+   NOTION_TOKEN="op://pedro/notion_api_key/credential"
+   ```
+
+4. **Find your database ID**:
+   ```bash
+   # Test your token and list accessible databases
+   op run --env-file=.env -- sh -c 'curl -s \
+     -H "Authorization: Bearer $NOTION_TOKEN" \
+     -H "Notion-Version: 2022-06-28" \
+     "https://api.notion.com/v1/search" -X POST \
+     -H "Content-Type: application/json" \
+     -d "{\"filter\":{\"property\":\"object\",\"value\":\"database\"}}"' | jq '.results[] | {id: .id, title: .title[0].plain_text}'
+   ```
+
+5. **Configure in `.pedrocli.json`**:
+   ```json
+   {
+     "blog": {
+       "enabled": true,
+       "notion_drafts_db": "YOUR-DATABASE-UUID-HERE",
+       "notion_ideas_db": "YOUR-PROJECT-PAGE-UUID",
+       "whisper_url": "http://localhost:8081",
+       "whisper_model": "base.en"
+     }
+   }
+   ```
+
+   Example with real IDs:
+   ```json
+   {
+     "blog": {
+       "enabled": true,
+       "notion_drafts_db": "18aa4c9f-9845-81d5-aad1-e53b75ab3a2b",
+       "notion_ideas_db": "191a4c9f-9845-803b-b008-d16d6a025ba2",
+       "whisper_url": "http://localhost:8081",
+       "whisper_model": "base.en"
+     }
+   }
+   ```
+
+6. **Test the integration**:
+   ```bash
+   # Via CLI
+   ./pedrocli blog -title "Test Post" -content "Hello world"
+
+   # Via API
+   curl -X POST http://localhost:8080/api/blog \
+     -H "Content-Type: application/json" \
+     -d '{"title":"Test Post","content":"Hello world"}'
+   ```
+
+### Voice Transcription (Whisper)
+
+For voice dictation in the blog tools, whisper.cpp is installed at `~/Code/ml/whisper.cpp/`:
+
+```bash
+# Start whisper server (port 8081 to avoid conflict with HTTP server)
+~/Code/ml/whisper.cpp/build/bin/whisper-server \
+  --model ~/Code/ml/whisper.cpp/models/ggml-base.en.bin \
+  --port 8081 \
+  --convert  # Uses ffmpeg to convert browser audio (WebM) to WAV
+
+# Check health
+curl http://localhost:8081/health
+```
+
+Configure in `.pedrocli.json`:
+```json
+{
+  "blog": {
+    "whisper_url": "http://localhost:8081",
+    "whisper_model": "base.en"
+  }
+}
+```
+
+The web UI also supports browser-based speech recognition (Chrome/Edge) as a fallback.
+
+### Service Ports (Complete)
+
+| Service | Port | Description |
+|---------|------|-------------|
+| HTTP Server | 8080 | Web UI and API |
+| Whisper | 8081 | Voice transcription |
+| Ollama | 11434 | LLM inference API |
+| PostgreSQL | 5432 | Blog storage (if enabled) |
+
 ## Development Workflow
 
 ### Adding a New Tool

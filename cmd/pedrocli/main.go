@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/soypete/pedrocli/pkg/config"
-	"github.com/soypete/pedrocli/pkg/database"
 	depcheck "github.com/soypete/pedrocli/pkg/init"
 	"github.com/soypete/pedrocli/pkg/mcp"
 )
@@ -89,10 +88,8 @@ func main() {
 		reviewCommand(cfg, os.Args[2:])
 	case "triage":
 		triageCommand(cfg, os.Args[2:])
-	case "podcast":
-		podcastCommand(cfg, os.Args[2:])
-	case "migrate":
-		migrateCommand(cfg, os.Args[2:])
+	case "blog":
+		blogCommand(cfg, os.Args[2:])
 	case "status":
 		statusCommand(cfg, os.Args[2:])
 	case "list":
@@ -117,8 +114,7 @@ Commands:
   debug      Debug and fix an issue
   review     Review a pull request or branch
   triage     Diagnose and triage an issue (no fix)
-  podcast    Podcast production tools (create-script, review-news, add-link, add-guest, create-outline)
-  migrate    Database migration commands (up, down, status, reset, redo, version)
+  blog       Create a blog post (writes to Notion)
   status     Get status of a job
   list       List all jobs
   cancel     Cancel a running job
@@ -133,9 +129,7 @@ Examples:
   pedrocli debug -symptoms "Bot crashes on startup" -logs error.log
   pedrocli review -branch feature/rate-limiting
   pedrocli triage -description "Memory leak in handler"
-  pedrocli podcast create-script -topic "Starting a Homelab" -notes "Cover hardware, OS choices"
-  pedrocli migrate up
-  pedrocli migrate status
+  pedrocli blog -title "My Post" -content "Raw thoughts here..."
   pedrocli status job-1234567890
   pedrocli list
   pedrocli cancel job-1234567890
@@ -453,6 +447,29 @@ func triageCommand(cfg *config.Config, args []string) {
 	callAgent(cfg, "triager", arguments)
 }
 
+func blogCommand(cfg *config.Config, args []string) {
+	fs := flag.NewFlagSet("blog", flag.ExitOnError)
+	title := fs.String("title", "", "Blog post title (required)")
+	content := fs.String("content", "", "Blog post content/dictation (required)")
+	fs.Parse(args)
+
+	if *title == "" || *content == "" {
+		fmt.Fprintln(os.Stderr, "Error: -title and -content are required")
+		fs.Usage()
+		os.Exit(1)
+	}
+
+	fmt.Printf("Creating blog post: %s\n", *title)
+
+	// Build arguments for blog tool
+	arguments := map[string]interface{}{
+		"title":   *title,
+		"content": *content,
+	}
+
+	callMCPTool(cfg, "blog_writer", arguments)
+}
+
 func statusCommand(cfg *config.Config, args []string) {
 	fs := flag.NewFlagSet("status", flag.ExitOnError)
 	fs.Parse(args)
@@ -502,378 +519,4 @@ func cancelCommand(cfg *config.Config, args []string) {
 	}
 
 	callMCPTool(cfg, "cancel_job", arguments)
-}
-
-// podcastCommand handles all podcast-related subcommands
-func podcastCommand(cfg *config.Config, args []string) {
-	if len(args) == 0 {
-		printPodcastUsage()
-		os.Exit(1)
-	}
-
-	action := args[0]
-	switch action {
-	case "create-script":
-		podcastCreateScriptCommand(cfg, args[1:])
-	case "review-news":
-		podcastReviewNewsCommand(cfg, args[1:])
-	case "add-link":
-		podcastAddLinkCommand(cfg, args[1:])
-	case "add-guest":
-		podcastAddGuestCommand(cfg, args[1:])
-	case "create-outline":
-		podcastCreateOutlineCommand(cfg, args[1:])
-	default:
-		fmt.Fprintf(os.Stderr, "Unknown podcast action: %s\n\n", action)
-		printPodcastUsage()
-		os.Exit(1)
-	}
-}
-
-func printPodcastUsage() {
-	fmt.Println(`Podcast production tools
-
-Usage:
-  pedrocli podcast <action> [flags]
-
-Actions:
-  create-script    Create a podcast episode script from a topic
-  review-news      Review and summarize news items for episode prep
-  add-link         Add an article or news link to Notion database
-  add-guest        Add guest information to the guests database
-  create-outline   Create an episode outline from a topic
-
-Examples:
-  pedrocli podcast create-script -topic "Starting a Homelab" -notes "Cover hardware, OS choices, first services"
-  pedrocli podcast review-news -focus "AI" -max-items 5
-  pedrocli podcast add-link -url "https://example.com/article" -title "Great article" -notes "Useful for episode 42"
-  pedrocli podcast add-guest -name "John Doe" -email "john@example.com" -bio "Homelab expert"
-  pedrocli podcast create-outline -topic "Kubernetes Basics" -duration "45min"`)
-}
-
-func podcastCreateScriptCommand(cfg *config.Config, args []string) {
-	fs := flag.NewFlagSet("create-script", flag.ExitOnError)
-	topic := fs.String("topic", "", "Episode topic (required)")
-	notes := fs.String("notes", "", "Additional notes or key points (optional)")
-	guests := fs.String("guests", "", "Guest names, comma-separated (optional)")
-	recordingDate := fs.String("recording-date", "", "Recording date (optional)")
-	fs.Parse(args)
-
-	if *topic == "" {
-		fmt.Fprintln(os.Stderr, "Error: -topic is required")
-		fs.Usage()
-		os.Exit(1)
-	}
-
-	fmt.Printf("Creating podcast script for: %s\n", *topic)
-
-	// Build arguments
-	arguments := map[string]interface{}{
-		"topic": *topic,
-	}
-	if *notes != "" {
-		arguments["notes"] = *notes
-	}
-	if *guests != "" {
-		// Split comma-separated guests into array
-		guestList := strings.Split(*guests, ",")
-		guestArray := make([]interface{}, len(guestList))
-		for i, g := range guestList {
-			guestArray[i] = strings.TrimSpace(g)
-		}
-		arguments["guests"] = guestArray
-	}
-	if *recordingDate != "" {
-		arguments["recording_date"] = *recordingDate
-	}
-
-	callAgent(cfg, "create_podcast_script", arguments)
-}
-
-func podcastReviewNewsCommand(cfg *config.Config, args []string) {
-	fs := flag.NewFlagSet("review-news", flag.ExitOnError)
-	focus := fs.String("focus", "", "Focus topic for news filtering (optional)")
-	maxItems := fs.Int("max-items", 0, "Maximum number of news items to review (optional)")
-	fs.Parse(args)
-
-	fmt.Println("Reviewing news items for podcast...")
-
-	// Build arguments
-	arguments := map[string]interface{}{}
-	if *focus != "" {
-		arguments["focus_topic"] = *focus
-	}
-	if *maxItems > 0 {
-		arguments["max_items"] = float64(*maxItems)
-	}
-
-	callAgent(cfg, "review_news_summary", arguments)
-}
-
-func podcastAddLinkCommand(cfg *config.Config, args []string) {
-	fs := flag.NewFlagSet("add-link", flag.ExitOnError)
-	url := fs.String("url", "", "URL to add (required)")
-	title := fs.String("title", "", "Article title (optional)")
-	notes := fs.String("notes", "", "Notes about the link (optional)")
-	database := fs.String("database", "", "Target Notion database (optional)")
-	fs.Parse(args)
-
-	if *url == "" {
-		fmt.Fprintln(os.Stderr, "Error: -url is required")
-		fs.Usage()
-		os.Exit(1)
-	}
-
-	fmt.Printf("Adding link: %s\n", *url)
-
-	// Build arguments
-	arguments := map[string]interface{}{
-		"url": *url,
-	}
-	if *title != "" {
-		arguments["title"] = *title
-	}
-	if *notes != "" {
-		arguments["notes"] = *notes
-	}
-	if *database != "" {
-		arguments["database"] = *database
-	}
-
-	callAgent(cfg, "add_notion_link", arguments)
-}
-
-func podcastAddGuestCommand(cfg *config.Config, args []string) {
-	fs := flag.NewFlagSet("add-guest", flag.ExitOnError)
-	name := fs.String("name", "", "Guest name (required)")
-	title := fs.String("title", "", "Guest title/role (optional)")
-	organization := fs.String("organization", "", "Guest organization (optional)")
-	bio := fs.String("bio", "", "Guest bio (optional)")
-	email := fs.String("email", "", "Guest email (optional)")
-	topics := fs.String("topics", "", "Topics of expertise, comma-separated (optional)")
-	fs.Parse(args)
-
-	if *name == "" {
-		fmt.Fprintln(os.Stderr, "Error: -name is required")
-		fs.Usage()
-		os.Exit(1)
-	}
-
-	fmt.Printf("Adding guest: %s\n", *name)
-
-	// Build arguments
-	arguments := map[string]interface{}{
-		"name": *name,
-	}
-	if *title != "" {
-		arguments["title"] = *title
-	}
-	if *organization != "" {
-		arguments["organization"] = *organization
-	}
-	if *bio != "" {
-		arguments["bio"] = *bio
-	}
-	if *email != "" {
-		arguments["email"] = *email
-	}
-	if *topics != "" {
-		// Split comma-separated topics into array
-		topicList := strings.Split(*topics, ",")
-		topicArray := make([]interface{}, len(topicList))
-		for i, t := range topicList {
-			topicArray[i] = strings.TrimSpace(t)
-		}
-		arguments["topics"] = topicArray
-	}
-
-	callAgent(cfg, "add_guest", arguments)
-}
-
-func podcastCreateOutlineCommand(cfg *config.Config, args []string) {
-	fs := flag.NewFlagSet("create-outline", flag.ExitOnError)
-	topic := fs.String("topic", "", "Episode topic (required)")
-	duration := fs.String("duration", "", "Target episode duration (optional)")
-	format := fs.String("format", "", "Episode format (optional)")
-	fs.Parse(args)
-
-	if *topic == "" {
-		fmt.Fprintln(os.Stderr, "Error: -topic is required")
-		fs.Usage()
-		os.Exit(1)
-	}
-
-	fmt.Printf("Creating episode outline for: %s\n", *topic)
-
-	// Build arguments
-	arguments := map[string]interface{}{
-		"topic": *topic,
-	}
-	if *duration != "" {
-		arguments["duration"] = *duration
-	}
-	if *format != "" {
-		arguments["format"] = *format
-	}
-
-	callAgent(cfg, "create_episode_outline", arguments)
-}
-
-// migrateCommand handles database migration subcommands
-func migrateCommand(cfg *config.Config, args []string) {
-	if len(args) == 0 {
-		printMigrateUsage()
-		os.Exit(1)
-	}
-
-	action := args[0]
-
-	// Get database path from config
-	dbPath := cfg.RepoStorage.DatabasePath
-
-	switch action {
-	case "up":
-		migrateUpCommand(dbPath)
-	case "down":
-		migrateDownCommand(dbPath)
-	case "status":
-		migrateStatusCommand(dbPath)
-	case "reset":
-		migrateResetCommand(dbPath)
-	case "redo":
-		migrateRedoCommand(dbPath)
-	case "version":
-		migrateVersionCommand(dbPath)
-	default:
-		fmt.Fprintf(os.Stderr, "Unknown migrate action: %s\n\n", action)
-		printMigrateUsage()
-		os.Exit(1)
-	}
-}
-
-func printMigrateUsage() {
-	fmt.Println(`Database migration commands
-
-Usage:
-  pedrocli migrate <action>
-
-Actions:
-  up        Run all pending migrations
-  down      Rollback the last migration
-  status    Show migration status
-  reset     Rollback all migrations
-  redo      Rollback and re-run the last migration
-  version   Show current database version
-
-Examples:
-  pedrocli migrate up
-  pedrocli migrate down
-  pedrocli migrate status
-  pedrocli migrate reset
-  pedrocli migrate redo
-  pedrocli migrate version`)
-}
-
-func migrateUpCommand(dbPath string) {
-	fmt.Println("Running database migrations...")
-
-	store, err := database.NewSQLiteStoreWithOptions(dbPath, false)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: failed to open database: %v\n", err)
-		os.Exit(1)
-	}
-	defer store.Close()
-
-	if err := store.Migrate(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: migration failed: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Println("Migrations complete")
-}
-
-func migrateDownCommand(dbPath string) {
-	fmt.Println("Rolling back last migration...")
-
-	store, err := database.NewSQLiteStoreWithOptions(dbPath, false)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: failed to open database: %v\n", err)
-		os.Exit(1)
-	}
-	defer store.Close()
-
-	if err := store.MigrateDown(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: rollback failed: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Println("Rollback complete")
-}
-
-func migrateStatusCommand(dbPath string) {
-	store, err := database.NewSQLiteStoreWithOptions(dbPath, false)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: failed to open database: %v\n", err)
-		os.Exit(1)
-	}
-	defer store.Close()
-
-	fmt.Printf("Database: %s\n\n", dbPath)
-	if err := store.MigrationStatus(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: failed to get migration status: %v\n", err)
-		os.Exit(1)
-	}
-}
-
-func migrateResetCommand(dbPath string) {
-	fmt.Println("Rolling back all migrations...")
-
-	store, err := database.NewSQLiteStoreWithOptions(dbPath, false)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: failed to open database: %v\n", err)
-		os.Exit(1)
-	}
-	defer store.Close()
-
-	if err := store.MigrateReset(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: reset failed: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Println("Reset complete")
-}
-
-func migrateRedoCommand(dbPath string) {
-	fmt.Println("Re-running last migration...")
-
-	store, err := database.NewSQLiteStoreWithOptions(dbPath, false)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: failed to open database: %v\n", err)
-		os.Exit(1)
-	}
-	defer store.Close()
-
-	if err := store.MigrateRedo(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: redo failed: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Println("Redo complete")
-}
-
-func migrateVersionCommand(dbPath string) {
-	store, err := database.NewSQLiteStoreWithOptions(dbPath, false)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: failed to open database: %v\n", err)
-		os.Exit(1)
-	}
-	defer store.Close()
-
-	version, err := store.MigrationVersion()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: failed to get database version: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Printf("Database version: %d\n", version)
 }
