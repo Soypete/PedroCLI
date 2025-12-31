@@ -4,6 +4,7 @@ const VoiceRecorder = {
     audioChunks: [],
     isRecording: false,
     stream: null,
+    activeButtonId: null,  // Track which button started the recording
 
     // Initialize and request microphone permission
     async init() {
@@ -25,14 +26,23 @@ const VoiceRecorder = {
     },
 
     // Start recording
-    async startRecording() {
+    async startRecording(buttonId) {
         if (this.isRecording) {
             console.warn('Voice: Already recording');
             return;
         }
 
-        // Initialize if not already done
-        if (!this.stream) {
+        // Check if stream exists and has active tracks
+        const needsInit = !this.stream ||
+            !this.stream.active ||
+            this.stream.getTracks().every(t => t.readyState === 'ended');
+
+        if (needsInit) {
+            // Release old stream if exists
+            if (this.stream) {
+                this.stream.getTracks().forEach(t => t.stop());
+                this.stream = null;
+            }
             const initialized = await this.init();
             if (!initialized) {
                 return;
@@ -40,9 +50,12 @@ const VoiceRecorder = {
         }
 
         try {
-            // Create MediaRecorder
+            // Create MediaRecorder with explicit mime type
             this.audioChunks = [];
-            this.mediaRecorder = new MediaRecorder(this.stream);
+            const options = MediaRecorder.isTypeSupported('audio/webm')
+                ? { mimeType: 'audio/webm' }
+                : {};
+            this.mediaRecorder = new MediaRecorder(this.stream, options);
 
             this.mediaRecorder.ondataavailable = (event) => {
                 if (event.data.size > 0) {
@@ -60,7 +73,7 @@ const VoiceRecorder = {
             console.log('Voice: Recording started');
 
             // Update UI
-            this.updateUI(true);
+            this.updateUI(true, buttonId);
         } catch (error) {
             console.error('Voice: Failed to start recording:', error);
             alert('Failed to start recording: ' + error.message);
@@ -137,8 +150,10 @@ const VoiceRecorder = {
     },
 
     // Update UI to show recording state
-    updateUI(isRecording) {
-        const voiceBtn = document.getElementById('voice-btn');
+    updateUI(isRecording, buttonId) {
+        // Use provided buttonId, or fall back to activeButtonId, or default to 'voice-btn'
+        const btnId = buttonId || this.activeButtonId || 'voice-btn';
+        const voiceBtn = document.getElementById(btnId);
         if (!voiceBtn) return;
 
         if (isRecording) {
@@ -166,13 +181,26 @@ const VoiceRecorder = {
     },
 
     // Toggle recording (start if stopped, transcribe if recording)
-    async toggle(targetInputId) {
+    async toggle(targetInputId, buttonId) {
+        // Determine button ID from targetInputId if not provided
+        if (!buttonId) {
+            // Map input IDs to button IDs
+            const buttonMap = {
+                'description': 'voice-btn',
+                'topic': 'voice-btn-topic',
+                'notes': 'voice-btn-notes',
+                'guest-bio': 'voice-btn-bio'
+            };
+            buttonId = buttonMap[targetInputId] || 'voice-btn';
+        }
+
         if (this.isRecording) {
             // Stop and transcribe
             await this.transcribeAndFill(targetInputId);
         } else {
-            // Start recording
-            await this.startRecording();
+            // Start recording - track which button
+            this.activeButtonId = buttonId;
+            await this.startRecording(buttonId);
         }
     },
 
@@ -206,15 +234,18 @@ const VoiceRecorder = {
 
 // Initialize voice status on page load
 document.addEventListener('DOMContentLoaded', async function() {
-    const voiceBtn = document.getElementById('voice-btn');
-    if (!voiceBtn) return;
+    // Find all voice buttons
+    const voiceBtns = document.querySelectorAll('.voice-btn, #voice-btn');
+    if (voiceBtns.length === 0) return;
 
     // Check if voice is enabled
     const isEnabled = await VoiceRecorder.checkStatus();
     if (!isEnabled) {
-        voiceBtn.disabled = true;
-        voiceBtn.title = 'Voice transcription is not enabled. Start whisper.cpp server to use this feature.';
-        voiceBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        voiceBtns.forEach(btn => {
+            btn.disabled = true;
+            btn.title = 'Voice transcription is not enabled. Start whisper.cpp server to use this feature.';
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+        });
         console.log('Voice: Disabled (whisper.cpp not running)');
     } else {
         console.log('Voice: Enabled');

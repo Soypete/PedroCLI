@@ -10,12 +10,23 @@ import (
 
 // CreateJobRequest represents the job creation request
 type CreateJobRequest struct {
-	Type        string `json:"type"`        // builder, debugger, reviewer, triager
+	// Coding job fields
+	Type        string `json:"type"`        // builder, debugger, reviewer, triager, or podcast types
 	Description string `json:"description"` // Job description
 	Issue       string `json:"issue"`       // Optional issue number
 	Symptoms    string `json:"symptoms"`    // For debugger
 	Logs        string `json:"logs"`        // For debugger
 	Branch      string `json:"branch"`      // For reviewer
+
+	// Podcast job fields
+	Topic      string `json:"topic"`       // For create_podcast_script, create_episode_outline
+	Notes      string `json:"notes"`       // For create_podcast_script, add_notion_link, create_episode_outline
+	URL        string `json:"url"`         // For add_notion_link
+	Title      string `json:"title"`       // For add_notion_link
+	Name       string `json:"name"`        // For add_guest
+	Bio        string `json:"bio"`         // For add_guest
+	Email      string `json:"email"`       // For add_guest
+	FocusTopic string `json:"focus_topic"` // For review_news_summary
 }
 
 // JobResponse represents the job response
@@ -81,6 +92,7 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Coding job fields
 		req.Type = r.FormValue("type")
 		req.Description = r.FormValue("description")
 		req.Issue = r.FormValue("issue")
@@ -88,10 +100,60 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		req.Logs = r.FormValue("logs")
 		req.Branch = r.FormValue("branch")
 
-		if req.Type == "" || req.Description == "" {
+		// Podcast job fields
+		req.Topic = r.FormValue("topic")
+		req.Notes = r.FormValue("notes")
+		req.URL = r.FormValue("url")
+		req.Title = r.FormValue("title")
+		req.Name = r.FormValue("name")
+		req.Bio = r.FormValue("bio")
+		req.Email = r.FormValue("email")
+		req.FocusTopic = r.FormValue("focus_topic")
+
+		if req.Type == "" {
 			respondJSON(w, http.StatusBadRequest, JobResponse{
 				Success: false,
-				Error:   "type and description are required",
+				Error:   "type is required",
+			})
+			return
+		}
+
+		// Validate required fields per job type
+		var validationErr string
+		switch req.Type {
+		case "builder", "triager":
+			if req.Description == "" {
+				validationErr = "description is required"
+			}
+		case "debugger":
+			if req.Symptoms == "" {
+				validationErr = "symptoms is required"
+			}
+		case "reviewer":
+			if req.Branch == "" {
+				validationErr = "branch is required"
+			}
+		case "create_podcast_script":
+			if req.Topic == "" {
+				validationErr = "topic is required"
+			}
+		case "add_notion_link":
+			if req.URL == "" {
+				validationErr = "url is required"
+			}
+		case "add_guest":
+			if req.Name == "" {
+				validationErr = "name is required"
+			}
+		case "review_news_summary":
+			if req.FocusTopic == "" {
+				validationErr = "focus_topic is required"
+			}
+		}
+		if validationErr != "" {
+			respondJSON(w, http.StatusBadRequest, JobResponse{
+				Success: false,
+				Error:   validationErr,
 			})
 			return
 		}
@@ -115,6 +177,34 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		args["branch"] = req.Branch
 	case "triager":
 		args["description"] = req.Description
+
+	// Podcast job types
+	case "create_podcast_script":
+		args["topic"] = req.Topic
+		if req.Notes != "" {
+			args["notes"] = req.Notes
+		}
+	case "add_notion_link":
+		args["url"] = req.URL
+		if req.Title != "" {
+			args["title"] = req.Title
+		}
+		if req.Notes != "" {
+			args["notes"] = req.Notes
+		}
+	case "add_guest":
+		args["name"] = req.Name
+		if req.Bio != "" {
+			args["bio"] = req.Bio
+		}
+		if req.Email != "" {
+			args["email"] = req.Email
+		}
+	case "review_news_summary":
+		if req.FocusTopic != "" {
+			args["focus_topic"] = req.FocusTopic
+		}
+
 	default:
 		respondJSON(w, http.StatusBadRequest, JobResponse{
 			Success: false,

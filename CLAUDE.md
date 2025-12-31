@@ -38,6 +38,37 @@ make lint               # Run golangci-lint
 make tidy               # Tidy dependencies
 ```
 
+### Running the Web UI
+```bash
+# Start the HTTP server (includes MCP server)
+./pedrocli-http-server
+
+# Access at http://localhost:8080
+```
+
+### Running whisper.cpp (Voice Dictation)
+
+The web UI supports voice-to-text using whisper.cpp. To enable:
+
+1. **Start whisper.cpp server**:
+```bash
+# From whisper.cpp directory (e.g., ~/Code/ml/whisper.cpp)
+./build/bin/whisper-server -m models/ggml-base.en.bin --port 9090 --host 0.0.0.0
+```
+
+2. **Enable in config** (`.pedrocli.json`):
+```json
+{
+  "voice": {
+    "enabled": true,
+    "whisper_url": "http://localhost:9090",
+    "language": "en"
+  }
+}
+```
+
+3. **Restart HTTP server** - voice buttons will now work in the web UI.
+
 ## Core Architecture
 
 ### Two-Binary System

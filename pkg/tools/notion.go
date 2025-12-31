@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/soypete/pedrocli/pkg/config"
@@ -111,7 +112,7 @@ func (t *NotionTool) Execute(ctx context.Context, args map[string]interface{}) (
 
 // getAPIKey retrieves the Notion API key
 func (t *NotionTool) getAPIKey(ctx context.Context) (string, error) {
-	// Try TokenManager first
+	// Try TokenManager first (database store)
 	if t.tokenManager != nil {
 		apiKey, err := t.tokenManager.GetToken(ctx, "notion", "database")
 		if err == nil && apiKey != "" {
@@ -119,12 +120,17 @@ func (t *NotionTool) getAPIKey(ctx context.Context) (string, error) {
 		}
 	}
 
-	// Fall back to config
+	// Fall back to config file
 	if t.config.Podcast.Notion.APIKey != "" {
 		return t.config.Podcast.Notion.APIKey, nil
 	}
 
-	return "", fmt.Errorf("Notion API key not configured")
+	// Fall back to environment variable (supports op run)
+	if apiKey := os.Getenv("NOTION_TOKEN"); apiKey != "" {
+		return apiKey, nil
+	}
+
+	return "", fmt.Errorf("Notion API key not configured. Set NOTION_TOKEN env var, add podcast.notion.api_key to config, or configure token storage")
 }
 
 // makeRequest makes an HTTP request to the Notion API

@@ -5,6 +5,11 @@
     "context_size": 32768,
     "temperature": 0.2
   },
+  "voice": {
+    "enabled": true,
+    "whisper_url": "http://localhost:9090",
+    "language": "en"
+  },
   "project": {
     "name": "Taikai",
     "workdir": "/Users/miriahpeterson/Code/go-projects/taikai",
@@ -23,5 +28,19 @@
     "enabled": true,
     "keep_temp_files": true,
     "log_level": "info"
+  },
+  "podcast": {
+    "enabled": true,
+    "notion": {
+      "enabled": true,
+      "databases": {
+        "scripts": "29da4c9f98458041afaec55980124eb7"
+      }
+    },
+    "metadata": {
+      "name": "Domesticating AI",
+      "description": "A podcast about practical AI for developers",
+      "format": "weekly discussion"
+    }
   }
 }

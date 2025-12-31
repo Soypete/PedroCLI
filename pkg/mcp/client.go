@@ -88,10 +88,13 @@ func (c *Client) Stop() error {
 
 // CallTool calls an MCP tool and returns the result
 func (c *Client) CallTool(ctx context.Context, name string, arguments map[string]interface{}) (*ToolResponse, error) {
+	// Hold lock for entire request-response cycle to prevent race conditions
+	// between concurrent goroutines (SSE broadcaster + HTTP handlers)
 	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	id := c.nextID
 	c.nextID++
-	c.mu.Unlock()
 
 	// Build JSON-RPC request
 	request := &JSONRPCRequest{
@@ -111,24 +114,19 @@ func (c *Client) CallTool(ctx context.Context, name string, arguments map[string
 	}
 
 	// Send request
-	c.mu.Lock()
 	_, err = c.stdin.Write(append(requestBytes, '\n'))
-	c.mu.Unlock()
 	if err != nil {
 		return nil, fmt.Errorf("failed to write request: %w", err)
 	}
 
-	// Read response
-	c.mu.Lock()
+	// Read response (must be in same lock to ensure we get OUR response)
 	if !c.scanner.Scan() {
-		c.mu.Unlock()
 		if err := c.scanner.Err(); err != nil {
 			return nil, fmt.Errorf("failed to read response: %w", err)
 		}
 		return nil, fmt.Errorf("no response from server")
 	}
 	responseBytes := c.scanner.Bytes()
-	c.mu.Unlock()
 
 	// Parse response
 	var response JSONRPCResponse
@@ -157,10 +155,12 @@ func (c *Client) CallTool(ctx context.Context, name string, arguments map[string
 
 // ListTools lists available MCP tools
 func (c *Client) ListTools(ctx context.Context) ([]ToolInfo, error) {
+	// Hold lock for entire request-response cycle
 	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	id := c.nextID
 	c.nextID++
-	c.mu.Unlock()
 
 	// Build JSON-RPC request
 	request := &JSONRPCRequest{
@@ -177,24 +177,19 @@ func (c *Client) ListTools(ctx context.Context) ([]ToolInfo, error) {
 	}
 
 	// Send request
-	c.mu.Lock()
 	_, err = c.stdin.Write(append(requestBytes, '\n'))
-	c.mu.Unlock()
 	if err != nil {
 		return nil, fmt.Errorf("failed to write request: %w", err)
 	}
 
 	// Read response
-	c.mu.Lock()
 	if !c.scanner.Scan() {
-		c.mu.Unlock()
 		if err := c.scanner.Err(); err != nil {
 			return nil, fmt.Errorf("failed to read response: %w", err)
 		}
 		return nil, fmt.Errorf("no response from server")
 	}
 	responseBytes := c.scanner.Bytes()
-	c.mu.Unlock()
 
 	// Parse response
 	var response JSONRPCResponse
