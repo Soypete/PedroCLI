@@ -84,6 +84,12 @@ func main() {
 	listJobsTool := tools.NewListJobsTool(jobManager)
 	cancelJobTool := tools.NewCancelJobTool(jobManager)
 
+	// Create web scraping tool (only if enabled)
+	var webScrapeTool *tools.WebScrapeTool
+	if cfg.WebScraping.Enabled {
+		webScrapeTool = tools.NewWebScrapeTool(cfg, nil) // Token manager will be set later if available
+	}
+
 	// Initialize repo management system
 	var repoStore repos.Store
 	if cfg.RepoStorage.DatabasePath != "" {
@@ -124,6 +130,9 @@ func main() {
 	server.RegisterTool(listJobsTool)
 	server.RegisterTool(cancelJobTool)
 	server.RegisterTool(repoTool)
+	if webScrapeTool != nil {
+		server.RegisterTool(webScrapeTool)
+	}
 
 	// Create and register agents with all tools
 	builderAgent := agents.NewBuilderAgent(cfg, backend, jobManager)
@@ -135,6 +144,9 @@ func main() {
 	builderAgent.RegisterTool(bashTool)
 	builderAgent.RegisterTool(testTool)
 	builderAgent.RegisterTool(repoTool)
+	if webScrapeTool != nil {
+		builderAgent.RegisterTool(webScrapeTool)
+	}
 
 	reviewerAgent := agents.NewReviewerAgent(cfg, backend, jobManager)
 	reviewerAgent.RegisterTool(fileTool)
@@ -145,6 +157,9 @@ func main() {
 	reviewerAgent.RegisterTool(bashTool)
 	reviewerAgent.RegisterTool(testTool)
 	reviewerAgent.RegisterTool(repoTool)
+	if webScrapeTool != nil {
+		reviewerAgent.RegisterTool(webScrapeTool)
+	}
 
 	debuggerAgent := agents.NewDebuggerAgent(cfg, backend, jobManager)
 	debuggerAgent.RegisterTool(fileTool)
@@ -155,6 +170,9 @@ func main() {
 	debuggerAgent.RegisterTool(bashTool)
 	debuggerAgent.RegisterTool(testTool)
 	debuggerAgent.RegisterTool(repoTool)
+	if webScrapeTool != nil {
+		debuggerAgent.RegisterTool(webScrapeTool)
+	}
 
 	triagerAgent := agents.NewTriagerAgent(cfg, backend, jobManager)
 	triagerAgent.RegisterTool(fileTool)
@@ -165,6 +183,9 @@ func main() {
 	triagerAgent.RegisterTool(bashTool)
 	triagerAgent.RegisterTool(testTool)
 	triagerAgent.RegisterTool(repoTool)
+	if webScrapeTool != nil {
+		triagerAgent.RegisterTool(webScrapeTool)
+	}
 
 	// Create token manager for podcast tools (only if podcast mode is enabled)
 	var tokenManager *tokens.Manager
