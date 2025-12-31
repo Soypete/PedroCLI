@@ -69,6 +69,28 @@
     "notion_drafts_db": "18aa4c9f-9845-81d5-aad1-e53b75ab3a2b",
     "notion_ideas_db": "191a4c9f-9845-803b-b008-d16d6a025ba2",
     "whisper_url": "http://localhost:8081",
-    "whisper_model": "base.en"
+    "whisper_model": "base.en",
+    "rss_feed_url": "https://soypetetech.substack.com/feed",
+    "research": {
+      "enabled": true,
+      "calendar_enabled": false,
+      "rss_enabled": true,
+      "max_rss_posts": 5,
+      "max_calendar_days": 30
+    },
+    "static_links": {
+      "discord": "https://discord.gg/ExTAH54KCE",
+      "linktree": "https://linktr.ee/soypete_tech",
+      "youtube": "https://www.youtube.com/@SoyPete_Tech",
+      "twitter": "https://x.com/captainnobody1",
+      "bluesky": "https://bsky.app/profile/soypetetech.bsky.social",
+      "linkedin": "https://www.linkedin.com/in/miriah-peterson-35649b5b/",
+      "newsletter": "https://soypetetech.substack.com",
+      "youtube_placeholder": "Latest Video: [ADD LINK BEFORE SUBSTACK PUBLISH]",
+      "custom_links": [
+        {"name": "GitHub", "url": "https://www.github.com/Soypete"},
+        {"name": "Twitch", "url": "https://twitch.tv/soypeteTech"}
+      ]
+    }
   }
 }

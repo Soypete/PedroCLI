@@ -67,6 +67,7 @@ func (s *Server) setupRoutes() {
 	s.mux.HandleFunc("/api/jobs/", s.handleJobsWithID)
 	s.mux.HandleFunc("/api/stream/jobs/", s.handleJobStream)
 	s.mux.HandleFunc("/api/blog", s.handleBlog)
+	s.mux.HandleFunc("/api/blog/orchestrate", s.handleBlogOrchestrate)
 	s.mux.HandleFunc("/api/health", s.handleHealth)
 
 	// Voice transcription routes

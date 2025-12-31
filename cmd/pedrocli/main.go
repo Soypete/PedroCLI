@@ -130,6 +130,7 @@ Examples:
   pedrocli review -branch feature/rate-limiting
   pedrocli triage -description "Memory leak in handler"
   pedrocli blog -title "My Post" -content "Raw thoughts here..."
+  pedrocli blog -prompt "Write a 2025 recap with calendar events..." -publish
   pedrocli status job-1234567890
   pedrocli list
   pedrocli cancel job-1234567890
@@ -449,25 +450,52 @@ func triageCommand(cfg *config.Config, args []string) {
 
 func blogCommand(cfg *config.Config, args []string) {
 	fs := flag.NewFlagSet("blog", flag.ExitOnError)
-	title := fs.String("title", "", "Blog post title (required)")
-	content := fs.String("content", "", "Blog post content/dictation (required)")
+	title := fs.String("title", "", "Blog post title (optional for orchestrate)")
+	content := fs.String("content", "", "Blog post content/dictation (for simple posts)")
+	prompt := fs.String("prompt", "", "Complex blog prompt for orchestration (use this for multi-step posts)")
+	publish := fs.Bool("publish", false, "Auto-publish to Notion after generation")
 	fs.Parse(args)
 
-	if *title == "" || *content == "" {
-		fmt.Fprintln(os.Stderr, "Error: -title and -content are required")
-		fs.Usage()
+	// Check which mode we're in
+	if *prompt != "" {
+		// Orchestrated blog post (complex, multi-phase)
+		fmt.Println("Starting blog orchestrator...")
+		if *title != "" {
+			fmt.Printf("Title hint: %s\n", *title)
+		}
+
+		arguments := map[string]interface{}{
+			"prompt":  *prompt,
+			"publish": *publish,
+		}
+		if *title != "" {
+			arguments["title"] = *title
+		}
+
+		callAgent(cfg, "blog_orchestrator", arguments)
+	} else if *content != "" {
+		// Simple blog post (direct to writer)
+		if *title == "" {
+			fmt.Fprintln(os.Stderr, "Error: -title is required for simple blog posts")
+			fs.Usage()
+			os.Exit(1)
+		}
+
+		fmt.Printf("Creating blog post: %s\n", *title)
+
+		arguments := map[string]interface{}{
+			"title":   *title,
+			"content": *content,
+		}
+
+		callMCPTool(cfg, "blog_writer", arguments)
+	} else {
+		fmt.Fprintln(os.Stderr, "Error: either -prompt (for orchestrated posts) or -content (for simple posts) is required")
+		fmt.Fprintln(os.Stderr, "\nExamples:")
+		fmt.Fprintln(os.Stderr, "  Simple post:       pedrocli blog -title \"My Post\" -content \"Raw thoughts...\"")
+		fmt.Fprintln(os.Stderr, "  Orchestrated post: pedrocli blog -prompt \"Write a 2025 recap with...\" -publish")
 		os.Exit(1)
 	}
-
-	fmt.Printf("Creating blog post: %s\n", *title)
-
-	// Build arguments for blog tool
-	arguments := map[string]interface{}{
-		"title":   *title,
-		"content": *content,
-	}
-
-	callMCPTool(cfg, "blog_writer", arguments)
 }
 
 func statusCommand(cfg *config.Config, args []string) {

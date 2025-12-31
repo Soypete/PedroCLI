@@ -83,6 +83,11 @@ func main() {
 	// Register blog tools
 	blogNotionTool := tools.NewBlogNotionTool(cfg)
 
+	// Register blog research tools
+	rssFeedTool := tools.NewRSSFeedTool(cfg)
+	staticLinksTool := tools.NewStaticLinksTool(cfg)
+	// CalendarTool requires TokenManager - skip for now if not available
+
 	server.RegisterTool(fileTool)
 	server.RegisterTool(gitTool)
 	server.RegisterTool(bashTool)
@@ -94,6 +99,8 @@ func main() {
 	server.RegisterTool(listJobsTool)
 	server.RegisterTool(cancelJobTool)
 	server.RegisterTool(blogNotionTool)
+	server.RegisterTool(rssFeedTool)
+	server.RegisterTool(staticLinksTool)
 
 	// Create and register agents with all tools
 	builderAgent := agents.NewBuilderAgent(cfg, backend, jobManager)
@@ -132,17 +139,20 @@ func main() {
 	triagerAgent.RegisterTool(bashTool)
 	triagerAgent.RegisterTool(testTool)
 
-	// Create blog writing agents (don't need code tools)
-	writerAgent := agents.NewWriterAgent(cfg, backend, jobManager)
-	editorAgent := agents.NewEditorAgent(cfg, backend, jobManager, cfg.Blog.WriterAutoRevise)
+	// Create blog orchestrator agent with research tools and Notion publishing
+	// (Replaces the old writer/editor agents with a unified orchestrator)
+	blogOrchestratorAgent := agents.NewBlogOrchestratorAgent(cfg, backend, jobManager)
+	blogOrchestratorAgent.RegisterResearchTool(rssFeedTool)
+	blogOrchestratorAgent.RegisterResearchTool(staticLinksTool)
+	blogOrchestratorAgent.RegisterNotionTool(blogNotionTool)
+	// Note: CalendarTool would be registered here if TokenManager is available
 
 	// Wrap agents as tools for MCP
 	server.RegisterTool(mcp.NewAgentTool(builderAgent))
 	server.RegisterTool(mcp.NewAgentTool(reviewerAgent))
 	server.RegisterTool(mcp.NewAgentTool(debuggerAgent))
 	server.RegisterTool(mcp.NewAgentTool(triagerAgent))
-	server.RegisterTool(mcp.NewAgentTool(writerAgent))
-	server.RegisterTool(mcp.NewAgentTool(editorAgent))
+	server.RegisterTool(mcp.NewAgentTool(blogOrchestratorAgent))
 
 	// Start server (no logging to avoid corrupting JSON-RPC on stdout)
 	if err := server.Run(context.Background()); err != nil {

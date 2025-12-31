@@ -91,22 +91,27 @@ cmd/mcp-server/main.go        → MCP server (Model Context Protocol)
 
 ```
 pkg/
-├── agents/          # Autonomous agents (Builder, Debugger, Reviewer, Triager)
+├── agents/          # Autonomous agents (Code + Blog)
 │   ├── base.go      # BaseAgent - common agent functionality
 │   ├── executor.go  # InferenceExecutor - THE INFERENCE LOOP (critical!)
 │   ├── builder.go   # Build new features
 │   ├── debugger.go  # Debug and fix issues
 │   ├── reviewer.go  # Code review
-│   └── triager.go   # Diagnose issues without fixing
+│   ├── triager.go   # Diagnose issues without fixing
+│   ├── writer.go    # Expand dictation into blog posts
+│   ├── editor.go    # Review and refine blog content
+│   └── blog_orchestrator.go  # Multi-phase complex blog generation
 │
-├── tools/           # 7 tools that agents use (MCP protocol)
+├── tools/           # Tools that agents use (MCP protocol)
 │   ├── file.go      # Read/write entire files
 │   ├── codeedit.go  # Precise line-based editing (edit/insert/delete)
 │   ├── search.go    # Search code (grep, find files, find definitions)
 │   ├── navigate.go  # Navigate code structure (list dirs, outlines, imports)
 │   ├── git.go       # Git operations
 │   ├── bash.go      # Safe shell commands (with allow/deny lists)
-│   └── test.go      # Run tests (Go, npm, Python)
+│   ├── test.go      # Run tests (Go, npm, Python)
+│   ├── rss.go       # RSS/Atom feed parsing for blog research
+│   └── static_links.go  # Static links from config for newsletters
 │
 ├── llm/             # LLM backend abstraction
 │   ├── interface.go # Backend interface
@@ -208,12 +213,26 @@ type Tool interface {
 
 Each agent has specialized prompts but shares the same BaseAgent + InferenceExecutor:
 
+**Code Agents** (use 7 code tools):
 - **Builder** (`pkg/agents/builder.go`) - Build new features from descriptions
 - **Debugger** (`pkg/agents/debugger.go`) - Debug and fix issues (accepts symptoms, logs)
 - **Reviewer** (`pkg/agents/reviewer.go`) - Code review on branches/PRs
 - **Triager** (`pkg/agents/triager.go`) - Diagnose without fixing
 
-All agents use the same 7 tools but with different system prompts.
+**Blog Agents** (use research tools):
+- **Writer** (`pkg/agents/writer.go`) - Expand dictation into blog posts
+- **Editor** (`pkg/agents/editor.go`) - Review and refine blog content
+- **BlogOrchestrator** (`pkg/agents/blog_orchestrator.go`) - Multi-phase complex blog generation
+
+The BlogOrchestrator handles complex prompts through a 6-phase pipeline:
+1. Analyze prompt (identify topics, sections, research needs)
+2. Execute research (calendar, RSS, static links)
+3. Generate outline
+4. Expand sections independently (handles large content)
+5. Assemble final post with newsletter
+6. Generate social media posts
+
+See `docs/blog-orchestrator.md` for full documentation.
 
 ### 6. Configuration (.pedroceli.json)
 
@@ -237,6 +256,25 @@ Config structure in `pkg/config/config.go`:
   "tools": {
     "allowed_bash_commands": ["go", "git", "ls", ...],
     "forbidden_commands": ["rm", "sudo", ...]
+  },
+  "blog": {
+    "enabled": true,
+    "rss_feed_url": "https://soypetetech.substack.com/feed",
+    "research": {
+      "enabled": true,
+      "calendar_enabled": true,
+      "rss_enabled": true,
+      "max_rss_posts": 5,
+      "max_calendar_days": 30
+    },
+    "static_links": {
+      "discord": "https://discord.gg/soypete",
+      "linktree": "https://linktr.ee/soypete_tech",
+      "youtube": "https://youtube.com/@soypete",
+      "twitter": "https://twitter.com/soypete",
+      "newsletter": "https://soypetetech.substack.com",
+      "youtube_placeholder": "Latest Video: [ADD LINK]"
+    }
   }
 }
 ```
