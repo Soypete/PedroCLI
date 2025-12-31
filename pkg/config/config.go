@@ -304,6 +304,39 @@ type BlogConfig struct {
 	PaywallDays       int    `json:"paywall_days"`        // Days before removing paywall (default: 7)
 	WhisperURL        string `json:"whisper_url"`         // Whisper server URL for transcription (e.g., "http://localhost:8081")
 	WhisperModel      string `json:"whisper_model"`       // Whisper model name (e.g., "base.en", "medium.en")
+	// Research tools configuration
+	RSSFeedURL  string             `json:"rss_feed_url,omitempty"` // RSS feed URL for previous blog posts
+	Research    BlogResearchConfig `json:"research,omitempty"`     // Research tools settings
+	StaticLinks BlogStaticLinks    `json:"static_links,omitempty"` // Static links for newsletter
+}
+
+// BlogResearchConfig contains settings for blog research tools
+type BlogResearchConfig struct {
+	Enabled         bool `json:"enabled"`                     // Enable research tools
+	CalendarEnabled bool `json:"calendar_enabled"`            // Enable Google Calendar integration
+	RSSEnabled      bool `json:"rss_enabled"`                 // Enable RSS feed parsing
+	MaxRSSPosts     int  `json:"max_rss_posts,omitempty"`     // Max RSS posts to fetch (default: 5)
+	MaxCalendarDays int  `json:"max_calendar_days,omitempty"` // Max days ahead for calendar (default: 30)
+}
+
+// BlogStaticLinks contains static links for newsletter sections
+type BlogStaticLinks struct {
+	Discord            string       `json:"discord,omitempty"`
+	LinkTree           string       `json:"linktree,omitempty"`
+	YouTube            string       `json:"youtube,omitempty"`
+	Twitter            string       `json:"twitter,omitempty"`
+	Bluesky            string       `json:"bluesky,omitempty"`
+	LinkedIn           string       `json:"linkedin,omitempty"`
+	Newsletter         string       `json:"newsletter,omitempty"`
+	YouTubePlaceholder string       `json:"youtube_placeholder,omitempty"` // Placeholder for latest video link
+	CustomLinks        []CustomLink `json:"custom_links,omitempty"`
+}
+
+// CustomLink defines a custom link for newsletter sections
+type CustomLink struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+	Icon string `json:"icon,omitempty"` // emoji or icon name
 }
 
 // DatabaseConfig contains database configuration
@@ -556,6 +589,16 @@ func (c *Config) setDefaults() {
 	}
 	if c.Blog.PaywallDays == 0 {
 		c.Blog.PaywallDays = 7 // Default 7-day paywall
+	}
+	// Blog research defaults
+	if c.Blog.Research.MaxRSSPosts == 0 {
+		c.Blog.Research.MaxRSSPosts = 5 // Default 5 RSS posts
+	}
+	if c.Blog.Research.MaxCalendarDays == 0 {
+		c.Blog.Research.MaxCalendarDays = 30 // Default 30 days ahead
+	}
+	if c.Blog.StaticLinks.YouTubePlaceholder == "" {
+		c.Blog.StaticLinks.YouTubePlaceholder = "🎥 **Latest Video**: [ADD LINK BEFORE SUBSTACK PUBLISH]"
 	}
 
 	// Database defaults

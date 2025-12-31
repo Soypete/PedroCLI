@@ -1,4 +1,4 @@
-.PHONY: build build-mac build-linux build-all test test-coverage test-coverage-report install clean run-server run-cli run-http build-http build-calendar fmt lint tidy migrate-up migrate-down migrate-status migrate-reset migrate-redo db-reset db-fresh
+.PHONY: build build-mac build-linux build-all test test-coverage test-coverage-report install clean run-server run-cli run-http serve build-http build-calendar fmt lint tidy migrate-up migrate-down migrate-status migrate-reset migrate-redo db-reset db-fresh
 
 # Default build for current platform (CLI, server, HTTP server, and calendar MCP server)
 build:
@@ -59,17 +59,21 @@ install:
 clean:
 	rm -f pedrocli pedrocli-* coverage.out coverage.html
 
-# Run MCP server
+# Run MCP server (with secrets from 1Password)
 run-server:
-	go run cmd/mcp-server/main.go
+	op run --env-file=.env -- go run cmd/mcp-server/main.go
 
-# Run CLI
+# Run CLI (with secrets from 1Password)
 run-cli:
-	go run cmd/pedrocli/main.go
+	op run --env-file=.env -- go run cmd/pedrocli/main.go
 
-# Run HTTP server
+# Run HTTP server (with secrets from 1Password)
 run-http:
-	go run cmd/http-server/main.go
+	op run --env-file=.env -- go run cmd/http-server/main.go
+
+# Run HTTP server from built binary (with secrets from 1Password)
+serve:
+	op run --env-file=.env -- ./pedrocli-http-server
 
 # Format code
 fmt:

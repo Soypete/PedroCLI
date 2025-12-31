@@ -81,10 +81,16 @@ func (t *BlogNotionTool) Execute(ctx context.Context, args map[string]interface{
 		return &Result{Success: false, Error: fmt.Sprintf("failed to create Notion page: %v", err)}, nil
 	}
 
+	notionURL := fmt.Sprintf("https://www.notion.so/%s", strings.ReplaceAll(pageID, "-", ""))
+
 	return &Result{
 		Success: true,
-		Output: fmt.Sprintf("Blog draft created successfully!\n\nTitle: %s\nNotion Page: https://www.notion.so/%s\nStatus: Not Started\n\nSuggested Titles: %v\nTags: %v\nRead Time: %s\n\nThe post has been added to your blog drafts with AI suggestions.",
-			title, strings.ReplaceAll(pageID, "-", ""), suggestedTitles, substackTags, readTime),
+		Output: fmt.Sprintf("Blog draft created successfully!\n\nTitle: %s\nNotion Page: %s\nStatus: Not Started\n\nSuggested Titles: %v\nTags: %v\nRead Time: %s\n\nThe post has been added to your blog drafts with AI suggestions.",
+			title, notionURL, suggestedTitles, substackTags, readTime),
+		Data: map[string]interface{}{
+			"page_id":    pageID,
+			"notion_url": notionURL,
+		},
 	}, nil
 }
 
