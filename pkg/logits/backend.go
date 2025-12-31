@@ -85,10 +85,10 @@ type TimingInfo struct {
 
 // LlamaHTTPBackend implements LlamaBackend using llama-server's HTTP API.
 type LlamaHTTPBackend struct {
-	baseURL    string
-	client     *http.Client
-	tokenizer  Tokenizer
-	vocabPath  string
+	baseURL   string
+	client    *http.Client
+	tokenizer Tokenizer
+	vocabPath string
 }
 
 // NewLlamaHTTPBackend creates a new HTTP backend for llama-server.

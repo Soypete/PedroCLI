@@ -105,16 +105,16 @@ type LogitTestResult struct {
 
 // TestSummary contains aggregated test statistics.
 type TestSummary struct {
-	TotalIterations   int           `json:"total_iterations"`
-	SuccessRate       float64       `json:"success_rate"`
-	FormatPassRate    float64       `json:"format_pass_rate"`
-	JSONPassRate      float64       `json:"json_pass_rate"`
-	ContentPassRate   float64       `json:"content_pass_rate"`
-	AvgLatency        time.Duration `json:"avg_latency"`
-	MinLatency        time.Duration `json:"min_latency"`
-	MaxLatency        time.Duration `json:"max_latency"`
-	AvgTokens         float64       `json:"avg_tokens"`
-	ErrorCount        int           `json:"error_count"`
+	TotalIterations int           `json:"total_iterations"`
+	SuccessRate     float64       `json:"success_rate"`
+	FormatPassRate  float64       `json:"format_pass_rate"`
+	JSONPassRate    float64       `json:"json_pass_rate"`
+	ContentPassRate float64       `json:"content_pass_rate"`
+	AvgLatency      time.Duration `json:"avg_latency"`
+	MinLatency      time.Duration `json:"min_latency"`
+	MaxLatency      time.Duration `json:"max_latency"`
+	AvgTokens       float64       `json:"avg_tokens"`
+	ErrorCount      int           `json:"error_count"`
 }
 
 // LogitTestHarness runs logit configuration tests.
@@ -197,11 +197,11 @@ func (h *LogitTestHarness) RunTestsParallel(ctx context.Context, concurrency int
 // runTestCase runs a single test case.
 func (h *LogitTestHarness) runTestCase(ctx context.Context, tc *LogitTestCase) *LogitTestResult {
 	result := &LogitTestResult{
-		Case:       tc,
-		Outputs:    make([]string, 0),
-		Latencies:  make([]time.Duration, 0),
+		Case:        tc,
+		Outputs:     make([]string, 0),
+		Latencies:   make([]time.Duration, 0),
 		TokenCounts: make([]int, 0),
-		Errors:     make([]string, 0),
+		Errors:      make([]string, 0),
 	}
 
 	iterations := tc.Iterations
@@ -475,29 +475,29 @@ func (h *LogitTestHarness) LoadTestCasesFromJSON(data []byte) error {
 // StandardTestCases returns a set of standard test cases for validating logit control.
 var StandardTestCases = []*LogitTestCase{
 	{
-		Name:        "json_object_basic",
-		Description: "Generate a simple JSON object",
-		Prompt:      "Generate a JSON object with fields 'name' (string) and 'age' (number)",
-		PresetName:  "json_strict",
-		ExpectedJSON: true,
+		Name:           "json_object_basic",
+		Description:    "Generate a simple JSON object",
+		Prompt:         "Generate a JSON object with fields 'name' (string) and 'age' (number)",
+		PresetName:     "json_strict",
+		ExpectedJSON:   true,
 		ExpectedFormat: `^\s*\{.*\}\s*$`,
-		Iterations:  5,
+		Iterations:     5,
 	},
 	{
-		Name:        "tool_call_format",
-		Description: "Generate a properly formatted tool call",
-		Prompt:      "Call the 'read_file' tool with path '/etc/hosts'",
-		PresetName:  "tool_call",
-		ExpectedJSON: true,
+		Name:           "tool_call_format",
+		Description:    "Generate a properly formatted tool call",
+		Prompt:         "Call the 'read_file' tool with path '/etc/hosts'",
+		PresetName:     "tool_call",
+		ExpectedJSON:   true,
 		ExpectedFormat: `"name"\s*:\s*"read_file"`,
-		Iterations:  5,
+		Iterations:     5,
 	},
 	{
-		Name:        "deterministic_output",
-		Description: "Verify deterministic generation produces consistent output",
-		Prompt:      "Say exactly: Hello World",
-		PresetName:  "deterministic",
-		Iterations:  3,
+		Name:            "deterministic_output",
+		Description:     "Verify deterministic generation produces consistent output",
+		Prompt:          "Say exactly: Hello World",
+		PresetName:      "deterministic",
+		Iterations:      3,
 		RequiredContent: []string{"hello", "world"},
 	},
 	{

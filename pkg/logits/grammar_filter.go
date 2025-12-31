@@ -15,9 +15,9 @@ import (
 type GrammarFilter struct {
 	StatefulFilter
 
-	grammar      *GBNF
-	state        *GrammarState
-	tokenizer    Tokenizer
+	grammar   *GBNF
+	state     *GrammarState
+	tokenizer Tokenizer
 
 	// validTokenCache caches valid tokens for each grammar state
 	// Key is a state fingerprint, value is set of valid token IDs

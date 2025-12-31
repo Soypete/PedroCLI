@@ -23,13 +23,13 @@ type LlamaCppClient struct {
 	threads      int
 
 	// Logit control options (applied via CLI flags)
-	grammar           string  // GBNF grammar string for constrained generation
-	grammarFile       string  // Path to grammar file (alternative to inline)
-	repeatPenalty     float64 // Repetition penalty (default 1.1)
-	repeatLastN       int     // How many tokens to check for repetition
-	topK              int     // Top-K sampling
-	topP              float64 // Top-P (nucleus) sampling
-	minP              float64 // Min-P sampling
+	grammar       string  // GBNF grammar string for constrained generation
+	grammarFile   string  // Path to grammar file (alternative to inline)
+	repeatPenalty float64 // Repetition penalty (default 1.1)
+	repeatLastN   int     // How many tokens to check for repetition
+	topK          int     // Top-K sampling
+	topP          float64 // Top-P (nucleus) sampling
+	minP          float64 // Min-P sampling
 }
 
 // NewLlamaCppClient creates a new llama.cpp client

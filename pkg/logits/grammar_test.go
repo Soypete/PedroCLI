@@ -264,7 +264,7 @@ func TestGBNFString(t *testing.T) {
 	// The String() method should return the original grammar
 	str := g.String()
 	if str != grammar {
-		// Original is preserved
+		t.Errorf("String() returned different grammar:\ngot:  %q\nwant: %q", str, grammar)
 	}
 }
 

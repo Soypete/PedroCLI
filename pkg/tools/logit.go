@@ -143,9 +143,9 @@ func (t *LogitTool) generate(ctx context.Context, args map[string]interface{}) (
 	}
 
 	output := map[string]interface{}{
-		"text":         resp.Text,
-		"token_count":  resp.TokenCount,
-		"stop_reason":  resp.StopReason,
+		"text":        resp.Text,
+		"token_count": resp.TokenCount,
+		"stop_reason": resp.StopReason,
 	}
 
 	outputJSON, _ := json.MarshalIndent(output, "", "  ")

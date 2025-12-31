@@ -49,9 +49,9 @@ func (l GBNFLiteral) String() string {
 
 // GBNFCharClass is a character class like [a-z] or [^"].
 type GBNFCharClass struct {
-	Chars    string
-	Negated  bool
-	Ranges   [][2]rune // Start-end pairs for ranges
+	Chars   string
+	Negated bool
+	Ranges  [][2]rune // Start-end pairs for ranges
 }
 
 func (GBNFCharClass) isGBNFElement() {}

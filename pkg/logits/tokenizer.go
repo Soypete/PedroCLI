@@ -40,11 +40,11 @@ type Tokenizer interface {
 // VocabTokenizer is a simple vocabulary-based tokenizer.
 // It loads vocabulary from a file and provides basic tokenization.
 type VocabTokenizer struct {
-	vocab        []string
-	tokenToID    map[string]int
-	specialIDs   map[int]bool
-	eosTokenID   int
-	bosTokenID   int
+	vocab      []string
+	tokenToID  map[string]int
+	specialIDs map[int]bool
+	eosTokenID int
+	bosTokenID int
 }
 
 // NewVocabTokenizer creates a tokenizer with the given vocabulary.

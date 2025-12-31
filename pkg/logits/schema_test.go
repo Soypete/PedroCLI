@@ -175,7 +175,7 @@ func TestSchemaToGBNFNested(t *testing.T) {
 			"user": {
 				Type: "object",
 				Properties: map[string]*JSONSchema{
-					"name": {Type: "string"},
+					"name":  {Type: "string"},
 					"email": {Type: "string"},
 				},
 			},

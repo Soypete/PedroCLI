@@ -211,7 +211,7 @@ func TestRegisterPreset(t *testing.T) {
 
 	got := GetPreset("test_preset")
 	if got == nil {
-		t.Error("expected registered preset")
+		t.Fatal("expected registered preset")
 	}
 	if got.Description != "Test preset" {
 		t.Errorf("unexpected description: %q", got.Description)
@@ -286,7 +286,7 @@ func TestPresetBuilderBuildAndRegister(t *testing.T) {
 
 	got := GetPreset("builder_test")
 	if got == nil {
-		t.Error("expected registered preset")
+		t.Fatal("expected registered preset")
 	}
 	// GetPreset returns a clone, so check by name instead
 	if got.Name != preset.Name {

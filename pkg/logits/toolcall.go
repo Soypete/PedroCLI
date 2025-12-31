@@ -87,13 +87,13 @@ const (
 type ToolCallFilter struct {
 	StatefulFilter
 
-	tools           map[string]*ToolDefinition
-	tokenizer       Tokenizer
+	tools     map[string]*ToolDefinition
+	tokenizer Tokenizer
 
 	// State tracking
-	parseState      ToolParseState
-	currentTool     *ToolDefinition
-	generatedText   string
+	parseState    ToolParseState
+	currentTool   *ToolDefinition
+	generatedText string
 
 	// Grammar filter for current tool's args
 	argsGrammarFilter *GrammarFilter

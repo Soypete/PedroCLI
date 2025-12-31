@@ -104,15 +104,15 @@ func SchemaToGBNF(schema *JSONSchema) (string, error) {
 }
 
 type schemaConverter struct {
-	rules       map[string]string
-	ruleCount   int
-	defs        map[string]*JSONSchema
-	needsWS     bool
-	needsString bool
-	needsNumber bool
+	rules        map[string]string
+	ruleCount    int
+	defs         map[string]*JSONSchema
+	needsWS      bool
+	needsString  bool
+	needsNumber  bool
 	needsInteger bool
 	needsBoolean bool
-	needsNull   bool
+	needsNull    bool
 }
 
 func (c *schemaConverter) newRuleName(prefix string) string {

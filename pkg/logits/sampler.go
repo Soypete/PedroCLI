@@ -143,15 +143,15 @@ func (c *SamplerConfig) ToJSON() ([]byte, error) {
 // ToLlamaServerParams converts to llama-server compatible parameters.
 func (c *SamplerConfig) ToLlamaServerParams() map[string]interface{} {
 	params := map[string]interface{}{
-		"temperature":        c.Temperature,
-		"top_k":              c.TopK,
-		"top_p":              c.TopP,
-		"min_p":              c.MinP,
-		"repeat_penalty":     c.RepetitionPenalty,
-		"repeat_last_n":      c.RepetitionWindow,
-		"frequency_penalty":  c.FrequencyPenalty,
-		"presence_penalty":   c.PresencePenalty,
-		"n_predict":          c.MaxTokens,
+		"temperature":       c.Temperature,
+		"top_k":             c.TopK,
+		"top_p":             c.TopP,
+		"min_p":             c.MinP,
+		"repeat_penalty":    c.RepetitionPenalty,
+		"repeat_last_n":     c.RepetitionWindow,
+		"frequency_penalty": c.FrequencyPenalty,
+		"presence_penalty":  c.PresencePenalty,
+		"n_predict":         c.MaxTokens,
 	}
 
 	if c.Mirostat > 0 {
@@ -318,9 +318,9 @@ var Presets = map[string]*GenerationPreset{
 	},
 
 	"safe_chat": {
-		Name:        "safe_chat",
-		Description: "Chat responses with safety filtering",
-		Config:      ChatConfig.Clone(),
+		Name:         "safe_chat",
+		Description:  "Chat responses with safety filtering",
+		Config:       ChatConfig.Clone(),
 		SafetyPreset: "standard",
 		FilterConfigs: []FilterConfig{
 			{Type: "safety", Enabled: true, Options: map[string]interface{}{
@@ -330,9 +330,9 @@ var Presets = map[string]*GenerationPreset{
 	},
 
 	"code_generation": {
-		Name:        "code_generation",
-		Description: "Code generation with injection protection",
-		Config:      CodeGenerationConfig.Clone(),
+		Name:         "code_generation",
+		Description:  "Code generation with injection protection",
+		Config:       CodeGenerationConfig.Clone(),
 		SafetyPreset: "minimal",
 		FilterConfigs: []FilterConfig{
 			{Type: "safety", Enabled: true, Options: map[string]interface{}{

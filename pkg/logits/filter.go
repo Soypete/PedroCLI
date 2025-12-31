@@ -111,9 +111,9 @@ func (f *StatefulFilter) SetEnabled(enabled bool) {
 // TokenBanFilter is a simple filter that bans specific tokens.
 type TokenBanFilter struct {
 	StatefulFilter
-	name          string
-	description   string
-	bannedTokens  map[int]bool
+	name         string
+	description  string
+	bannedTokens map[int]bool
 }
 
 // NewTokenBanFilter creates a filter that bans the specified token IDs.
