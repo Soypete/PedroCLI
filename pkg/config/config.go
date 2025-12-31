@@ -30,6 +30,8 @@ type Config struct {
 	Podcast PodcastConfig `json:"podcast,omitempty"`
 	// OAuth configuration for external services
 	OAuth OAuthConfig `json:"oauth,omitempty"`
+	// Web scraping configuration
+	WebScraping WebScrapingConfig `json:"web_scraping,omitempty"`
 }
 
 // ModelConfig contains model configuration
@@ -254,6 +256,36 @@ type GoogleOAuthConfig struct {
 	RedirectURI string `json:"redirect_uri,omitempty"`
 }
 
+// WebScrapingConfig contains web scraping configuration
+type WebScrapingConfig struct {
+	Enabled bool `json:"enabled"`
+	// HTTP client settings
+	UserAgent      string `json:"user_agent,omitempty"`
+	TimeoutSeconds int    `json:"timeout_seconds,omitempty"`
+	MaxSizeMB      int    `json:"max_size_mb,omitempty"`
+	// Rate limiting (requests per second per domain)
+	RateLimits map[string]float64 `json:"rate_limits,omitempty"`
+	// Caching
+	CacheEnabled   bool   `json:"cache_enabled"`
+	CacheType      string `json:"cache_type,omitempty"` // "sqlite", "memory"
+	CachePath      string `json:"cache_path,omitempty"`
+	CacheTTLHours  int    `json:"cache_ttl_hours,omitempty"`
+	CacheMaxSizeMB int64  `json:"cache_max_size_mb,omitempty"`
+	// API tokens (optional, for higher rate limits)
+	// These can also be set via environment variables:
+	// GITHUB_TOKEN, GITLAB_TOKEN, SO_API_KEY
+	GitHubToken      string `json:"github_token,omitempty"`
+	GitLabToken      string `json:"gitlab_token,omitempty"`
+	StackOverflowKey string `json:"stackoverflow_key,omitempty"`
+	GoogleSearchKey  string `json:"google_search_key,omitempty"`
+	GoogleSearchCX   string `json:"google_search_cx,omitempty"`
+	// Search engine preference
+	SearchEngine string `json:"search_engine,omitempty"` // "duckduckgo", "google", "searxng"
+	SearXNGURL   string `json:"searxng_url,omitempty"`   // For self-hosted SearXNG
+	// GitLab instance URL (for self-hosted)
+	GitLabURL string `json:"gitlab_url,omitempty"`
+}
+
 // GetModelConfig returns the model configuration for a given profile name.
 // If the profile is empty or not found, returns the default Model config.
 func (c *Config) GetModelConfig(profile string) ModelConfig {
@@ -457,6 +489,32 @@ func (c *Config) setDefaults() {
 	if c.Podcast.Calendar.Command == "" {
 		// Use our built-in calendar MCP server
 		c.Podcast.Calendar.Command = "./pedrocli-calendar-mcp"
+	}
+
+	// Web scraping defaults
+	if c.WebScraping.UserAgent == "" {
+		c.WebScraping.UserAgent = "PedroCLI/1.0 (Web Scraping Tool)"
+	}
+	if c.WebScraping.TimeoutSeconds == 0 {
+		c.WebScraping.TimeoutSeconds = 30
+	}
+	if c.WebScraping.MaxSizeMB == 0 {
+		c.WebScraping.MaxSizeMB = 10
+	}
+	if c.WebScraping.CacheType == "" {
+		c.WebScraping.CacheType = "memory"
+	}
+	if c.WebScraping.CacheTTLHours == 0 {
+		c.WebScraping.CacheTTLHours = 1
+	}
+	if c.WebScraping.CacheMaxSizeMB == 0 {
+		c.WebScraping.CacheMaxSizeMB = 100
+	}
+	if c.WebScraping.SearchEngine == "" {
+		c.WebScraping.SearchEngine = "duckduckgo"
+	}
+	if c.WebScraping.GitLabURL == "" {
+		c.WebScraping.GitLabURL = "https://gitlab.com"
 	}
 }
 
