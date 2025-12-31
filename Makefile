@@ -1,4 +1,4 @@
-.PHONY: build build-mac build-linux build-all test test-coverage test-coverage-report install clean run-server run-cli run-http build-http build-calendar fmt lint tidy
+.PHONY: build build-mac build-linux build-all test test-coverage test-coverage-report install clean run-server run-cli run-http build-http build-calendar fmt lint tidy migrate-up migrate-down migrate-status migrate-reset migrate-redo db-reset db-fresh
 
 # Default build for current platform (CLI, server, HTTP server, and calendar MCP server)
 build:
@@ -82,3 +82,29 @@ lint:
 # Tidy dependencies
 tidy:
 	go mod tidy
+
+# Database migrations
+migrate-up:
+	go run cmd/pedrocli/main.go migrate up
+
+migrate-down:
+	go run cmd/pedrocli/main.go migrate down
+
+migrate-status:
+	go run cmd/pedrocli/main.go migrate status
+
+migrate-reset:
+	go run cmd/pedrocli/main.go migrate reset
+
+migrate-redo:
+	go run cmd/pedrocli/main.go migrate redo
+
+# Development database reset
+db-reset: migrate-reset migrate-up
+	@echo "Database reset complete"
+
+# Fresh database (delete and recreate)
+db-fresh:
+	rm -f /var/pedro/repos/pedro.db
+	go run cmd/pedrocli/main.go migrate up
+	@echo "Fresh database created"
