@@ -35,6 +35,8 @@ type Config struct {
 	// Blog writing tools configuration
 	Blog     BlogConfig     `json:"blog"`
 	Database DatabaseConfig `json:"database"`
+	// Vision and image generation configuration
+	Vision VisionConfig `json:"vision"`
 }
 
 // ModelConfig contains model configuration
@@ -378,6 +380,57 @@ func (c *Config) GetPodcastModelConfig() ModelConfig {
 	return c.Model
 }
 
+// VisionConfig contains vision and image generation settings
+type VisionConfig struct {
+	Enabled         bool                      `json:"enabled"`
+	StoragePath     string                    `json:"storage_path"`
+	ImagesPath      string                    `json:"images_path"` // Path to reference images folder (logos, etc.)
+	Models          VisionModelsConfig        `json:"models"`
+	ComfyUI         ComfyUIConfig             `json:"comfyui"`
+	PromptTemplates map[string]PromptTemplate `json:"prompt_templates,omitempty"`
+}
+
+// VisionModelsConfig contains vision model configurations
+type VisionModelsConfig struct {
+	Vision      VisionModelDef `json:"vision"`       // Default vision model
+	VisionLarge VisionModelDef `json:"vision_large"` // Large vision model for complex tasks
+	Generation  VisionModelDef `json:"generation"`   // Image generation model
+}
+
+// VisionModelDef defines a vision or generation model
+type VisionModelDef struct {
+	Backend        string `json:"backend"`          // "llamacpp", "ollama", or "comfyui"
+	Model          string `json:"model"`            // Model name or path
+	MMProj         string `json:"mmproj,omitempty"` // Multimodal projector path (for vision)
+	HardwareTarget string `json:"target"`           // "rtx5090", "mac64", etc.
+	ContextSize    int    `json:"context_size,omitempty"`
+	NGPULayers     int    `json:"n_gpu_layers,omitempty"`
+}
+
+// ComfyUIConfig contains ComfyUI settings
+type ComfyUIConfig struct {
+	Enabled     bool   `json:"enabled"`
+	URL         string `json:"url"`
+	WorkflowDir string `json:"workflow_dir"`
+	Timeout     int    `json:"timeout_seconds"`
+}
+
+// PromptTemplate defines an image generation prompt template
+type PromptTemplate struct {
+	Name                string   `json:"name"`
+	Category            string   `json:"category"`
+	BasePrompt          string   `json:"base_prompt"`
+	StyleModifiers      []string `json:"style_modifiers,omitempty"`
+	NegativePrompt      string   `json:"negative_prompt,omitempty"`
+	RecommendedModel    string   `json:"recommended_model,omitempty"`
+	AspectRatio         string   `json:"aspect_ratio"`
+	Width               int      `json:"width"`
+	Height              int      `json:"height"`
+	Steps               int      `json:"steps,omitempty"`
+	CFGScale            float64  `json:"cfg_scale,omitempty"`
+	AltTextInstructions string   `json:"alt_text_instructions,omitempty"`
+}
+
 // Load loads configuration from a file
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
@@ -616,6 +669,26 @@ func (c *Config) setDefaults() {
 	}
 	if c.Database.SSLMode == "" {
 		c.Database.SSLMode = "disable" // TODO: Enable SSL for production
+	}
+
+	// Vision defaults
+	if c.Vision.StoragePath == "" {
+		c.Vision.StoragePath = "./storage"
+	}
+	if c.Vision.ImagesPath == "" {
+		c.Vision.ImagesPath = "./images" // Default reference images folder
+	}
+	if c.Vision.ComfyUI.URL == "" {
+		c.Vision.ComfyUI.URL = "http://localhost:8188"
+	}
+	if c.Vision.ComfyUI.WorkflowDir == "" {
+		c.Vision.ComfyUI.WorkflowDir = "./comfyui/workflows"
+	}
+	if c.Vision.ComfyUI.Timeout == 0 {
+		c.Vision.ComfyUI.Timeout = 300
+	}
+	if c.Vision.PromptTemplates == nil {
+		c.Vision.PromptTemplates = make(map[string]PromptTemplate)
 	}
 }
 
