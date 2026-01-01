@@ -5,6 +5,7 @@ import (
 	"github.com/soypete/pedrocli/pkg/jobs"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/prompts"
+	"github.com/soypete/pedrocli/pkg/tools"
 )
 
 // CodingBaseAgent provides common functionality for coding agents
@@ -22,8 +23,49 @@ func NewCodingBaseAgent(name, description string, cfg *config.Config, backend ll
 	}
 }
 
+// NewCodingBaseAgentWithRegistry creates a new coding base agent with a tool registry
+func NewCodingBaseAgentWithRegistry(name, description string, cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager, registry *tools.ToolRegistry) *CodingBaseAgent {
+	base := NewBaseAgentWithRegistry(name, description, cfg, backend, jobMgr, registry)
+	return &CodingBaseAgent{
+		BaseAgent: base,
+		promptMgr: prompts.NewManager(cfg),
+	}
+}
+
 // buildCodingSystemPrompt builds the system prompt for coding agents
 func (a *CodingBaseAgent) buildCodingSystemPrompt() string {
+	// Use dynamic tool prompt if registry is available
+	if a.toolPromptGen != nil {
+		return a.buildDynamicCodingSystemPrompt()
+	}
+
+	// Fall back to static prompt for backward compatibility
+	return a.buildStaticCodingSystemPrompt()
+}
+
+// buildDynamicCodingSystemPrompt builds a system prompt with dynamically generated tool descriptions
+func (a *CodingBaseAgent) buildDynamicCodingSystemPrompt() string {
+	// Use the code_agent bundle for coding-specific tools
+	toolSection := a.toolPromptGen.GenerateForBundle("code_agent")
+	if toolSection == "" {
+		// Fall back to all registry tools if bundle not found or empty
+		toolSection = a.toolPromptGen.GenerateToolSection()
+	}
+
+	return a.promptMgr.GetCodingSystemPrompt() + `
+
+# Available Tools
+
+` + toolSection + `
+
+## Tool Call Format
+Use tools by providing JSON objects: {"tool": "tool_name", "args": {"key": "value"}}
+
+When you have completed all tasks successfully, respond with "TASK_COMPLETE".`
+}
+
+// buildStaticCodingSystemPrompt returns the legacy static system prompt
+func (a *CodingBaseAgent) buildStaticCodingSystemPrompt() string {
 	return a.promptMgr.GetCodingSystemPrompt() + `
 
 Available tools:
