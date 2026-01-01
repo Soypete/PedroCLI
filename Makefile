@@ -1,39 +1,34 @@
-.PHONY: build build-mac build-linux build-all test test-coverage test-coverage-report install clean run-server run-cli run-http serve build-http build-calendar fmt lint tidy migrate-up migrate-down migrate-status migrate-reset migrate-redo db-reset db-fresh
+.PHONY: build build-mac build-linux build-all test test-coverage test-coverage-report install clean run-cli run-http serve build-http build-calendar fmt lint tidy migrate-up migrate-down migrate-status migrate-reset migrate-redo db-reset db-fresh
 
-# Default build for current platform (CLI, server, HTTP server, and calendar MCP server)
+# Default build for current platform (CLI, HTTP server, and calendar MCP server)
 build:
-	go build -o pedrocli cmd/pedrocli/main.go
-	go build -o pedrocli-server cmd/mcp-server/main.go
-	go build -o pedrocli-http-server cmd/http-server/main.go
-	go build -o pedrocli-calendar-mcp cmd/calendar-mcp-server/main.go
+	go build -o pedrocli ./cmd/pedrocli
+	go build -o pedrocli-http-server ./cmd/http-server
+	go build -o pedrocli-calendar-mcp ./cmd/calendar-mcp-server
 
 # Build CLI only
 build-cli:
-	go build -o pedrocli cmd/pedrocli/main.go
+	go build -o pedrocli ./cmd/pedrocli
 
 # Build for macOS
 build-mac:
-	GOOS=darwin GOARCH=arm64 go build -o pedrocli-mac-arm64 cmd/pedrocli/main.go
-	GOOS=darwin GOARCH=amd64 go build -o pedrocli-mac-amd64 cmd/pedrocli/main.go
+	GOOS=darwin GOARCH=arm64 go build -o pedrocli-mac-arm64 ./cmd/pedrocli
+	GOOS=darwin GOARCH=amd64 go build -o pedrocli-mac-amd64 ./cmd/pedrocli
 
 # Build for Linux (Ubuntu on Spark)
 build-linux:
-	GOOS=linux GOARCH=amd64 go build -o pedrocli-linux-amd64 cmd/pedrocli/main.go
-
-# Build MCP server
-build-server:
-	go build -o pedrocli-server cmd/mcp-server/main.go
+	GOOS=linux GOARCH=amd64 go build -o pedrocli-linux-amd64 ./cmd/pedrocli
 
 # Build HTTP server
 build-http:
-	go build -o pedrocli-http-server cmd/http-server/main.go
+	go build -o pedrocli-http-server ./cmd/http-server
 
 # Build Calendar MCP server
 build-calendar:
-	go build -o pedrocli-calendar-mcp cmd/calendar-mcp-server/main.go
+	go build -o pedrocli-calendar-mcp ./cmd/calendar-mcp-server
 
 # Build for both platforms
-build-all: build-mac build-linux build-server build-calendar
+build-all: build-mac build-linux build-calendar
 
 # Run tests
 test:
@@ -52,16 +47,12 @@ test-coverage-report:
 
 # Install locally
 install:
-	go build -o pedrocli cmd/pedrocli/main.go
+	go build -o pedrocli ./cmd/pedrocli
 	sudo mv pedrocli /usr/local/bin/
 
 # Clean build artifacts
 clean:
 	rm -f pedrocli pedrocli-* coverage.out coverage.html
-
-# Run MCP server (with secrets from 1Password)
-run-server:
-	op run --env-file=.env -- go run cmd/mcp-server/main.go
 
 # Run CLI (with secrets from 1Password)
 run-cli:

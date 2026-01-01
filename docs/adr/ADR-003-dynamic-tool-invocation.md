@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Implemented (v0.3.0)
 
 ## Context
 

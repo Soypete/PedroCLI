@@ -6,22 +6,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 PedroCLI is a self-hosted autonomous coding agent system - an open-source alternative to Cursor's background jobs using your own LLMs. It runs autonomous agents powered by self-hosted models (via llama.cpp or Ollama) that can build features, debug issues, review code, and triage problems.
 
-**Key Concept**: This is a **two-binary system** - `pedrocli` (CLI client) communicates with `pedrocli-server` (MCP server) via JSON-RPC over stdio. The server manages agents, tools, and LLM backends.
+**Key Concept**: PedroCLI uses **direct agent execution** - agents run embedded in the CLI and HTTP server binaries with direct LLM backend integration. No subprocess spawning required.
 
 ## Build & Test Commands
 
 ### Build
 ```bash
-make build              # Build both CLI and server (current platform)
+make build              # Build CLI and HTTP server (current platform)
 make build-cli          # Build CLI only
-make build-server       # Build server only
+make build-http         # Build HTTP server only
 make build-mac          # Build for macOS (arm64 + amd64)
 make build-linux        # Build for Linux (amd64)
 ```
 
-The build produces two binaries:
+The build produces binaries:
 - `pedrocli` - CLI client (cmd/pedrocli/main.go)
-- `pedrocli-server` - MCP server (cmd/mcp-server/main.go)
+- `pedrocli-http-server` - HTTP server with web UI (cmd/http-server/main.go)
 
 ### Test
 ```bash
@@ -40,7 +40,7 @@ make tidy               # Tidy dependencies
 
 ### Running the Web UI
 ```bash
-# Start the HTTP server (includes MCP server)
+# Start the HTTP server
 ./pedrocli-http-server
 
 # Access at http://localhost:8080
@@ -71,20 +71,20 @@ The web UI supports voice-to-text using whisper.cpp. To enable:
 
 ## Core Architecture
 
-### Two-Binary System
+### Direct Agent Execution
 
-**CLI (`pedrocli`)** → JSON-RPC stdio → **MCP Server (`pedrocli-server`)**
+Both CLI and HTTP server embed agents directly - no subprocess communication needed.
 
 ```
 cmd/pedrocli/main.go          → User-facing commands (build, debug, review, triage)
                               → Loads .pedroceli.json config
-                              → Spawns pedrocli-server as subprocess
-                              → Communicates via JSON-RPC (stdio)
-
-cmd/mcp-server/main.go        → MCP server (Model Context Protocol)
-                              → Manages agents, tools, LLM backends
+                              → Creates LLM backend and agents directly
                               → Executes autonomous inference loops
-                              → Runs in subprocess, communicates via stdio
+
+cmd/http-server/main.go       → Web UI and API endpoints
+                              → Creates AppContext with shared dependencies
+                              → Agents execute jobs in background goroutines
+                              → Job manager tracks status and results
 ```
 
 ### Package Structure
@@ -98,11 +98,10 @@ pkg/
 │   ├── debugger.go  # Debug and fix issues
 │   ├── reviewer.go  # Code review
 │   ├── triager.go   # Diagnose issues without fixing
-│   ├── writer.go    # Expand dictation into blog posts
-│   ├── editor.go    # Review and refine blog content
-│   └── blog_orchestrator.go  # Multi-phase complex blog generation
+│   ├── blog_orchestrator.go  # Multi-phase rigid blog generation
+│   └── blog_dynamic.go       # Dynamic LLM-driven blog creation (ADR-003)
 │
-├── tools/           # Tools that agents use (MCP protocol)
+├── tools/           # Tools that agents use
 │   ├── file.go      # Read/write entire files
 │   ├── codeedit.go  # Precise line-based editing (edit/insert/delete)
 │   ├── search.go    # Search code (grep, find files, find definitions)
@@ -112,6 +111,17 @@ pkg/
 │   ├── test.go      # Run tests (Go, npm, Python)
 │   ├── rss.go       # RSS/Atom feed parsing for blog research
 │   └── static_links.go  # Static links from config for newsletters
+│
+├── toolformat/      # Model-specific tool call formatting (ADR-007)
+│   ├── formatter.go # ToolFormatter interface
+│   ├── generic.go   # Generic JSON format (default)
+│   ├── qwen.go      # Qwen 2.5 <tool_call> format
+│   ├── llama.go     # Llama 3.x <|python_tag|> format
+│   ├── mistral.go   # Mistral [TOOL_CALLS] format
+│   └── selector.go  # GetFormatter(modelName) selection
+│
+├── prompts/         # Dynamic prompt generation (ADR-002)
+│   └── tool_generator.go  # Generate tool sections from registry
 │
 ├── llm/             # LLM backend abstraction
 │   ├── interface.go # Backend interface
@@ -123,10 +133,11 @@ pkg/
 ├── llmcontext/      # File-based context management
 │   └── manager.go   # Manages /tmp/pedroceli-jobs/<job-id>/ files
 │
-├── mcp/             # Model Context Protocol implementation
-│   ├── server.go    # MCP server (JSON-RPC 2.0)
-│   ├── client.go    # MCP client
-│   └── agent_tool.go # Agent tool abstraction
+├── httpbridge/      # HTTP server and API
+│   ├── app.go       # AppContext with agent factories
+│   ├── server.go    # HTTP server setup
+│   ├── handlers.go  # API endpoint handlers
+│   └── sse.go       # Server-sent events for job updates
 │
 ├── config/          # Configuration management
 │   └── config.go    # Load/validate .pedroceli.json
@@ -296,7 +307,7 @@ make build
 # 2. Start Ollama (LLM backend)
 ollama serve                    # In separate terminal, or runs as service
 
-# 3. Start HTTP server with secrets (includes MCP server)
+# 3. Start HTTP server with secrets
 op run --env-file=.env -- ./pedrocli-http-server
 ```
 
@@ -437,15 +448,14 @@ The web UI also supports browser-based speech recognition (Chrome/Edge) as a fal
 
 1. Create `pkg/tools/newtool.go` implementing `tools.Tool` interface
 2. Add tests in `pkg/tools/newtool_test.go`
-3. Register in `cmd/mcp-server/main.go`: `server.RegisterTool(newTool)`
-4. Add to agent registration: `agent.RegisterTool(newTool)`
-5. Update system prompt in `pkg/agents/base.go` to describe new tool
+3. Register with agents in `pkg/httpbridge/app.go` or `cmd/pedrocli/setup.go`
+4. Tool descriptions are auto-generated from `ExtendedTool` metadata (ADR-002)
 
 ### Modifying Agent Behavior
 
-1. **Prompt changes**: Edit system prompts in `pkg/agents/*.go` (builder.go, debugger.go, etc.)
+1. **Prompt changes**: Edit system prompts in `pkg/agents/prompts/*.md`
 2. **Inference loop changes**: Modify `pkg/agents/executor.go` (careful - this is critical)
-3. **Tool selection**: Agents share tools; register/unregister in `cmd/mcp-server/main.go`
+3. **Tool selection**: Register tools with agents in factory methods (`NewBuilderAgent()`, etc.)
 
 ### Testing Changes
 
@@ -515,19 +525,10 @@ Better models (Qwen 2.5 Coder 32B+) = better results.
 1. **pkg/agents/executor.go** - The inference loop (most critical)
 2. **pkg/agents/base.go** - Agent foundation and system prompts
 3. **pkg/llmcontext/manager.go** - File-based context management
-4. **pkg/tools/*.go** - Tool implementations (all 7 tools)
-5. **pkg/mcp/server.go** - JSON-RPC server handling
-6. **cmd/pedrocli/main.go** - CLI entry point
-7. **cmd/mcp-server/main.go** - Server entry point and registration
-
-## MCP Protocol Notes
-
-The system uses Model Context Protocol (JSON-RPC 2.0) for CLI-server communication:
-
-- **stdio transport**: Server runs as subprocess, communicates via stdin/stdout
-- **Tool-based**: Agents use tools (like OpenAI function calling)
-- **Stateful**: Each job has persistent file-based state
-- See `pkg/mcp/` for implementation details
+4. **pkg/tools/*.go** - Tool implementations
+5. **pkg/toolformat/*.go** - Model-specific tool call parsing (Qwen, Llama, Mistral)
+6. **pkg/httpbridge/app.go** - Shared dependencies and agent factories
+7. **cmd/pedrocli/main.go** - CLI entry point
 
 ## Release & Distribution
 
