@@ -1,6 +1,6 @@
--- Migration: 003_vision_models_table
+-- +goose Up
+-- Migration: 008_vision_models_table
 -- Description: Create vision_models table for tracking model configurations
--- Created: 2025-01-01
 
 CREATE TABLE IF NOT EXISTS vision_models (
     id UUID PRIMARY KEY,
@@ -26,3 +26,6 @@ CREATE INDEX IF NOT EXISTS idx_vision_models_active ON vision_models(is_active);
 -- Comment: Model types:
 -- 'vision' - Image understanding models (Qwen2-VL, LLaVA, Llama 3.2 Vision)
 -- 'generation' - Image generation models (SDXL, Flux.1)
+
+-- +goose Down
+DROP TABLE IF EXISTS vision_models;

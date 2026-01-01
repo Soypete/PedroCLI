@@ -52,23 +52,23 @@ type Job struct {
 
 // JobInput represents common input fields for jobs.
 type JobInput struct {
-	Description     string   `json:"description,omitempty"`
-	Prompt          string   `json:"prompt,omitempty"`
-	ReferenceImages []string `json:"reference_images,omitempty"`
-	StylePreset     string   `json:"style_preset,omitempty"`
-	BlogPostID      string   `json:"blog_post_id,omitempty"`
-	Width           int      `json:"width,omitempty"`
-	Height          int      `json:"height,omitempty"`
-	Model           string   `json:"model,omitempty"`
+	Description     string                 `json:"description,omitempty"`
+	Prompt          string                 `json:"prompt,omitempty"`
+	ReferenceImages []string               `json:"reference_images,omitempty"`
+	StylePreset     string                 `json:"style_preset,omitempty"`
+	BlogPostID      string                 `json:"blog_post_id,omitempty"`
+	Width           int                    `json:"width,omitempty"`
+	Height          int                    `json:"height,omitempty"`
+	Model           string                 `json:"model,omitempty"`
 	ExtraParams     map[string]interface{} `json:"extra_params,omitempty"`
 }
 
 // JobOutput represents common output fields for jobs.
 type JobOutput struct {
-	GeneratedImages []string `json:"generated_images,omitempty"`
-	AltText         string   `json:"alt_text,omitempty"`
-	Analysis        string   `json:"analysis,omitempty"`
-	Prompt          string   `json:"prompt,omitempty"`
+	GeneratedImages []string               `json:"generated_images,omitempty"`
+	AltText         string                 `json:"alt_text,omitempty"`
+	Analysis        string                 `json:"analysis,omitempty"`
+	Prompt          string                 `json:"prompt,omitempty"`
 	Metadata        map[string]interface{} `json:"metadata,omitempty"`
 }
 

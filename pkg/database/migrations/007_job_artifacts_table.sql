@@ -1,6 +1,6 @@
--- Migration: 002_job_artifacts_table
+-- +goose Up
+-- Migration: 007_job_artifacts_table
 -- Description: Create job_artifacts table for storing job-related files
--- Created: 2025-01-01
 
 CREATE TABLE IF NOT EXISTS job_artifacts (
     id UUID PRIMARY KEY,
@@ -27,3 +27,6 @@ CREATE INDEX IF NOT EXISTS idx_job_artifacts_created_at ON job_artifacts(created
 -- 'alt_text' - Generated alt text for images
 -- 'workflow' - ComfyUI workflow JSON
 -- 'log' - Execution logs
+
+-- +goose Down
+DROP TABLE IF EXISTS job_artifacts;

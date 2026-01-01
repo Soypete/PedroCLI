@@ -382,12 +382,12 @@ func (c *Config) GetPodcastModelConfig() ModelConfig {
 
 // VisionConfig contains vision and image generation settings
 type VisionConfig struct {
-	Enabled         bool                        `json:"enabled"`
-	StoragePath     string                      `json:"storage_path"`
-	ImagesPath      string                      `json:"images_path"`       // Path to reference images folder (logos, etc.)
-	Models          VisionModelsConfig          `json:"models"`
-	ComfyUI         ComfyUIConfig               `json:"comfyui"`
-	PromptTemplates map[string]PromptTemplate   `json:"prompt_templates,omitempty"`
+	Enabled         bool                      `json:"enabled"`
+	StoragePath     string                    `json:"storage_path"`
+	ImagesPath      string                    `json:"images_path"` // Path to reference images folder (logos, etc.)
+	Models          VisionModelsConfig        `json:"models"`
+	ComfyUI         ComfyUIConfig             `json:"comfyui"`
+	PromptTemplates map[string]PromptTemplate `json:"prompt_templates,omitempty"`
 }
 
 // VisionModelsConfig contains vision model configurations

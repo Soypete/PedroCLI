@@ -28,24 +28,24 @@ type VisionModel struct {
 // VisionModelConfig configures the vision model.
 type VisionModelConfig struct {
 	// Model files
-	ModelPath  string `json:"model_path"`   // Path to the GGUF model file
-	MMProjPath string `json:"mmproj_path"`  // Path to the multimodal projector file
+	ModelPath  string `json:"model_path"`  // Path to the GGUF model file
+	MMProjPath string `json:"mmproj_path"` // Path to the multimodal projector file
 
 	// Server configuration
-	Backend        string `json:"backend"`          // "llamacpp" or "ollama"
-	ServerURL      string `json:"server_url"`       // For remote server or Ollama
-	LlamaCppPath   string `json:"llamacpp_path"`    // Path to llama.cpp directory
-	Port           int    `json:"port"`             // Server port (default: 8081)
+	Backend      string `json:"backend"`       // "llamacpp" or "ollama"
+	ServerURL    string `json:"server_url"`    // For remote server or Ollama
+	LlamaCppPath string `json:"llamacpp_path"` // Path to llama.cpp directory
+	Port         int    `json:"port"`          // Server port (default: 8081)
 
 	// Model parameters
-	ContextSize    int     `json:"context_size"`     // Context window size
-	NGPULayers     int     `json:"n_gpu_layers"`     // Number of layers to offload to GPU
-	Threads        int     `json:"threads"`          // Number of CPU threads
-	Temperature    float64 `json:"temperature"`      // Generation temperature
-	MaxTokens      int     `json:"max_tokens"`       // Maximum tokens to generate
+	ContextSize int     `json:"context_size"` // Context window size
+	NGPULayers  int     `json:"n_gpu_layers"` // Number of layers to offload to GPU
+	Threads     int     `json:"threads"`      // Number of CPU threads
+	Temperature float64 `json:"temperature"`  // Generation temperature
+	MaxTokens   int     `json:"max_tokens"`   // Maximum tokens to generate
 
 	// Hardware target
-	HardwareTarget string `json:"hardware_target"`  // "rtx5090", "mac64", etc.
+	HardwareTarget string `json:"hardware_target"` // "rtx5090", "mac64", etc.
 }
 
 // DefaultVisionModelConfig returns default configuration.
@@ -64,37 +64,37 @@ func DefaultVisionModelConfig() *VisionModelConfig {
 
 // VisionRequest represents a vision model request.
 type VisionRequest struct {
-	Images     []ImageInput `json:"images"`
-	Prompt     string       `json:"prompt"`
-	SystemPrompt string     `json:"system_prompt,omitempty"`
-	MaxTokens  int          `json:"max_tokens,omitempty"`
-	Temperature float64     `json:"temperature,omitempty"`
+	Images       []ImageInput `json:"images"`
+	Prompt       string       `json:"prompt"`
+	SystemPrompt string       `json:"system_prompt,omitempty"`
+	MaxTokens    int          `json:"max_tokens,omitempty"`
+	Temperature  float64      `json:"temperature,omitempty"`
 }
 
 // ImageInput represents an input image for vision models.
 type ImageInput struct {
-	Data     []byte `json:"-"`          // Raw image data
-	Base64   string `json:"base64"`     // Base64-encoded image
-	Path     string `json:"path"`       // Path to image file
-	URL      string `json:"url"`        // URL to image
-	MimeType string `json:"mime_type"`  // MIME type
+	Data     []byte `json:"-"`         // Raw image data
+	Base64   string `json:"base64"`    // Base64-encoded image
+	Path     string `json:"path"`      // Path to image file
+	URL      string `json:"url"`       // URL to image
+	MimeType string `json:"mime_type"` // MIME type
 }
 
 // VisionResponse represents a vision model response.
 type VisionResponse struct {
-	Text        string  `json:"text"`
-	TokensUsed  int     `json:"tokens_used"`
-	Duration    time.Duration `json:"duration"`
+	Text       string        `json:"text"`
+	TokensUsed int           `json:"tokens_used"`
+	Duration   time.Duration `json:"duration"`
 }
 
 // AnalysisResult represents the result of image analysis.
 type AnalysisResult struct {
-	Description string            `json:"description"`
-	Objects     []string          `json:"objects,omitempty"`
-	Colors      []string          `json:"colors,omitempty"`
-	Style       string            `json:"style,omitempty"`
-	Mood        string            `json:"mood,omitempty"`
-	Text        string            `json:"text,omitempty"` // OCR text if present
+	Description string                 `json:"description"`
+	Objects     []string               `json:"objects,omitempty"`
+	Colors      []string               `json:"colors,omitempty"`
+	Style       string                 `json:"style,omitempty"`
+	Mood        string                 `json:"mood,omitempty"`
+	Text        string                 `json:"text,omitempty"` // OCR text if present
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
@@ -207,8 +207,8 @@ func (vm *VisionModel) Stop() error {
 	defer vm.mu.Unlock()
 
 	if vm.serverCmd != nil && vm.serverCmd.Process != nil {
-		vm.serverCmd.Process.Kill()
-		vm.serverCmd.Wait()
+		_ = vm.serverCmd.Process.Kill()
+		_ = vm.serverCmd.Wait() // Error ignored: process was killed
 		vm.serverCmd = nil
 	}
 
@@ -307,9 +307,9 @@ func (vm *VisionModel) analyzeOllama(ctx context.Context, req *VisionRequest) (*
 	}
 
 	var result struct {
-		Response string `json:"response"`
-		Context  []int  `json:"context"`
-		EvalCount int   `json:"eval_count"`
+		Response  string `json:"response"`
+		Context   []int  `json:"context"`
+		EvalCount int    `json:"eval_count"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err

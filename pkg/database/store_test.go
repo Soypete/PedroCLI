@@ -29,8 +29,8 @@ func TestNewSQLiteStore(t *testing.T) {
 	}
 
 	// Should have version 5 (five migrations applied: initial_schema, oauth_tokens, blog_posts, training_pairs, newsletter_assets)
-	if version != 5 {
-		t.Errorf("expected migration version 5, got %d", version)
+	if version != 9 {
+		t.Errorf("expected migration version 9, got %d", version)
 	}
 }
 
@@ -66,8 +66,8 @@ func TestNewSQLiteStoreWithoutAutoMigration(t *testing.T) {
 		t.Fatalf("failed to get migration version: %v", err)
 	}
 
-	if version != 5 {
-		t.Errorf("expected migration version 5 after migration, got %d", version)
+	if version != 9 {
+		t.Errorf("expected migration version 9 after migration, got %d", version)
 	}
 }
 
@@ -86,8 +86,8 @@ func TestMigrationRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get migration version: %v", err)
 	}
-	if version != 5 {
-		t.Fatalf("expected version 5, got %d", version)
+	if version != 9 {
+		t.Fatalf("expected version 9, got %d", version)
 	}
 
 	// Rollback one migration
@@ -100,8 +100,8 @@ func TestMigrationRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get migration version: %v", err)
 	}
-	if version != 4 {
-		t.Errorf("expected version 4 after rollback, got %d", version)
+	if version != 8 {
+		t.Errorf("expected version 8 after rollback, got %d", version)
 	}
 
 	// Re-apply migrations
@@ -114,8 +114,8 @@ func TestMigrationRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get migration version: %v", err)
 	}
-	if version != 5 {
-		t.Errorf("expected version 5 after re-migration, got %d", version)
+	if version != 9 {
+		t.Errorf("expected version 9 after re-migration, got %d", version)
 	}
 }
 
@@ -139,8 +139,8 @@ func TestMigrationRedo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get migration version: %v", err)
 	}
-	if version != 5 {
-		t.Errorf("expected version 5 after redo, got %d", version)
+	if version != 9 {
+		t.Errorf("expected version 9 after redo, got %d", version)
 	}
 }
 
@@ -178,8 +178,8 @@ func TestMigrationReset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get migration version: %v", err)
 	}
-	if version != 5 {
-		t.Errorf("expected version 5 after re-migration, got %d", version)
+	if version != 9 {
+		t.Errorf("expected version 9 after re-migration, got %d", version)
 	}
 }
 
@@ -314,7 +314,7 @@ func TestIdempotentMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get migration version: %v", err)
 	}
-	if version != 5 {
-		t.Errorf("expected version 5, got %d", version)
+	if version != 9 {
+		t.Errorf("expected version 9, got %d", version)
 	}
 }

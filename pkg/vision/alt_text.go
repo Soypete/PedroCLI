@@ -13,10 +13,10 @@ type AltTextGenerator struct {
 
 // AltTextConfig configures alt text generation.
 type AltTextConfig struct {
-	MaxLength       int    `json:"max_length"`        // Maximum alt text length (default: 125)
-	IncludeContext  bool   `json:"include_context"`   // Include surrounding context
-	AvoidPhrases    []string `json:"avoid_phrases"`   // Phrases to avoid (e.g., "image of")
-	LanguageStyle   string `json:"language_style"`    // "descriptive", "concise", "technical"
+	MaxLength      int      `json:"max_length"`      // Maximum alt text length (default: 125)
+	IncludeContext bool     `json:"include_context"` // Include surrounding context
+	AvoidPhrases   []string `json:"avoid_phrases"`   // Phrases to avoid (e.g., "image of")
+	LanguageStyle  string   `json:"language_style"`  // "descriptive", "concise", "technical"
 }
 
 // DefaultAltTextConfig returns default configuration.
@@ -31,17 +31,17 @@ func DefaultAltTextConfig() *AltTextConfig {
 
 // AltTextRequest contains parameters for alt text generation.
 type AltTextRequest struct {
-	ImagePath    string `json:"image_path"`
-	Context      string `json:"context"`       // Surrounding context (blog post text, etc.)
-	Purpose      string `json:"purpose"`       // Purpose of the image (hero, diagram, etc.)
-	MaxLength    int    `json:"max_length"`
+	ImagePath string `json:"image_path"`
+	Context   string `json:"context"` // Surrounding context (blog post text, etc.)
+	Purpose   string `json:"purpose"` // Purpose of the image (hero, diagram, etc.)
+	MaxLength int    `json:"max_length"`
 }
 
 // AltTextResult contains the generated alt text and metadata.
 type AltTextResult struct {
-	AltText     string `json:"alt_text"`
-	Confidence  float64 `json:"confidence"`
-	ImageType   string `json:"image_type"`   // "photo", "illustration", "diagram", etc.
+	AltText     string   `json:"alt_text"`
+	Confidence  float64  `json:"confidence"`
+	ImageType   string   `json:"image_type"`            // "photo", "illustration", "diagram", etc.
 	Suggestions []string `json:"suggestions,omitempty"` // Alternative suggestions
 }
 

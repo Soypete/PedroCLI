@@ -1,6 +1,6 @@
--- Migration: 004_prompt_templates_table
+-- +goose Up
+-- Migration: 009_prompt_templates_table
 -- Description: Create prompt_templates table for image generation prompts
--- Created: 2025-01-01
 
 CREATE TABLE IF NOT EXISTS prompt_templates (
     id UUID PRIMARY KEY,
@@ -30,3 +30,6 @@ CREATE INDEX IF NOT EXISTS idx_prompt_templates_active ON prompt_templates(is_ac
 -- 'code_visualization' - Code concept visualizations
 -- 'social_preview' - Social media preview images (OG images)
 -- 'newsletter_header' - Email newsletter header images
+
+-- +goose Down
+DROP TABLE IF EXISTS prompt_templates;

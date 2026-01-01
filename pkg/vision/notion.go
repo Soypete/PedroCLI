@@ -50,13 +50,13 @@ type BlogPost struct {
 
 // NotionImage represents an image in Notion.
 type NotionImage struct {
-	ID         string            `json:"id"`
-	URL        string            `json:"url"`
-	Caption    string            `json:"caption"`
-	AltText    string            `json:"alt_text"`
-	Type       string            `json:"type"` // "external" or "file"
-	Metadata   map[string]string `json:"metadata"`
-	IsGenerated bool             `json:"is_generated"`
+	ID          string            `json:"id"`
+	URL         string            `json:"url"`
+	Caption     string            `json:"caption"`
+	AltText     string            `json:"alt_text"`
+	Type        string            `json:"type"` // "external" or "file"
+	Metadata    map[string]string `json:"metadata"`
+	IsGenerated bool              `json:"is_generated"`
 }
 
 // GetBlogPost retrieves a blog post from Notion by page ID.

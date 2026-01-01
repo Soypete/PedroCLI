@@ -19,7 +19,7 @@ import (
 	_ "github.com/mattn/go-sqlite3" // SQLite driver
 )
 
-//go:embed ../../../migrations/*.sql
+//go:embed migrations/*.sql
 var migrationsFS embed.FS
 
 // DB represents a database connection with migration support.
@@ -222,7 +222,7 @@ func (d *DB) applyMigration(ctx context.Context, filename string) error {
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Execute migration
 	if _, err := tx.ExecContext(ctx, sql); err != nil {

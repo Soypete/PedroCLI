@@ -26,9 +26,9 @@ type ImageProcessor struct {
 
 // ImageProcessorConfig configures the image processor.
 type ImageProcessorConfig struct {
-	MaxWidth  int `json:"max_width"`   // Maximum width for preprocessing
-	MaxHeight int `json:"max_height"`  // Maximum height for preprocessing
-	Quality   int `json:"quality"`     // JPEG quality (1-100)
+	MaxWidth  int `json:"max_width"`  // Maximum width for preprocessing
+	MaxHeight int `json:"max_height"` // Maximum height for preprocessing
+	Quality   int `json:"quality"`    // JPEG quality (1-100)
 }
 
 // DefaultImageProcessorConfig returns default configuration.
@@ -54,13 +54,13 @@ func NewImageProcessor(cfg *ImageProcessorConfig) *ImageProcessor {
 
 // ProcessedImage contains the processed image data and metadata.
 type ProcessedImage struct {
-	Data      []byte `json:"data"`
-	Width     int    `json:"width"`
-	Height    int    `json:"height"`
-	Format    string `json:"format"`
-	OriginalWidth  int `json:"original_width"`
-	OriginalHeight int `json:"original_height"`
-	Resized   bool   `json:"resized"`
+	Data           []byte `json:"data"`
+	Width          int    `json:"width"`
+	Height         int    `json:"height"`
+	Format         string `json:"format"`
+	OriginalWidth  int    `json:"original_width"`
+	OriginalHeight int    `json:"original_height"`
+	Resized        bool   `json:"resized"`
 }
 
 // Process reads and processes an image file.

@@ -1,9 +1,6 @@
--- Migration: 001_jobs_table
+-- +goose Up
+-- Migration: 006_jobs_table
 -- Description: Create jobs table for persistent job storage
--- Created: 2025-01-01
-
--- Enable UUID extension if not exists (PostgreSQL)
--- For SQLite, UUIDs are stored as TEXT
 
 CREATE TABLE IF NOT EXISTS jobs (
     id UUID PRIMARY KEY,
@@ -29,3 +26,6 @@ CREATE INDEX IF NOT EXISTS idx_jobs_hardware_target ON jobs(hardware_target);
 -- Comment: Job types include 'builder', 'debugger', 'reviewer', 'triager',
 -- 'image_generation', 'image_analysis', 'alt_text_generation', 'blog_workflow'
 -- Status values: 'pending', 'running', 'completed', 'failed', 'cancelled'
+
+-- +goose Down
+DROP TABLE IF EXISTS jobs;

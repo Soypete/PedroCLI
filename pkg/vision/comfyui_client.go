@@ -75,26 +75,26 @@ type GenerationRequest struct {
 
 // GenerationResult represents the result of image generation.
 type GenerationResult struct {
-	PromptID   string            `json:"prompt_id"`
-	Images     []GeneratedImage  `json:"images"`
-	Seed       int64             `json:"seed"`
-	Duration   time.Duration     `json:"duration"`
-	Status     string            `json:"status"`
-	Error      string            `json:"error,omitempty"`
+	PromptID string           `json:"prompt_id"`
+	Images   []GeneratedImage `json:"images"`
+	Seed     int64            `json:"seed"`
+	Duration time.Duration    `json:"duration"`
+	Status   string           `json:"status"`
+	Error    string           `json:"error,omitempty"`
 }
 
 // GeneratedImage represents a generated image.
 type GeneratedImage struct {
-	Filename string `json:"filename"`
+	Filename  string `json:"filename"`
 	Subfolder string `json:"subfolder"`
-	Type     string `json:"type"`
-	URL      string `json:"url"`
+	Type      string `json:"type"`
+	URL       string `json:"url"`
 }
 
 // QueueStatus represents the ComfyUI queue status.
 type QueueStatus struct {
-	QueueRunning  int `json:"queue_running"`
-	QueuePending  int `json:"queue_pending"`
+	QueueRunning int `json:"queue_running"`
+	QueuePending int `json:"queue_pending"`
 }
 
 // SystemStats represents ComfyUI system statistics.
@@ -104,11 +104,11 @@ type SystemStats struct {
 
 // DeviceStats represents GPU device statistics.
 type DeviceStats struct {
-	Name       string  `json:"name"`
-	Type       string  `json:"type"`
-	VRAMTotal  int64   `json:"vram_total"`
-	VRAMFree   int64   `json:"vram_free"`
-	TorchVRAM  int64   `json:"torch_vram_total"`
+	Name      string `json:"name"`
+	Type      string `json:"type"`
+	VRAMTotal int64  `json:"vram_total"`
+	VRAMFree  int64  `json:"vram_free"`
+	TorchVRAM int64  `json:"torch_vram_total"`
 }
 
 // NewComfyUIClient creates a new ComfyUI client.
@@ -458,8 +458,8 @@ func (c *ComfyUIClient) checkHistory(ctx context.Context, promptID string) ([]Ge
 			Images []GeneratedImage `json:"images"`
 		} `json:"outputs"`
 		Status struct {
-			Completed   bool   `json:"completed"`
-			StatusStr   string `json:"status_str"`
+			Completed bool   `json:"completed"`
+			StatusStr string `json:"status_str"`
 		} `json:"status"`
 	}
 
@@ -532,9 +532,15 @@ func (c *ComfyUIClient) UploadImage(ctx context.Context, data []byte, filename s
 	}
 
 	// Add subfolder and type fields
-	writer.WriteField("subfolder", "")
-	writer.WriteField("type", "input")
-	writer.WriteField("overwrite", "true")
+	if err := writer.WriteField("subfolder", ""); err != nil {
+		return "", err
+	}
+	if err := writer.WriteField("type", "input"); err != nil {
+		return "", err
+	}
+	if err := writer.WriteField("overwrite", "true"); err != nil {
+		return "", err
+	}
 
 	if err := writer.Close(); err != nil {
 		return "", err

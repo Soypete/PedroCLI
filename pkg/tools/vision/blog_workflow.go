@@ -6,18 +6,18 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/soypete/pedrocli/pkg/storage"
 	"github.com/soypete/pedrocli/pkg/tools"
 	"github.com/soypete/pedrocli/pkg/vision"
-	"github.com/google/uuid"
 )
 
 // BlogWorkflowTool provides the blog post image generation workflow.
 type BlogWorkflowTool struct {
-	visionModel   *vision.VisionModel
-	comfyUI       *vision.ComfyUIClient
-	altTextGen    *vision.AltTextGenerator
-	imageStorage  *storage.ImageStorage
+	visionModel  *vision.VisionModel
+	comfyUI      *vision.ComfyUIClient
+	altTextGen   *vision.AltTextGenerator
+	imageStorage *storage.ImageStorage
 }
 
 // NewBlogWorkflowTool creates a new blog workflow tool.
@@ -175,15 +175,15 @@ func (t *BlogWorkflowTool) generateBlogImage(ctx context.Context, args map[strin
 	}
 
 	output := map[string]interface{}{
-		"job_id":        jobID,
-		"prompt_id":     result.PromptID,
-		"prompt_used":   imagePrompt.Prompt,
-		"status":        result.Status,
-		"seed":          result.Seed,
-		"images":        savedImages,
-		"alt_text":      altText,
-		"style_preset":  stylePreset,
-		"duration_ms":   result.Duration.Milliseconds(),
+		"job_id":       jobID,
+		"prompt_id":    result.PromptID,
+		"prompt_used":  imagePrompt.Prompt,
+		"status":       result.Status,
+		"seed":         result.Seed,
+		"images":       savedImages,
+		"alt_text":     altText,
+		"style_preset": stylePreset,
+		"duration_ms":  result.Duration.Milliseconds(),
 	}
 
 	var modifiedFiles []string
@@ -247,7 +247,7 @@ func (t *BlogWorkflowTool) generateWithReference(ctx context.Context, args map[s
 	// Upload reference image to ComfyUI
 	refData, _, err := t.imageStorage.PreprocessImage(referencePath, 1024, 1024)
 	if err == nil {
-		t.comfyUI.UploadImage(ctx, refData, "reference_"+jobID[:8]+".png")
+		_, _ = t.comfyUI.UploadImage(ctx, refData, "reference_"+jobID[:8]+".png")
 	}
 
 	// Generate the image
@@ -296,15 +296,15 @@ func (t *BlogWorkflowTool) generateWithReference(ctx context.Context, args map[s
 	}
 
 	output := map[string]interface{}{
-		"job_id":           jobID,
-		"prompt_id":        result.PromptID,
-		"prompt_used":      imagePrompt.Prompt,
-		"reference_style":  styleSuggestion,
-		"status":           result.Status,
-		"seed":             result.Seed,
-		"images":           savedImages,
-		"alt_text":         altText,
-		"duration_ms":      result.Duration.Milliseconds(),
+		"job_id":          jobID,
+		"prompt_id":       result.PromptID,
+		"prompt_used":     imagePrompt.Prompt,
+		"reference_style": styleSuggestion,
+		"status":          result.Status,
+		"seed":            result.Seed,
+		"images":          savedImages,
+		"alt_text":        altText,
+		"duration_ms":     result.Duration.Milliseconds(),
 	}
 
 	var modifiedFiles []string
@@ -516,11 +516,11 @@ func (t *BlogWorkflowTool) generateSimplePrompt(blogContent, stylePreset string)
 	}
 
 	styleKeywords := map[string]string{
-		"blog_hero":           "professional blog header image, clean modern design, high quality",
-		"technical_diagram":   "technical diagram, clean lines, professional illustration",
-		"code_visualization":  "code concept art, digital technology, abstract visualization",
-		"social_preview":      "social media preview image, bold colors, eye-catching design",
-		"newsletter_header":   "newsletter header image, minimal design, professional",
+		"blog_hero":          "professional blog header image, clean modern design, high quality",
+		"technical_diagram":  "technical diagram, clean lines, professional illustration",
+		"code_visualization": "code concept art, digital technology, abstract visualization",
+		"social_preview":     "social media preview image, bold colors, eye-catching design",
+		"newsletter_header":  "newsletter header image, minimal design, professional",
 	}
 
 	style := styleKeywords[stylePreset]
@@ -537,11 +537,11 @@ func (t *BlogWorkflowTool) generateSimplePrompt(blogContent, stylePreset string)
 // enhancePrompt adds style keywords to a prompt.
 func (t *BlogWorkflowTool) enhancePrompt(prompt, stylePreset string) string {
 	suffixes := map[string]string{
-		"blog_hero":           ", professional photography, high quality, sharp focus, clean composition",
-		"technical_diagram":   ", clean vector style, professional diagram, clear layout",
-		"code_visualization":  ", digital art, technology theme, abstract patterns",
-		"social_preview":      ", bold and vibrant, high contrast, eye-catching",
-		"newsletter_header":   ", minimal and clean, professional design, modern aesthetic",
+		"blog_hero":          ", professional photography, high quality, sharp focus, clean composition",
+		"technical_diagram":  ", clean vector style, professional diagram, clear layout",
+		"code_visualization": ", digital art, technology theme, abstract patterns",
+		"social_preview":     ", bold and vibrant, high contrast, eye-catching",
+		"newsletter_header":  ", minimal and clean, professional design, modern aesthetic",
 	}
 
 	suffix := suffixes[stylePreset]
@@ -560,11 +560,11 @@ func (t *BlogWorkflowTool) getNegativePrompt(stylePreset string) string {
 // getWorkflowForPreset returns the workflow template for a style preset.
 func (t *BlogWorkflowTool) getWorkflowForPreset(stylePreset string) string {
 	workflows := map[string]string{
-		"blog_hero":           "blog_hero",
-		"technical_diagram":   "sdxl_base",
-		"code_visualization":  "sdxl_base",
-		"social_preview":      "sdxl_base",
-		"newsletter_header":   "sdxl_base",
+		"blog_hero":          "blog_hero",
+		"technical_diagram":  "sdxl_base",
+		"code_visualization": "sdxl_base",
+		"social_preview":     "sdxl_base",
+		"newsletter_header":  "sdxl_base",
 	}
 
 	workflow := workflows[stylePreset]

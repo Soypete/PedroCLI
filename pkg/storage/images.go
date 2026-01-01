@@ -110,7 +110,7 @@ func (s *ImageStorage) uploadImage(category, jobID string, file multipart.File, 
 
 	// Reset file position after reading for mime detection
 	if seeker, ok := file.(io.Seeker); ok {
-		seeker.Seek(0, io.SeekStart)
+		_, _ = seeker.Seek(0, io.SeekStart)
 	}
 
 	// Create job directory
@@ -343,11 +343,11 @@ func (s *ImageStorage) getImageInfo(path, filename string) (*ImageInfo, error) {
 	checksum := hex.EncodeToString(hash.Sum(nil))
 
 	// Reset for dimension reading
-	file.Seek(0, io.SeekStart)
+	_, _ = file.Seek(0, io.SeekStart)
 	width, height, _ := s.getImageDimensions(path)
 
 	// Detect MIME type
-	file.Seek(0, io.SeekStart)
+	_, _ = file.Seek(0, io.SeekStart)
 	buffer := make([]byte, 512)
 	n, _ := file.Read(buffer)
 	mimeType := http.DetectContentType(buffer[:n])
