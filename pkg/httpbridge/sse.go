@@ -30,13 +30,13 @@ type SSEMessage struct {
 type SSEBroadcaster struct {
 	clients    map[string]*SSEClient
 	mutex      sync.RWMutex
-	jobManager *jobs.Manager
+	jobManager jobs.JobManager
 	ctx        context.Context
 	lastStatus map[string]string // jobID -> last known status
 }
 
 // NewSSEBroadcaster creates a new SSE broadcaster
-func NewSSEBroadcaster(jobManager *jobs.Manager, ctx context.Context) *SSEBroadcaster {
+func NewSSEBroadcaster(jobManager jobs.JobManager, ctx context.Context) *SSEBroadcaster {
 	return &SSEBroadcaster{
 		clients:    make(map[string]*SSEClient),
 		jobManager: jobManager,
@@ -109,7 +109,10 @@ func (b *SSEBroadcaster) StartPolling(pollInterval time.Duration) {
 // pollJobs checks job statuses and broadcasts updates
 func (b *SSEBroadcaster) pollJobs() {
 	// Get list of all jobs from job manager
-	jobList := b.jobManager.List()
+	jobList, err := b.jobManager.List(b.ctx)
+	if err != nil {
+		return // Skip this poll cycle on error
+	}
 
 	// Build job list text for all-jobs broadcast
 	var jobListText string
@@ -150,7 +153,7 @@ func (b *SSEBroadcaster) pollJobs() {
 
 // checkJobStatus checks a single job's status and broadcasts if changed
 func (b *SSEBroadcaster) checkJobStatus(jobID string) {
-	job, err := b.jobManager.Get(jobID)
+	job, err := b.jobManager.Get(b.ctx, jobID)
 	if err != nil {
 		return
 	}
@@ -236,7 +239,10 @@ func (b *SSEBroadcaster) ServeHTTP(w http.ResponseWriter, r *http.Request, jobID
 func (b *SSEBroadcaster) sendInitialStatus(w http.ResponseWriter, flusher http.Flusher, jobID string) {
 	if jobID == "*" {
 		// Send full job list
-		jobList := b.jobManager.List()
+		jobList, err := b.jobManager.List(b.ctx)
+		if err != nil {
+			return // Skip sending initial status on error
+		}
 		var jobListText string
 		for _, job := range jobList {
 			statusEmoji := "⏳"
@@ -260,7 +266,7 @@ func (b *SSEBroadcaster) sendInitialStatus(w http.ResponseWriter, flusher http.F
 		flusher.Flush()
 	} else {
 		// Send specific job status
-		job, err := b.jobManager.Get(jobID)
+		job, err := b.jobManager.Get(b.ctx, jobID)
 		if err == nil {
 			statusText := fmt.Sprintf("Job: %s\nType: %s\nStatus: %s\nCreated: %s",
 				job.ID, job.Type, job.Status, job.CreatedAt.Format(time.RFC3339))

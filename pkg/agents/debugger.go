@@ -16,7 +16,7 @@ type DebuggerAgent struct {
 }
 
 // NewDebuggerAgent creates a new debugger agent
-func NewDebuggerAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager) *DebuggerAgent {
+func NewDebuggerAgent(cfg *config.Config, backend llm.Backend, jobMgr jobs.JobManager) *DebuggerAgent {
 	base := NewCodingBaseAgent(
 		"debugger",
 		"Debug and fix issues autonomously",
@@ -39,13 +39,13 @@ func (d *DebuggerAgent) Execute(ctx context.Context, input map[string]interface{
 	}
 
 	// Create job
-	job, err := d.jobManager.Create("debug", description, input)
+	job, err := d.jobManager.Create(ctx, "debug", description, input)
 	if err != nil {
 		return nil, err
 	}
 
 	// Update status to running
-	d.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
+	d.jobManager.Update(ctx, job.ID, jobs.StatusRunning, nil, nil)
 
 	// Run the inference loop in background with its own context
 	go func() {
@@ -55,7 +55,7 @@ func (d *DebuggerAgent) Execute(ctx context.Context, input map[string]interface{
 		// Create context manager
 		contextMgr, err := llmcontext.NewManager(job.ID, d.config.Debug.Enabled)
 		if err != nil {
-			d.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			d.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
@@ -70,7 +70,7 @@ func (d *DebuggerAgent) Execute(ctx context.Context, input map[string]interface{
 		// Execute the inference loop
 		err = executor.Execute(bgCtx, userPrompt)
 		if err != nil {
-			d.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			d.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 
@@ -80,7 +80,7 @@ func (d *DebuggerAgent) Execute(ctx context.Context, input map[string]interface{
 			"job_dir": contextMgr.GetJobDir(),
 		}
 
-		d.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
+		d.jobManager.Update(bgCtx, job.ID, jobs.StatusCompleted, output, nil)
 	}()
 
 	// Return immediately with the running job

@@ -81,6 +81,10 @@ func main() {
 	go func() {
 		<-sigChan
 		fmt.Println("\nShutting down...")
+		// Close server (including database connections)
+		if err := server.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error closing server: %v\n", err)
+		}
 		cancel()
 		os.Exit(0)
 	}()

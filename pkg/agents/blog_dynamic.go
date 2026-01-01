@@ -27,7 +27,7 @@ type DynamicBlogAgent struct {
 }
 
 // NewDynamicBlogAgent creates a new dynamic blog agent
-func NewDynamicBlogAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager) *DynamicBlogAgent {
+func NewDynamicBlogAgent(cfg *config.Config, backend llm.Backend, jobMgr jobs.JobManager) *DynamicBlogAgent {
 	base := NewBaseAgent(
 		"blog_dynamic",
 		"Dynamic LLM-driven blog creation with tool selection",
@@ -71,12 +71,12 @@ func (a *DynamicBlogAgent) Execute(ctx context.Context, input map[string]interfa
 	shouldPublish, _ := input["publish"].(bool)
 
 	// Create job
-	job, err := a.jobManager.Create("blog_dynamic", "Dynamic Blog: "+title, input)
+	job, err := a.jobManager.Create(ctx, "blog_dynamic", "Dynamic Blog: "+title, input)
 	if err != nil {
 		return nil, err
 	}
 
-	a.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
+	a.jobManager.Update(ctx, job.ID, jobs.StatusRunning, nil, nil)
 
 	// Run in background
 	go func() {
@@ -84,18 +84,18 @@ func (a *DynamicBlogAgent) Execute(ctx context.Context, input map[string]interfa
 
 		contextMgr, err := llmcontext.NewManager(job.ID, a.config.Debug.Enabled)
 		if err != nil {
-			a.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			a.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
 
 		result, err := a.runDynamic(bgCtx, contextMgr, prompt, title, shouldPublish)
 		if err != nil {
-			a.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			a.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 
-		a.jobManager.Update(job.ID, jobs.StatusCompleted, result, nil)
+		a.jobManager.Update(bgCtx, job.ID, jobs.StatusCompleted, result, nil)
 	}()
 
 	return job, nil

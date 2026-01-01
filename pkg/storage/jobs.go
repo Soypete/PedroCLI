@@ -39,15 +39,31 @@ type Job struct {
 	ID             string          `json:"id"`
 	JobType        JobType         `json:"job_type"`
 	Status         JobStatus       `json:"status"`
+	Description    string          `json:"description,omitempty"`
 	InputPayload   json.RawMessage `json:"input_payload,omitempty"`
 	OutputPayload  json.RawMessage `json:"output_payload,omitempty"`
 	ModelUsed      string          `json:"model_used,omitempty"`
 	HardwareTarget string          `json:"hardware_target,omitempty"`
 	ErrorMessage   string          `json:"error_message,omitempty"`
+	WorkDir        string          `json:"work_dir,omitempty"`
+	ContextDir     string          `json:"context_dir,omitempty"`
 	StartedAt      *time.Time      `json:"started_at,omitempty"`
 	CompletedAt    *time.Time      `json:"completed_at,omitempty"`
 	CreatedAt      time.Time       `json:"created_at"`
 	UpdatedAt      time.Time       `json:"updated_at"`
+	// ConversationHistory stores all prompts, responses, and tool calls for debugging
+	ConversationHistory []ConversationEntry `json:"conversation_history,omitempty"`
+}
+
+// ConversationEntry represents a single entry in the job's conversation history.
+type ConversationEntry struct {
+	Role      string                 `json:"role"`                 // "user", "assistant", "tool_call", "tool_result"
+	Content   string                 `json:"content,omitempty"`    // For user/assistant messages
+	Tool      string                 `json:"tool,omitempty"`       // For tool_call/tool_result
+	Args      map[string]interface{} `json:"args,omitempty"`       // For tool_call
+	Result    interface{}            `json:"result,omitempty"`     // For tool_result
+	Success   *bool                  `json:"success,omitempty"`    // For tool_result
+	Timestamp time.Time              `json:"timestamp"`
 }
 
 // JobInput represents common input fields for jobs.
@@ -85,8 +101,8 @@ func NewJobStore(db *sql.DB) *JobStore {
 // Create creates a new job.
 func (s *JobStore) Create(ctx context.Context, job *Job) error {
 	query := `
-		INSERT INTO jobs (id, job_type, status, input_payload, model_used, hardware_target, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO jobs (id, job_type, status, description, input_payload, model_used, hardware_target, work_dir, context_dir, conversation_history, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 	`
 	now := time.Now()
 	job.CreatedAt = now
@@ -95,13 +111,27 @@ func (s *JobStore) Create(ctx context.Context, job *Job) error {
 		job.Status = JobStatusPending
 	}
 
+	// Initialize empty conversation history if nil
+	conversationJSON := []byte("[]")
+	if len(job.ConversationHistory) > 0 {
+		var err error
+		conversationJSON, err = json.Marshal(job.ConversationHistory)
+		if err != nil {
+			return fmt.Errorf("failed to marshal conversation history: %w", err)
+		}
+	}
+
 	_, err := s.db.ExecContext(ctx, query,
 		job.ID,
 		job.JobType,
 		job.Status,
+		nullString(job.Description),
 		job.InputPayload,
 		nullString(job.ModelUsed),
 		nullString(job.HardwareTarget),
+		nullString(job.WorkDir),
+		nullString(job.ContextDir),
+		string(conversationJSON),
 		job.CreatedAt,
 		job.UpdatedAt,
 	)
@@ -111,24 +141,30 @@ func (s *JobStore) Create(ctx context.Context, job *Job) error {
 // Get retrieves a job by ID.
 func (s *JobStore) Get(ctx context.Context, id string) (*Job, error) {
 	query := `
-		SELECT id, job_type, status, input_payload, output_payload, model_used,
-			   hardware_target, error_message, started_at, completed_at, created_at, updated_at
+		SELECT id, job_type, status, description, input_payload, output_payload, model_used,
+			   hardware_target, error_message, work_dir, context_dir, conversation_history,
+			   started_at, completed_at, created_at, updated_at
 		FROM jobs WHERE id = $1
 	`
 	job := &Job{}
-	var inputPayload, outputPayload sql.NullString
+	var description, inputPayload, outputPayload sql.NullString
 	var modelUsed, hardwareTarget, errorMessage sql.NullString
+	var workDir, contextDir, conversationHistory sql.NullString
 	var startedAt, completedAt sql.NullTime
 
 	err := s.db.QueryRowContext(ctx, query, id).Scan(
 		&job.ID,
 		&job.JobType,
 		&job.Status,
+		&description,
 		&inputPayload,
 		&outputPayload,
 		&modelUsed,
 		&hardwareTarget,
 		&errorMessage,
+		&workDir,
+		&contextDir,
+		&conversationHistory,
 		&startedAt,
 		&completedAt,
 		&job.CreatedAt,
@@ -141,6 +177,9 @@ func (s *JobStore) Get(ctx context.Context, id string) (*Job, error) {
 		return nil, err
 	}
 
+	if description.Valid {
+		job.Description = description.String
+	}
 	if inputPayload.Valid {
 		job.InputPayload = json.RawMessage(inputPayload.String)
 	}
@@ -155,6 +194,17 @@ func (s *JobStore) Get(ctx context.Context, id string) (*Job, error) {
 	}
 	if errorMessage.Valid {
 		job.ErrorMessage = errorMessage.String
+	}
+	if workDir.Valid {
+		job.WorkDir = workDir.String
+	}
+	if contextDir.Valid {
+		job.ContextDir = contextDir.String
+	}
+	if conversationHistory.Valid && conversationHistory.String != "" {
+		if err := json.Unmarshal([]byte(conversationHistory.String), &job.ConversationHistory); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal conversation history: %w", err)
+		}
 	}
 	if startedAt.Valid {
 		job.StartedAt = &startedAt.Time
@@ -171,13 +221,16 @@ func (s *JobStore) Update(ctx context.Context, job *Job) error {
 	query := `
 		UPDATE jobs SET
 			status = $2,
-			output_payload = $3,
-			model_used = $4,
-			hardware_target = $5,
-			error_message = $6,
-			started_at = $7,
-			completed_at = $8,
-			updated_at = $9
+			description = $3,
+			output_payload = $4,
+			model_used = $5,
+			hardware_target = $6,
+			error_message = $7,
+			work_dir = $8,
+			context_dir = $9,
+			started_at = $10,
+			completed_at = $11,
+			updated_at = $12
 		WHERE id = $1
 	`
 	job.UpdatedAt = time.Now()
@@ -185,10 +238,13 @@ func (s *JobStore) Update(ctx context.Context, job *Job) error {
 	_, err := s.db.ExecContext(ctx, query,
 		job.ID,
 		job.Status,
+		nullString(job.Description),
 		nullJSON(job.OutputPayload),
 		nullString(job.ModelUsed),
 		nullString(job.HardwareTarget),
 		nullString(job.ErrorMessage),
+		nullString(job.WorkDir),
+		nullString(job.ContextDir),
 		nullTime(job.StartedAt),
 		nullTime(job.CompletedAt),
 		job.UpdatedAt,
@@ -229,10 +285,12 @@ func (s *JobStore) MarkFailed(ctx context.Context, id string, errorMsg string) e
 }
 
 // List retrieves jobs with optional filtering.
+// Note: conversation_history is not included in list queries for performance.
 func (s *JobStore) List(ctx context.Context, opts ListJobsOptions) ([]*Job, error) {
 	query := `
-		SELECT id, job_type, status, input_payload, output_payload, model_used,
-			   hardware_target, error_message, started_at, completed_at, created_at, updated_at
+		SELECT id, job_type, status, description, input_payload, output_payload, model_used,
+			   hardware_target, error_message, work_dir, context_dir,
+			   started_at, completed_at, created_at, updated_at
 		FROM jobs WHERE 1=1
 	`
 	var args []interface{}
@@ -275,19 +333,23 @@ func (s *JobStore) List(ctx context.Context, opts ListJobsOptions) ([]*Job, erro
 	var jobs []*Job
 	for rows.Next() {
 		job := &Job{}
-		var inputPayload, outputPayload sql.NullString
+		var description, inputPayload, outputPayload sql.NullString
 		var modelUsed, hardwareTarget, errorMessage sql.NullString
+		var workDir, contextDir sql.NullString
 		var startedAt, completedAt sql.NullTime
 
 		err := rows.Scan(
 			&job.ID,
 			&job.JobType,
 			&job.Status,
+			&description,
 			&inputPayload,
 			&outputPayload,
 			&modelUsed,
 			&hardwareTarget,
 			&errorMessage,
+			&workDir,
+			&contextDir,
 			&startedAt,
 			&completedAt,
 			&job.CreatedAt,
@@ -297,6 +359,9 @@ func (s *JobStore) List(ctx context.Context, opts ListJobsOptions) ([]*Job, erro
 			return nil, err
 		}
 
+		if description.Valid {
+			job.Description = description.String
+		}
 		if inputPayload.Valid {
 			job.InputPayload = json.RawMessage(inputPayload.String)
 		}
@@ -311,6 +376,12 @@ func (s *JobStore) List(ctx context.Context, opts ListJobsOptions) ([]*Job, erro
 		}
 		if errorMessage.Valid {
 			job.ErrorMessage = errorMessage.String
+		}
+		if workDir.Valid {
+			job.WorkDir = workDir.String
+		}
+		if contextDir.Valid {
+			job.ContextDir = contextDir.String
 		}
 		if startedAt.Valid {
 			job.StartedAt = &startedAt.Time
@@ -330,6 +401,68 @@ func (s *JobStore) Delete(ctx context.Context, id string) error {
 	query := `DELETE FROM jobs WHERE id = $1`
 	_, err := s.db.ExecContext(ctx, query, id)
 	return err
+}
+
+// AppendConversation appends an entry to the job's conversation history.
+// Uses PostgreSQL jsonb_array_append or equivalent for atomic append.
+func (s *JobStore) AppendConversation(ctx context.Context, id string, entry ConversationEntry) error {
+	entryJSON, err := json.Marshal(entry)
+	if err != nil {
+		return fmt.Errorf("failed to marshal conversation entry: %w", err)
+	}
+
+	// Use PostgreSQL jsonb concatenation for atomic append
+	query := `
+		UPDATE jobs
+		SET conversation_history = COALESCE(conversation_history, '[]'::jsonb) || $2::jsonb,
+		    updated_at = $3
+		WHERE id = $1
+	`
+	_, err = s.db.ExecContext(ctx, query, id, string(entryJSON), time.Now())
+	return err
+}
+
+// GetConversation retrieves the conversation history for a job.
+func (s *JobStore) GetConversation(ctx context.Context, id string) ([]ConversationEntry, error) {
+	query := `SELECT conversation_history FROM jobs WHERE id = $1`
+	var conversationJSON sql.NullString
+
+	err := s.db.QueryRowContext(ctx, query, id).Scan(&conversationJSON)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("job not found: %s", id)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	if !conversationJSON.Valid || conversationJSON.String == "" {
+		return []ConversationEntry{}, nil
+	}
+
+	var history []ConversationEntry
+	if err := json.Unmarshal([]byte(conversationJSON.String), &history); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal conversation history: %w", err)
+	}
+
+	return history, nil
+}
+
+// CleanupOldJobs deletes completed/failed/cancelled jobs older than the specified duration.
+func (s *JobStore) CleanupOldJobs(ctx context.Context, olderThan time.Duration) (int64, error) {
+	cutoff := time.Now().Add(-olderThan)
+	query := `
+		DELETE FROM jobs
+		WHERE status IN ($1, $2, $3)
+		AND completed_at IS NOT NULL
+		AND completed_at < $4
+	`
+	result, err := s.db.ExecContext(ctx, query,
+		JobStatusCompleted, JobStatusFailed, JobStatusCancelled, cutoff)
+	if err != nil {
+		return 0, err
+	}
+
+	return result.RowsAffected()
 }
 
 // ListJobsOptions provides filtering options for listing jobs.

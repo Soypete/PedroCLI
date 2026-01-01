@@ -150,7 +150,7 @@ func pollJobStatus(ctx context.Context, jobMgr *jobs.Manager, jobID string) erro
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			job, err := jobMgr.Get(jobID)
+			job, err := jobMgr.Get(ctx, jobID)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: Failed to check status: %v\n", err)
 				continue
@@ -451,7 +451,7 @@ func statusCommand(cfg *config.Config, args []string) {
 		os.Exit(1)
 	}
 
-	job, err := jobMgr.Get(jobID)
+	job, err := jobMgr.Get(context.Background(), jobID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to get job status: %v\n", err)
 		os.Exit(1)
@@ -488,7 +488,11 @@ func listCommand(cfg *config.Config, args []string) {
 		os.Exit(1)
 	}
 
-	jobList := jobMgr.List()
+	jobList, err := jobMgr.List(context.Background())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to list jobs: %v\n", err)
+		os.Exit(1)
+	}
 	if len(jobList) == 0 {
 		fmt.Println("\nNo jobs found.")
 		return
@@ -532,7 +536,7 @@ func cancelCommand(cfg *config.Config, args []string) {
 		os.Exit(1)
 	}
 
-	if err := jobMgr.Cancel(jobID); err != nil {
+	if err := jobMgr.Cancel(context.Background(), jobID); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to cancel job: %v\n", err)
 		os.Exit(1)
 	}

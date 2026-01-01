@@ -15,7 +15,7 @@ type CodingBaseAgent struct {
 }
 
 // NewCodingBaseAgent creates a new coding base agent
-func NewCodingBaseAgent(name, description string, cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager) *CodingBaseAgent {
+func NewCodingBaseAgent(name, description string, cfg *config.Config, backend llm.Backend, jobMgr jobs.JobManager) *CodingBaseAgent {
 	base := NewBaseAgent(name, description, cfg, backend, jobMgr)
 	return &CodingBaseAgent{
 		BaseAgent: base,
@@ -24,7 +24,7 @@ func NewCodingBaseAgent(name, description string, cfg *config.Config, backend ll
 }
 
 // NewCodingBaseAgentWithRegistry creates a new coding base agent with a tool registry
-func NewCodingBaseAgentWithRegistry(name, description string, cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager, registry *tools.ToolRegistry) *CodingBaseAgent {
+func NewCodingBaseAgentWithRegistry(name, description string, cfg *config.Config, backend llm.Backend, jobMgr jobs.JobManager, registry *tools.ToolRegistry) *CodingBaseAgent {
 	base := NewBaseAgentWithRegistry(name, description, cfg, backend, jobMgr, registry)
 	return &CodingBaseAgent{
 		BaseAgent: base,

@@ -7,9 +7,11 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/llmcontext"
+	"github.com/soypete/pedrocli/pkg/storage"
 	"github.com/soypete/pedrocli/pkg/toolformat"
 	"github.com/soypete/pedrocli/pkg/tools"
 )
@@ -69,17 +71,24 @@ func (e *InferenceExecutor) getSystemPrompt() string {
 // Execute runs the inference loop until completion or max rounds
 func (e *InferenceExecutor) Execute(ctx context.Context, initialPrompt string) error {
 	currentPrompt := initialPrompt
+	jobID := e.contextMgr.GetJobID()
 
 	for e.currentRound < e.maxRounds {
 		e.currentRound++
 
 		fmt.Fprintf(os.Stderr, "🔄 Inference round %d/%d\n", e.currentRound, e.maxRounds)
 
+		// Log user prompt to conversation history
+		e.logConversation(ctx, jobID, "user", currentPrompt, "", nil, nil)
+
 		// Execute one inference round (with custom system prompt if set)
 		response, err := e.agent.executeInferenceWithSystemPrompt(ctx, e.contextMgr, currentPrompt, e.systemPrompt)
 		if err != nil {
 			return fmt.Errorf("inference failed: %w", err)
 		}
+
+		// Log assistant response to conversation history
+		e.logConversation(ctx, jobID, "assistant", response.Text, "", nil, nil)
 
 		// Parse tool calls from response
 		toolCalls := e.parseToolCalls(response.Text)
@@ -108,8 +117,8 @@ func (e *InferenceExecutor) Execute(ctx context.Context, initialPrompt string) e
 			return fmt.Errorf("failed to save tool calls: %w", err)
 		}
 
-		// Execute tools
-		results, err := e.executeTools(ctx, toolCalls)
+		// Execute tools and log each call/result
+		results, err := e.executeToolsWithLogging(ctx, toolCalls, jobID)
 		if err != nil {
 			return fmt.Errorf("tool execution failed: %w", err)
 		}
@@ -140,6 +149,91 @@ func (e *InferenceExecutor) Execute(ctx context.Context, initialPrompt string) e
 	}
 
 	return fmt.Errorf("max inference rounds (%d) reached without completion", e.maxRounds)
+}
+
+// logConversation logs a conversation entry to the database
+func (e *InferenceExecutor) logConversation(ctx context.Context, jobID, role, content, tool string, args map[string]interface{}, result interface{}) {
+	if e.agent.jobManager == nil {
+		return // No job manager available
+	}
+
+	entry := storage.ConversationEntry{
+		Role:      role,
+		Content:   content,
+		Tool:      tool,
+		Args:      args,
+		Result:    result,
+		Timestamp: time.Now(),
+	}
+
+	if err := e.agent.jobManager.AppendConversation(ctx, jobID, entry); err != nil {
+		// Log error but don't fail the execution
+		if e.agent.config.Debug.Enabled {
+			fmt.Fprintf(os.Stderr, "  ⚠️ Failed to log conversation: %v\n", err)
+		}
+	}
+}
+
+// executeToolsWithLogging executes tools and logs each call/result to conversation history
+func (e *InferenceExecutor) executeToolsWithLogging(ctx context.Context, calls []llm.ToolCall, jobID string) ([]*tools.Result, error) {
+	results := make([]*tools.Result, len(calls))
+
+	for i, call := range calls {
+		fmt.Fprintf(os.Stderr, "  🔧 Executing tool: %s\n", call.Name)
+
+		// Log tool call
+		e.logConversation(ctx, jobID, "tool_call", "", call.Name, call.Args, nil)
+
+		result, err := e.agent.executeTool(ctx, call.Name, call.Args)
+		if err != nil {
+			result = &tools.Result{
+				Success: false,
+				Error:   fmt.Sprintf("tool execution error: %v", err),
+			}
+		}
+
+		results[i] = result
+
+		// Log tool result
+		success := result.Success
+		e.logConversationWithSuccess(ctx, jobID, call.Name, result, &success)
+
+		if result.Success {
+			fmt.Fprintf(os.Stderr, "  ✅ Tool %s succeeded\n", call.Name)
+		} else {
+			fmt.Fprintf(os.Stderr, "  ❌ Tool %s failed: %s\n", call.Name, result.Error)
+		}
+	}
+
+	return results, nil
+}
+
+// logConversationWithSuccess logs a tool result with success status
+func (e *InferenceExecutor) logConversationWithSuccess(ctx context.Context, jobID, tool string, result *tools.Result, success *bool) {
+	if e.agent.jobManager == nil {
+		return
+	}
+
+	// Build result object for storage
+	resultData := map[string]interface{}{
+		"output":         result.Output,
+		"error":          result.Error,
+		"modified_files": result.ModifiedFiles,
+	}
+
+	entry := storage.ConversationEntry{
+		Role:      "tool_result",
+		Tool:      tool,
+		Result:    resultData,
+		Success:   success,
+		Timestamp: time.Now(),
+	}
+
+	if err := e.agent.jobManager.AppendConversation(ctx, jobID, entry); err != nil {
+		if e.agent.config.Debug.Enabled {
+			fmt.Fprintf(os.Stderr, "  ⚠️ Failed to log tool result: %v\n", err)
+		}
+	}
 }
 
 // parseToolCalls parses tool calls from the LLM response using the model-specific formatter
@@ -282,33 +376,6 @@ func (e *InferenceExecutor) filterValidCalls(calls []llm.ToolCall) []llm.ToolCal
 		}
 	}
 	return valid
-}
-
-// executeTools executes a list of tool calls
-func (e *InferenceExecutor) executeTools(ctx context.Context, calls []llm.ToolCall) ([]*tools.Result, error) {
-	results := make([]*tools.Result, len(calls))
-
-	for i, call := range calls {
-		fmt.Fprintf(os.Stderr, "  🔧 Executing tool: %s\n", call.Name)
-
-		result, err := e.agent.executeTool(ctx, call.Name, call.Args)
-		if err != nil {
-			result = &tools.Result{
-				Success: false,
-				Error:   fmt.Sprintf("tool execution error: %v", err),
-			}
-		}
-
-		results[i] = result
-
-		if result.Success {
-			fmt.Fprintf(os.Stderr, "  ✅ Tool %s succeeded\n", call.Name)
-		} else {
-			fmt.Fprintf(os.Stderr, "  ❌ Tool %s failed: %s\n", call.Name, result.Error)
-		}
-	}
-
-	return results, nil
 }
 
 // buildFeedbackPrompt builds a prompt with tool results for the next round

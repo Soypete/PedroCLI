@@ -40,7 +40,7 @@ const (
 )
 
 // NewTriagerAgent creates a new triager agent
-func NewTriagerAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager) *TriagerAgent {
+func NewTriagerAgent(cfg *config.Config, backend llm.Backend, jobMgr jobs.JobManager) *TriagerAgent {
 	base := NewCodingBaseAgent(
 		"triager",
 		"Diagnose issues and provide triage reports (no fixes)",
@@ -63,13 +63,13 @@ func (t *TriagerAgent) Execute(ctx context.Context, input map[string]interface{}
 	}
 
 	// Create job
-	job, err := t.jobManager.Create("triage", description, input)
+	job, err := t.jobManager.Create(ctx, "triage", description, input)
 	if err != nil {
 		return nil, err
 	}
 
 	// Update status to running
-	t.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
+	t.jobManager.Update(ctx, job.ID, jobs.StatusRunning, nil, nil)
 
 	// Run the inference loop in background with its own context
 	go func() {
@@ -79,7 +79,7 @@ func (t *TriagerAgent) Execute(ctx context.Context, input map[string]interface{}
 		// Create context manager
 		contextMgr, err := llmcontext.NewManager(job.ID, t.config.Debug.Enabled)
 		if err != nil {
-			t.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			t.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
@@ -94,7 +94,7 @@ func (t *TriagerAgent) Execute(ctx context.Context, input map[string]interface{}
 		// Execute the inference loop
 		err = executor.Execute(bgCtx, userPrompt)
 		if err != nil {
-			t.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			t.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 
@@ -104,7 +104,7 @@ func (t *TriagerAgent) Execute(ctx context.Context, input map[string]interface{}
 			"status":  "completed",
 		}
 
-		t.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
+		t.jobManager.Update(bgCtx, job.ID, jobs.StatusCompleted, output, nil)
 	}()
 
 	// Return immediately with the running job

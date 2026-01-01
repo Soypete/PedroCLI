@@ -30,13 +30,13 @@ type BaseAgent struct {
 	config        *config.Config
 	llm           llm.Backend
 	tools         map[string]tools.Tool
-	jobManager    *jobs.Manager
+	jobManager    jobs.JobManager
 	registry      *tools.ToolRegistry
 	toolPromptGen *prompts.ToolPromptGenerator
 }
 
 // NewBaseAgent creates a new base agent
-func NewBaseAgent(name, description string, cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager) *BaseAgent {
+func NewBaseAgent(name, description string, cfg *config.Config, backend llm.Backend, jobMgr jobs.JobManager) *BaseAgent {
 	return &BaseAgent{
 		name:          name,
 		description:   description,
@@ -50,7 +50,7 @@ func NewBaseAgent(name, description string, cfg *config.Config, backend llm.Back
 }
 
 // NewBaseAgentWithRegistry creates a new base agent with a tool registry for dynamic prompts
-func NewBaseAgentWithRegistry(name, description string, cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager, registry *tools.ToolRegistry) *BaseAgent {
+func NewBaseAgentWithRegistry(name, description string, cfg *config.Config, backend llm.Backend, jobMgr jobs.JobManager, registry *tools.ToolRegistry) *BaseAgent {
 	agent := NewBaseAgent(name, description, cfg, backend, jobMgr)
 	agent.SetRegistry(registry)
 	return agent

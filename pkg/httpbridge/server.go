@@ -95,6 +95,14 @@ func (s *Server) Run(addr string) error {
 	return http.ListenAndServe(addr, s.mux)
 }
 
+// Close closes the server and releases resources (including database connections)
+func (s *Server) Close() error {
+	if s.appCtx != nil {
+		return s.appCtx.Close()
+	}
+	return nil
+}
+
 // handleIndex serves the main page
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {

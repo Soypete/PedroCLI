@@ -63,7 +63,7 @@ type BlogOrchestratorAgent struct {
 }
 
 // NewBlogOrchestratorAgent creates a new blog orchestrator agent
-func NewBlogOrchestratorAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager) *BlogOrchestratorAgent {
+func NewBlogOrchestratorAgent(cfg *config.Config, backend llm.Backend, jobMgr jobs.JobManager) *BlogOrchestratorAgent {
 	base := NewBaseAgent(
 		"blog_orchestrator",
 		"Orchestrate complex multi-step blog creation with research and outline-first generation",
@@ -105,12 +105,12 @@ func (o *BlogOrchestratorAgent) Execute(ctx context.Context, input map[string]in
 	}
 
 	// Create job
-	job, err := o.jobManager.Create("blog_orchestrator", "Orchestrate: "+title, input)
+	job, err := o.jobManager.Create(ctx, "blog_orchestrator", "Orchestrate: "+title, input)
 	if err != nil {
 		return nil, err
 	}
 
-	o.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
+	o.jobManager.Update(ctx, job.ID, jobs.StatusRunning, nil, nil)
 
 	// Run orchestration in background
 	go func() {
@@ -118,14 +118,14 @@ func (o *BlogOrchestratorAgent) Execute(ctx context.Context, input map[string]in
 
 		contextMgr, err := llmcontext.NewManager(job.ID, o.config.Debug.Enabled)
 		if err != nil {
-			o.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			o.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
 
 		result, err := o.runOrchestration(bgCtx, contextMgr, prompt, input)
 		if err != nil {
-			o.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			o.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 
@@ -146,7 +146,7 @@ func (o *BlogOrchestratorAgent) Execute(ctx context.Context, input map[string]in
 			"published":       result.Published,
 		}
 
-		o.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
+		o.jobManager.Update(bgCtx, job.ID, jobs.StatusCompleted, output, nil)
 	}()
 
 	return job, nil

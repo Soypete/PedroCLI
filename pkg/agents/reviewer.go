@@ -37,7 +37,7 @@ type ReviewIssue struct {
 }
 
 // NewReviewerAgent creates a new reviewer agent
-func NewReviewerAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager) *ReviewerAgent {
+func NewReviewerAgent(cfg *config.Config, backend llm.Backend, jobMgr jobs.JobManager) *ReviewerAgent {
 	base := NewCodingBaseAgent(
 		"reviewer",
 		"Perform code review on PRs (blind review - unaware of AI authorship)",
@@ -61,13 +61,13 @@ func (r *ReviewerAgent) Execute(ctx context.Context, input map[string]interface{
 
 	// Create job
 	description := fmt.Sprintf("Review code on branch: %s", branch)
-	job, err := r.jobManager.Create("review", description, input)
+	job, err := r.jobManager.Create(ctx, "review", description, input)
 	if err != nil {
 		return nil, err
 	}
 
 	// Update status to running
-	r.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
+	r.jobManager.Update(ctx, job.ID, jobs.StatusRunning, nil, nil)
 
 	// Run the inference loop in background with its own context
 	go func() {
@@ -77,7 +77,7 @@ func (r *ReviewerAgent) Execute(ctx context.Context, input map[string]interface{
 		// Create context manager
 		contextMgr, err := llmcontext.NewManager(job.ID, r.config.Debug.Enabled)
 		if err != nil {
-			r.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			r.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
@@ -85,7 +85,7 @@ func (r *ReviewerAgent) Execute(ctx context.Context, input map[string]interface{
 		// Get git diff for the branch
 		diff, err := r.getGitDiff(bgCtx, branch)
 		if err != nil {
-			r.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			r.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 
@@ -99,7 +99,7 @@ func (r *ReviewerAgent) Execute(ctx context.Context, input map[string]interface{
 		// Execute the inference loop
 		err = executor.Execute(bgCtx, userPrompt)
 		if err != nil {
-			r.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			r.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 
@@ -110,7 +110,7 @@ func (r *ReviewerAgent) Execute(ctx context.Context, input map[string]interface{
 			"status":  "completed",
 		}
 
-		r.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
+		r.jobManager.Update(bgCtx, job.ID, jobs.StatusCompleted, output, nil)
 	}()
 
 	// Return immediately with the running job

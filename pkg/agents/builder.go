@@ -16,7 +16,7 @@ type BuilderAgent struct {
 }
 
 // NewBuilderAgent creates a new builder agent
-func NewBuilderAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager) *BuilderAgent {
+func NewBuilderAgent(cfg *config.Config, backend llm.Backend, jobMgr jobs.JobManager) *BuilderAgent {
 	base := NewCodingBaseAgent(
 		"builder",
 		"Build new features autonomously and create draft PRs",
@@ -39,13 +39,13 @@ func (b *BuilderAgent) Execute(ctx context.Context, input map[string]interface{}
 	}
 
 	// Create job
-	job, err := b.jobManager.Create("build", description, input)
+	job, err := b.jobManager.Create(ctx, "build", description, input)
 	if err != nil {
 		return nil, err
 	}
 
 	// Update status to running
-	b.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
+	b.jobManager.Update(ctx, job.ID, jobs.StatusRunning, nil, nil)
 
 	// Run the inference loop in background with its own context
 	go func() {
@@ -55,7 +55,7 @@ func (b *BuilderAgent) Execute(ctx context.Context, input map[string]interface{}
 		// Create context manager
 		contextMgr, err := llmcontext.NewManager(job.ID, b.config.Debug.Enabled)
 		if err != nil {
-			b.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			b.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
@@ -70,7 +70,7 @@ func (b *BuilderAgent) Execute(ctx context.Context, input map[string]interface{}
 		// Execute the inference loop
 		err = executor.Execute(bgCtx, userPrompt)
 		if err != nil {
-			b.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			b.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 
@@ -80,7 +80,7 @@ func (b *BuilderAgent) Execute(ctx context.Context, input map[string]interface{}
 			"job_dir": contextMgr.GetJobDir(),
 		}
 
-		b.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
+		b.jobManager.Update(bgCtx, job.ID, jobs.StatusCompleted, output, nil)
 	}()
 
 	// Return immediately with the running job

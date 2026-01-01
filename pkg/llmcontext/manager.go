@@ -57,6 +57,11 @@ func (m *Manager) GetJobDir() string {
 	return m.jobDir
 }
 
+// GetJobID returns the job ID
+func (m *Manager) GetJobID() string {
+	return m.jobID
+}
+
 // SavePrompt saves a prompt to the context
 func (m *Manager) SavePrompt(prompt string) error {
 	m.counter++

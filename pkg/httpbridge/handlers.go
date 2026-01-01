@@ -240,7 +240,13 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 
 // handleListJobs lists all jobs from the job manager
 func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
-	jobList := s.appCtx.JobManager.List()
+	jobList, err := s.appCtx.JobManager.List(r.Context())
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": fmt.Sprintf("Failed to list jobs: %v", err),
+		})
+		return
+	}
 
 	if len(jobList) == 0 {
 		if r.Header.Get("HX-Request") == "true" {
@@ -292,7 +298,7 @@ func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
 
 // handleGetJob gets a single job status from the job manager
 func (s *Server) handleGetJob(w http.ResponseWriter, r *http.Request, jobID string) {
-	job, err := s.appCtx.JobManager.Get(jobID)
+	job, err := s.appCtx.JobManager.Get(r.Context(), jobID)
 	if err != nil {
 		respondJSON(w, http.StatusNotFound, map[string]string{
 			"error": fmt.Sprintf("Job not found: %v", err),
@@ -338,7 +344,7 @@ func (s *Server) handleGetJob(w http.ResponseWriter, r *http.Request, jobID stri
 
 // handleCancelJob cancels a job using the job manager
 func (s *Server) handleCancelJob(w http.ResponseWriter, r *http.Request, jobID string) {
-	if err := s.appCtx.JobManager.Cancel(jobID); err != nil {
+	if err := s.appCtx.JobManager.Cancel(r.Context(), jobID); err != nil {
 		respondJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": fmt.Sprintf("Failed to cancel job: %v", err),
 		})

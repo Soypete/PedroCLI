@@ -1,12 +1,16 @@
 package httpbridge
 
 import (
+	"context"
+	"log"
 	"os"
 
 	"github.com/soypete/pedrocli/pkg/agents"
 	"github.com/soypete/pedrocli/pkg/config"
+	"github.com/soypete/pedrocli/pkg/database"
 	"github.com/soypete/pedrocli/pkg/jobs"
 	"github.com/soypete/pedrocli/pkg/llm"
+	"github.com/soypete/pedrocli/pkg/storage"
 	"github.com/soypete/pedrocli/pkg/tools"
 )
 
@@ -14,7 +18,8 @@ import (
 type AppContext struct {
 	Config     *config.Config
 	Backend    llm.Backend
-	JobManager *jobs.Manager
+	JobManager jobs.JobManager
+	Database   *database.DB
 	WorkDir    string
 
 	// Tools (used by agents)
@@ -32,18 +37,45 @@ type AppContext struct {
 	BlogNotionTool  tools.Tool
 }
 
-// NewAppContext creates and initializes the application context
+// NewAppContext creates and initializes the application context with database-backed job manager.
 func NewAppContext(cfg *config.Config) (*AppContext, error) {
+	return NewAppContextWithDB(cfg, nil)
+}
+
+// NewAppContextWithDB creates and initializes the application context with an optional database.
+// If db is nil, it will create a new database connection using default config.
+func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, error) {
 	// Create LLM backend
 	backend, err := llm.NewBackend(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create job manager
-	jobManager, err := jobs.NewManager("/tmp/pedrocli-jobs")
-	if err != nil {
+	// Create or use provided database
+	if db == nil {
+		dbCfg := database.DefaultConfig()
+		db, err = database.New(dbCfg)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Run migrations
+	ctx := context.Background()
+	if err := db.Migrate(ctx); err != nil {
 		return nil, err
+	}
+
+	// Create job store and manager
+	jobStore := storage.NewJobStore(db.DB)
+	jobManager := jobs.NewDBManager(jobStore)
+
+	// Migrate existing file-based jobs to database
+	migrated, err := jobManager.MigrateFromFiles(ctx, "/tmp/pedrocli-jobs")
+	if err != nil {
+		log.Printf("Warning: failed to migrate jobs from files: %v", err)
+	} else if migrated > 0 {
+		log.Printf("Migrated %d jobs from files to database", migrated)
 	}
 
 	// Get working directory
@@ -53,28 +85,37 @@ func NewAppContext(cfg *config.Config) (*AppContext, error) {
 	}
 
 	// Create tools
-	ctx := &AppContext{
+	appCtx := &AppContext{
 		Config:     cfg,
 		Backend:    backend,
 		JobManager: jobManager,
+		Database:   db,
 		WorkDir:    workDir,
 	}
 
 	// Initialize code tools
-	ctx.FileTool = tools.NewFileTool()
-	ctx.GitTool = tools.NewGitTool(workDir)
-	ctx.BashTool = tools.NewBashTool(cfg, workDir)
-	ctx.TestTool = tools.NewTestTool(workDir)
-	ctx.CodeEditTool = tools.NewCodeEditTool()
-	ctx.SearchTool = tools.NewSearchTool(workDir)
-	ctx.NavigateTool = tools.NewNavigateTool(workDir)
+	appCtx.FileTool = tools.NewFileTool()
+	appCtx.GitTool = tools.NewGitTool(workDir)
+	appCtx.BashTool = tools.NewBashTool(cfg, workDir)
+	appCtx.TestTool = tools.NewTestTool(workDir)
+	appCtx.CodeEditTool = tools.NewCodeEditTool()
+	appCtx.SearchTool = tools.NewSearchTool(workDir)
+	appCtx.NavigateTool = tools.NewNavigateTool(workDir)
 
 	// Initialize blog tools
-	ctx.RSSFeedTool = tools.NewRSSFeedTool(cfg)
-	ctx.StaticLinksTool = tools.NewStaticLinksTool(cfg)
-	ctx.BlogNotionTool = tools.NewBlogNotionTool(cfg)
+	appCtx.RSSFeedTool = tools.NewRSSFeedTool(cfg)
+	appCtx.StaticLinksTool = tools.NewStaticLinksTool(cfg)
+	appCtx.BlogNotionTool = tools.NewBlogNotionTool(cfg)
 
-	return ctx, nil
+	return appCtx, nil
+}
+
+// Close closes the database connection.
+func (ctx *AppContext) Close() error {
+	if ctx.Database != nil {
+		return ctx.Database.Close()
+	}
+	return nil
 }
 
 // registerCodeTools registers standard code tools with an agent

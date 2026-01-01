@@ -1,12 +1,19 @@
+// Package jobs provides job management for PedroCLI agents.
+//
+// Deprecated: The file-based Manager is deprecated. Use DBManager instead
+// for persistent storage across nodes and better debugging capabilities.
 package jobs
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/soypete/pedrocli/pkg/storage"
 )
 
 // Status represents job status
@@ -36,14 +43,19 @@ type Job struct {
 	ContextDir  string                 `json:"context_dir"`
 }
 
-// Manager manages jobs
+// Manager manages jobs using file-based storage.
+//
+// Deprecated: Use DBManager for production use.
 type Manager struct {
-	mu       sync.RWMutex
-	jobs     map[string]*Job
-	stateDir string
+	mu            sync.RWMutex
+	jobs          map[string]*Job
+	conversations map[string][]storage.ConversationEntry
+	stateDir      string
 }
 
-// NewManager creates a new job manager
+// NewManager creates a new file-based job manager.
+//
+// Deprecated: Use NewDBManager for production use.
 func NewManager(stateDir string) (*Manager, error) {
 	if stateDir == "" {
 		stateDir = "/tmp/pedroceli-jobs"
@@ -54,8 +66,9 @@ func NewManager(stateDir string) (*Manager, error) {
 	}
 
 	m := &Manager{
-		jobs:     make(map[string]*Job),
-		stateDir: stateDir,
+		jobs:          make(map[string]*Job),
+		conversations: make(map[string][]storage.ConversationEntry),
+		stateDir:      stateDir,
 	}
 
 	// Load existing jobs
@@ -66,8 +79,8 @@ func NewManager(stateDir string) (*Manager, error) {
 	return m, nil
 }
 
-// Create creates a new job
-func (m *Manager) Create(jobType, description string, input map[string]interface{}) (*Job, error) {
+// Create creates a new job.
+func (m *Manager) Create(ctx context.Context, jobType, description string, input map[string]interface{}) (*Job, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -84,6 +97,7 @@ func (m *Manager) Create(jobType, description string, input map[string]interface
 	}
 
 	m.jobs[job.ID] = job
+	m.conversations[job.ID] = []storage.ConversationEntry{}
 
 	// Save to disk
 	if err := m.saveJob(job); err != nil {
@@ -93,8 +107,8 @@ func (m *Manager) Create(jobType, description string, input map[string]interface
 	return job, nil
 }
 
-// Get retrieves a job by ID
-func (m *Manager) Get(id string) (*Job, error) {
+// Get retrieves a job by ID.
+func (m *Manager) Get(ctx context.Context, id string) (*Job, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -106,8 +120,8 @@ func (m *Manager) Get(id string) (*Job, error) {
 	return job, nil
 }
 
-// List returns all jobs
-func (m *Manager) List() []*Job {
+// List returns all jobs.
+func (m *Manager) List(ctx context.Context) ([]*Job, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -116,11 +130,11 @@ func (m *Manager) List() []*Job {
 		jobs = append(jobs, job)
 	}
 
-	return jobs
+	return jobs, nil
 }
 
-// Update updates a job's status and details
-func (m *Manager) Update(id string, status Status, output map[string]interface{}, err error) error {
+// Update updates a job's status and details.
+func (m *Manager) Update(ctx context.Context, id string, status Status, output map[string]interface{}, err error) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -149,9 +163,9 @@ func (m *Manager) Update(id string, status Status, output map[string]interface{}
 	return m.saveJob(job)
 }
 
-// Cancel cancels a job
-func (m *Manager) Cancel(id string) error {
-	return m.Update(id, StatusCancelled, nil, nil)
+// Cancel cancels a job.
+func (m *Manager) Cancel(ctx context.Context, id string) error {
+	return m.Update(ctx, id, StatusCancelled, nil, nil)
 }
 
 // saveJob saves a job to disk
@@ -190,8 +204,8 @@ func (m *Manager) loadJobs() error {
 	return nil
 }
 
-// CleanupOldJobs removes completed jobs older than the specified duration
-func (m *Manager) CleanupOldJobs(olderThan time.Duration) error {
+// CleanupOldJobs removes completed jobs older than the specified duration.
+func (m *Manager) CleanupOldJobs(ctx context.Context, olderThan time.Duration) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -202,6 +216,7 @@ func (m *Manager) CleanupOldJobs(olderThan time.Duration) error {
 			if job.CompletedAt != nil && job.CompletedAt.Before(cutoff) {
 				// Remove from memory
 				delete(m.jobs, id)
+				delete(m.conversations, id)
 
 				// Remove from disk
 				filename := filepath.Join(m.stateDir, fmt.Sprintf("%s.json", id))
@@ -211,4 +226,57 @@ func (m *Manager) CleanupOldJobs(olderThan time.Duration) error {
 	}
 
 	return nil
+}
+
+// SetWorkDir sets the working directory for a job.
+func (m *Manager) SetWorkDir(ctx context.Context, id string, workDir string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	job, ok := m.jobs[id]
+	if !ok {
+		return fmt.Errorf("job not found: %s", id)
+	}
+
+	job.WorkDir = workDir
+	return m.saveJob(job)
+}
+
+// SetContextDir sets the context directory for a job.
+func (m *Manager) SetContextDir(ctx context.Context, id string, contextDir string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	job, ok := m.jobs[id]
+	if !ok {
+		return fmt.Errorf("job not found: %s", id)
+	}
+
+	job.ContextDir = contextDir
+	return m.saveJob(job)
+}
+
+// AppendConversation appends an entry to the job's conversation history.
+func (m *Manager) AppendConversation(ctx context.Context, id string, entry storage.ConversationEntry) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, ok := m.jobs[id]; !ok {
+		return fmt.Errorf("job not found: %s", id)
+	}
+
+	m.conversations[id] = append(m.conversations[id], entry)
+	return nil
+}
+
+// GetConversation retrieves the conversation history for a job.
+func (m *Manager) GetConversation(ctx context.Context, id string) ([]storage.ConversationEntry, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if _, ok := m.jobs[id]; !ok {
+		return nil, fmt.Errorf("job not found: %s", id)
+	}
+
+	return m.conversations[id], nil
 }
