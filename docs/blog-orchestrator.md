@@ -9,6 +9,28 @@ The Blog Orchestrator is designed for complex blog prompts like:
 - "Create a recap of my conference talks this year with my community links"
 - "Write a retrospective with newsletter section and social media posts"
 
+## Agent Types (v0.3.0+)
+
+PedroCLI provides two blog agent types:
+
+### BlogOrchestratorAgent (Rigid Phases)
+
+The original orchestrator follows a fixed 6-phase pipeline. Best for:
+- Complex, multi-step blog posts that always need research
+- Predictable, consistent output structure
+- Posts that require all phases (outline, newsletter, social posts)
+
+### DynamicBlogAgent (LLM-Driven)
+
+The dynamic agent lets the LLM decide which tools to use. Best for:
+- Simple posts that don't need extensive research
+- Flexible content where some phases can be skipped
+- Experimentation with different workflows
+
+The LLM has access to tools like `rss_feed`, `calendar`, `static_links`, and `blog_publish`, and decides when to call them based on the prompt.
+
+**API**: Use `/api/blog` endpoint with `"agent": "dynamic"` to select this mode.
+
 ## Multi-Phase Pipeline
 
 The orchestrator runs a 6-phase pipeline:
@@ -107,17 +129,20 @@ Response:
 }
 ```
 
-### MCP Tool Call
+### Programmatic Usage
 
-```json
-{
-  "tool": "blog_orchestrator",
-  "args": {
-    "prompt": "Write a 2025 year-in-review...",
-    "title": "Optional title",
-    "publish": true
-  }
-}
+```go
+// Create orchestrator via AppContext
+orchestrator := appCtx.NewBlogOrchestratorAgent()
+job, err := orchestrator.Execute(ctx, map[string]interface{}{
+    "prompt":  "Write a 2025 year-in-review...",
+    "title":   "Optional title",
+    "publish": true,
+})
+
+// Or use dynamic agent
+dynamicAgent := appCtx.NewDynamicBlogAgent()
+job, err := dynamicAgent.Execute(ctx, input)
 ```
 
 ## Research Tools
