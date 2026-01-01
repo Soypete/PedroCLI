@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/soypete/pedrocli/pkg/logits"
 )
 
 // NavigateTool provides code navigation and structure analysis
@@ -410,4 +412,59 @@ func (n *NavigateTool) getImportPatterns(language string) []string {
 	}
 
 	return patterns
+}
+
+// Metadata returns rich tool metadata for discovery and LLM guidance
+func (n *NavigateTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Schema: &logits.JSONSchema{
+			Type: "object",
+			Properties: map[string]*logits.JSONSchema{
+				"action": {
+					Type:        "string",
+					Enum:        []interface{}{"list_directory", "get_file_outline", "find_imports", "get_tree"},
+					Description: "The navigation operation to perform",
+				},
+				"directory": {
+					Type:        "string",
+					Description: "Directory to list or navigate (optional)",
+				},
+				"path": {
+					Type:        "string",
+					Description: "File path for get_file_outline or find_imports",
+				},
+				"show_hidden": {
+					Type:        "boolean",
+					Description: "Show hidden files in list_directory",
+				},
+				"extension": {
+					Type:        "string",
+					Description: "Filter by extension in list_directory",
+				},
+				"max_depth": {
+					Type:        "integer",
+					Description: "Maximum depth for get_tree (default: 3)",
+				},
+			},
+			Required: []string{"action"},
+		},
+		Category:    CategoryCode,
+		Optionality: ToolRequired,
+		UsageHint:   "Use get_tree to understand project structure. Use get_file_outline to see functions without reading entire files.",
+		Examples: []ToolExample{
+			{
+				Description: "List files in pkg directory",
+				Input:       map[string]interface{}{"action": "list_directory", "directory": "pkg"},
+			},
+			{
+				Description: "Get outline of a Go file",
+				Input:       map[string]interface{}{"action": "get_file_outline", "path": "pkg/agents/base.go"},
+			},
+			{
+				Description: "View project tree",
+				Input:       map[string]interface{}{"action": "get_tree", "max_depth": 2},
+			},
+		},
+		Produces: []string{"directory_listing", "file_outline", "import_list"},
+	}
 }

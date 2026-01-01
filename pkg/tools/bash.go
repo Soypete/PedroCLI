@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/soypete/pedrocli/pkg/config"
+	"github.com/soypete/pedrocli/pkg/logits"
 )
 
 // BashTool executes safe bash commands (no sed/grep/find - use Go instead)
@@ -125,4 +126,39 @@ func (b *BashTool) isAllowed(cmd string) bool {
 	}
 
 	return b.allowedCommands[cmd]
+}
+
+// Metadata returns rich tool metadata for discovery and LLM guidance
+func (b *BashTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Schema: &logits.JSONSchema{
+			Type: "object",
+			Properties: map[string]*logits.JSONSchema{
+				"command": {
+					Type:        "string",
+					Description: "The shell command to execute",
+				},
+			},
+			Required: []string{"command"},
+		},
+		Category:             CategoryBuild,
+		Optionality:          ToolRequired,
+		UsageHint:            "Use for build, test, and package commands. DON'T use grep/sed/cat - use file and search tools instead.",
+		RequiresCapabilities: []string{"bash"},
+		Examples: []ToolExample{
+			{
+				Description: "Build a Go project",
+				Input:       map[string]interface{}{"command": "go build ./..."},
+			},
+			{
+				Description: "Install npm dependencies",
+				Input:       map[string]interface{}{"command": "npm install"},
+			},
+			{
+				Description: "Run make target",
+				Input:       map[string]interface{}{"command": "make build"},
+			},
+		},
+		Produces: []string{"command_output"},
+	}
 }
