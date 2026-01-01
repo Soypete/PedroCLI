@@ -8,13 +8,12 @@ import (
 	"time"
 
 	"github.com/soypete/pedrocli/pkg/config"
-	"github.com/soypete/pedrocli/pkg/mcp"
 )
 
 // Server represents the HTTP server
 type Server struct {
 	config       *config.Config
-	mcpClient    *mcp.Client
+	appCtx       *AppContext
 	ctx          context.Context
 	mux          *http.ServeMux
 	templates    *template.Template
@@ -22,7 +21,13 @@ type Server struct {
 }
 
 // NewServer creates a new HTTP server
-func NewServer(cfg *config.Config, mcpClient *mcp.Client, ctx context.Context) *Server {
+func NewServer(cfg *config.Config, ctx context.Context) (*Server, error) {
+	// Initialize app context (creates LLM backend, job manager, tools)
+	appCtx, err := NewAppContext(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	mux := http.NewServeMux()
 
 	// Load HTML templates (must load all files individually, ** glob doesn't work)
@@ -33,12 +38,12 @@ func NewServer(cfg *config.Config, mcpClient *mcp.Client, ctx context.Context) *
 		"pkg/web/templates/components/job_card.html",
 	))
 
-	// Create SSE broadcaster
-	sseBroadcast := NewSSEBroadcaster(mcpClient, ctx)
+	// Create SSE broadcaster using job manager directly
+	sseBroadcast := NewSSEBroadcaster(appCtx.JobManager, ctx)
 
 	server := &Server{
 		config:       cfg,
-		mcpClient:    mcpClient,
+		appCtx:       appCtx,
 		ctx:          ctx,
 		mux:          mux,
 		templates:    templates,
@@ -51,7 +56,7 @@ func NewServer(cfg *config.Config, mcpClient *mcp.Client, ctx context.Context) *
 	// Start background polling for real-time updates (every 2 seconds)
 	go sseBroadcast.StartPolling(2 * time.Second)
 
-	return server
+	return server, nil
 }
 
 // setupRoutes configures all HTTP routes

@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/soypete/pedrocli/pkg/mcp"
+	"github.com/soypete/pedrocli/pkg/jobs"
 )
 
 // SSEClient represents a connected SSE client
@@ -30,16 +30,16 @@ type SSEMessage struct {
 type SSEBroadcaster struct {
 	clients    map[string]*SSEClient
 	mutex      sync.RWMutex
-	mcpClient  *mcp.Client
+	jobManager *jobs.Manager
 	ctx        context.Context
 	lastStatus map[string]string // jobID -> last known status
 }
 
 // NewSSEBroadcaster creates a new SSE broadcaster
-func NewSSEBroadcaster(mcpClient *mcp.Client, ctx context.Context) *SSEBroadcaster {
+func NewSSEBroadcaster(jobManager *jobs.Manager, ctx context.Context) *SSEBroadcaster {
 	return &SSEBroadcaster{
 		clients:    make(map[string]*SSEClient),
-		mcpClient:  mcpClient,
+		jobManager: jobManager,
 		ctx:        ctx,
 		lastStatus: make(map[string]string),
 	}
@@ -108,20 +108,23 @@ func (b *SSEBroadcaster) StartPolling(pollInterval time.Duration) {
 
 // pollJobs checks job statuses and broadcasts updates
 func (b *SSEBroadcaster) pollJobs() {
-	// Get list of all jobs from MCP
-	result, err := b.mcpClient.CallTool(b.ctx, "list_jobs", map[string]interface{}{})
-	if err != nil {
-		fmt.Printf("Error polling jobs: %v\n", err)
-		return
-	}
+	// Get list of all jobs from job manager
+	jobList := b.jobManager.List()
 
-	if len(result.Content) == 0 {
-		return
+	// Build job list text for all-jobs broadcast
+	var jobListText string
+	for _, job := range jobList {
+		statusEmoji := "⏳"
+		switch job.Status {
+		case jobs.StatusCompleted:
+			statusEmoji = "✅"
+		case jobs.StatusFailed:
+			statusEmoji = "❌"
+		case jobs.StatusRunning:
+			statusEmoji = "🔄"
+		}
+		jobListText += fmt.Sprintf("%s %s [%s] %s\n", job.ID, statusEmoji, job.Status, job.Description)
 	}
-
-	// Parse job list (assuming it's plain text for now)
-	// In a real implementation, we'd parse the structured data
-	jobListText := result.Content[0].Text
 
 	// For each job we're tracking, check if status changed
 	b.mutex.RLock()
@@ -147,18 +150,23 @@ func (b *SSEBroadcaster) pollJobs() {
 
 // checkJobStatus checks a single job's status and broadcasts if changed
 func (b *SSEBroadcaster) checkJobStatus(jobID string) {
-	result, err := b.mcpClient.CallTool(b.ctx, "get_job_status", map[string]interface{}{
-		"job_id": jobID,
-	})
+	job, err := b.jobManager.Get(jobID)
 	if err != nil {
 		return
 	}
 
-	if len(result.Content) == 0 {
-		return
+	// Build status text
+	currentStatus := fmt.Sprintf("Job: %s\nType: %s\nStatus: %s\nCreated: %s",
+		job.ID, job.Type, job.Status, job.CreatedAt.Format(time.RFC3339))
+	if job.StartedAt != nil {
+		currentStatus += fmt.Sprintf("\nStarted: %s", job.StartedAt.Format(time.RFC3339))
 	}
-
-	currentStatus := result.Content[0].Text
+	if job.CompletedAt != nil {
+		currentStatus += fmt.Sprintf("\nCompleted: %s", job.CompletedAt.Format(time.RFC3339))
+	}
+	if job.Error != "" {
+		currentStatus += fmt.Sprintf("\nError: %s", job.Error)
+	}
 
 	// Check if status changed
 	b.mutex.Lock()
@@ -228,27 +236,49 @@ func (b *SSEBroadcaster) ServeHTTP(w http.ResponseWriter, r *http.Request, jobID
 func (b *SSEBroadcaster) sendInitialStatus(w http.ResponseWriter, flusher http.Flusher, jobID string) {
 	if jobID == "*" {
 		// Send full job list
-		result, err := b.mcpClient.CallTool(b.ctx, "list_jobs", map[string]interface{}{})
-		if err == nil && len(result.Content) > 0 {
-			msg := SSEMessage{
-				Event: "list",
-				Data:  result.Content[0].Text,
+		jobList := b.jobManager.List()
+		var jobListText string
+		for _, job := range jobList {
+			statusEmoji := "⏳"
+			switch job.Status {
+			case jobs.StatusCompleted:
+				statusEmoji = "✅"
+			case jobs.StatusFailed:
+				statusEmoji = "❌"
+			case jobs.StatusRunning:
+				statusEmoji = "🔄"
 			}
-			data, _ := json.Marshal(msg)
-			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", msg.Event, string(data))
-			flusher.Flush()
+			jobListText += fmt.Sprintf("%s %s [%s] %s\n", job.ID, statusEmoji, job.Status, job.Description)
 		}
+
+		msg := SSEMessage{
+			Event: "list",
+			Data:  jobListText,
+		}
+		data, _ := json.Marshal(msg)
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", msg.Event, string(data))
+		flusher.Flush()
 	} else {
 		// Send specific job status
-		result, err := b.mcpClient.CallTool(b.ctx, "get_job_status", map[string]interface{}{
-			"job_id": jobID,
-		})
-		if err == nil && len(result.Content) > 0 {
+		job, err := b.jobManager.Get(jobID)
+		if err == nil {
+			statusText := fmt.Sprintf("Job: %s\nType: %s\nStatus: %s\nCreated: %s",
+				job.ID, job.Type, job.Status, job.CreatedAt.Format(time.RFC3339))
+			if job.StartedAt != nil {
+				statusText += fmt.Sprintf("\nStarted: %s", job.StartedAt.Format(time.RFC3339))
+			}
+			if job.CompletedAt != nil {
+				statusText += fmt.Sprintf("\nCompleted: %s", job.CompletedAt.Format(time.RFC3339))
+			}
+			if job.Error != "" {
+				statusText += fmt.Sprintf("\nError: %s", job.Error)
+			}
+
 			msg := SSEMessage{
 				Event: "update",
 				Data: map[string]interface{}{
 					"job_id": jobID,
-					"status": result.Content[0].Text,
+					"status": statusText,
 				},
 			}
 			data, _ := json.Marshal(msg)

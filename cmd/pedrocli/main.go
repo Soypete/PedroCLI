@@ -5,18 +5,16 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
+	"github.com/soypete/pedrocli/pkg/agents"
 	"github.com/soypete/pedrocli/pkg/config"
 	depcheck "github.com/soypete/pedrocli/pkg/init"
-	"github.com/soypete/pedrocli/pkg/mcp"
+	"github.com/soypete/pedrocli/pkg/jobs"
 )
 
-const version = "0.2.0-dev"
+const version = "0.3.0-dev"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -138,69 +136,8 @@ Examples:
 For more information: https://github.com/soypete/pedrocli`)
 }
 
-// startMCPClient starts the MCP server and returns a client
-func startMCPClient(cfg *config.Config) (*mcp.Client, context.Context, context.CancelFunc, error) {
-	// Find the MCP server binary
-	serverPath, err := findMCPServer()
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	// Create client
-	client := mcp.NewClient(serverPath, []string{})
-
-	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-
-	// Start server
-	if err := client.Start(ctx); err != nil {
-		cancel()
-		return nil, nil, nil, fmt.Errorf("failed to start MCP server: %w", err)
-	}
-
-	return client, ctx, cancel, nil
-}
-
-// findMCPServer finds the MCP server binary
-func findMCPServer() (string, error) {
-	// Try current directory first
-	localPath := "./pedrocli-server"
-	if _, err := os.Stat(localPath); err == nil {
-		abs, _ := filepath.Abs(localPath)
-		return abs, nil
-	}
-
-	// Try in same directory as the CLI binary
-	exePath, err := os.Executable()
-	if err == nil {
-		serverPath := filepath.Join(filepath.Dir(exePath), "pedrocli-server")
-		if _, err := os.Stat(serverPath); err == nil {
-			return serverPath, nil
-		}
-	}
-
-	// Try $PATH
-	serverPath, err := exec.LookPath("pedrocli-server")
-	if err == nil {
-		return serverPath, nil
-	}
-
-	return "", fmt.Errorf("pedrocli-server not found. Please build it with 'make build-server'")
-}
-
-// extractJobID extracts job ID from agent response text
-func extractJobID(text string) (string, error) {
-	// Look for "Job job-XXXXX started"
-	re := regexp.MustCompile(`Job (job-\d+)`)
-	matches := re.FindStringSubmatch(text)
-	if len(matches) < 2 {
-		return "", fmt.Errorf("could not extract job ID from response: %s", text)
-	}
-	return matches[1], nil
-}
-
 // pollJobStatus polls for job status until completion
-func pollJobStatus(ctx context.Context, client *mcp.Client, jobID string) error {
+func pollJobStatus(ctx context.Context, jobMgr *jobs.Manager, jobID string) error {
 	fmt.Printf("\n⏳ Job %s is running...\n", jobID)
 	fmt.Println("Checking status every 5 seconds. Press Ctrl+C to stop watching (job will continue in background).")
 
@@ -213,35 +150,62 @@ func pollJobStatus(ctx context.Context, client *mcp.Client, jobID string) error 
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			// Call get_job_status
-			response, err := client.CallTool(ctx, "get_job_status", map[string]interface{}{
-				"job_id": jobID,
-			})
+			job, err := jobMgr.Get(jobID)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: Failed to check status: %v\n", err)
 				continue
 			}
 
-			// Extract status from response
-			if len(response.Content) > 0 && response.Content[0].Type == "text" {
-				status := response.Content[0].Text
+			// Build status string
+			status := fmt.Sprintf("Status: %s", job.Status)
 
-				// Only print if status changed
-				if status != lastStatus {
-					fmt.Println(status)
-					lastStatus = status
-				}
-
-				// Check if job is complete
-				if strings.Contains(strings.ToLower(status), "completed") {
-					fmt.Println("\n✅ Job completed successfully!")
-					return nil
-				}
-				if strings.Contains(strings.ToLower(status), "failed") {
-					fmt.Println("\n❌ Job failed!")
-					return fmt.Errorf("job failed")
-				}
+			// Only print if status changed
+			if status != lastStatus {
+				fmt.Println(status)
+				lastStatus = status
 			}
+
+			// Check if job is complete
+			if job.Status == jobs.StatusCompleted {
+				fmt.Println("\n✅ Job completed successfully!")
+				return nil
+			}
+			if job.Status == jobs.StatusFailed {
+				fmt.Printf("\n❌ Job failed: %s\n", job.Error)
+				return fmt.Errorf("job failed: %s", job.Error)
+			}
+		}
+	}
+}
+
+// executeAgent executes an agent and polls for completion
+func executeAgent(cfg *config.Config, agent agents.Agent, arguments map[string]interface{}) {
+	// Initialize app context for job manager
+	appCtx, err := NewAppContext(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.Limits.MaxTaskDurationMinutes)*time.Minute)
+	defer cancel()
+
+	// Execute the agent
+	fmt.Printf("\nStarting %s job...\n", agent.Name())
+	job, err := agent.Execute(ctx, arguments)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to start %s: %v\n", agent.Name(), err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Job %s started\n", job.ID)
+
+	// Poll for status
+	if err := pollJobStatus(ctx, appCtx.JobManager, job.ID); err != nil {
+		if err == context.Canceled || err == context.DeadlineExceeded {
+			fmt.Println("\n⚠️  Stopped watching job. Job continues in background.")
+			fmt.Printf("Use 'pedrocli status %s' to check progress.\n", job.ID)
 		}
 	}
 }
@@ -263,7 +227,7 @@ func buildCommand(cfg *config.Config, args []string) {
 		fmt.Printf("Issue: %s\n", *issue)
 	}
 
-	// Build arguments for the tool
+	// Build arguments for the agent
 	arguments := map[string]interface{}{
 		"description": *description,
 	}
@@ -271,97 +235,15 @@ func buildCommand(cfg *config.Config, args []string) {
 		arguments["issue"] = *issue
 	}
 
-	// Call builder agent and poll for completion
-	callAgent(cfg, "builder", arguments)
-}
-
-// callAgent is a helper function to call an agent and poll for completion
-func callAgent(cfg *config.Config, agentName string, arguments map[string]interface{}) {
-	// Start MCP client
-	client, ctx, cancel, err := startMCPClient(cfg)
+	// Create and execute agent
+	appCtx, err := NewAppContext(cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to start MCP client: %v\n", err)
-		os.Exit(1)
-	}
-	defer cancel()
-	defer client.Stop()
-
-	// Call agent
-	fmt.Printf("\nStarting %s job...\n", agentName)
-	response, err := client.CallTool(ctx, agentName, arguments)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to call %s: %v\n", agentName, err)
+		fmt.Fprintf(os.Stderr, "Failed to initialize: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Extract job ID from response
-	if response.IsError {
-		fmt.Printf("\n❌ Failed to start %s job:\n", agentName)
-		for _, block := range response.Content {
-			if block.Type == "text" {
-				fmt.Println(block.Text)
-			}
-		}
-		os.Exit(1)
-	}
-
-	var jobID string
-	for _, block := range response.Content {
-		if block.Type == "text" {
-			fmt.Println(block.Text)
-			jobID, err = extractJobID(block.Text)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
-			}
-		}
-	}
-
-	if jobID == "" {
-		fmt.Println("\n⚠️  Job started but couldn't extract job ID. Check 'pedrocli list' for status.")
-		return
-	}
-
-	// Poll for status
-	if err := pollJobStatus(ctx, client, jobID); err != nil {
-		if err == context.Canceled || err == context.DeadlineExceeded {
-			fmt.Println("\n⚠️  Stopped watching job. Job continues in background.")
-			fmt.Printf("Use 'pedrocli status %s' to check progress.\n", jobID)
-		}
-	}
-}
-
-// callMCPTool is a helper function to call an MCP tool and display the response
-func callMCPTool(cfg *config.Config, toolName string, arguments map[string]interface{}) {
-	// Start MCP client
-	client, ctx, cancel, err := startMCPClient(cfg)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to start MCP client: %v\n", err)
-		os.Exit(1)
-	}
-	defer cancel()
-	defer client.Stop()
-
-	// Call tool
-	fmt.Printf("\nCalling %s...\n", toolName)
-	response, err := client.CallTool(ctx, toolName, arguments)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to call %s: %v\n", toolName, err)
-		os.Exit(1)
-	}
-
-	// Display response
-	fmt.Println()
-	if response.IsError {
-		fmt.Println("❌ Operation failed:")
-	} else {
-		fmt.Println("✅ Operation completed:")
-	}
-
-	for _, block := range response.Content {
-		if block.Type == "text" {
-			fmt.Println(block.Text)
-		}
-	}
+	agent := NewBuilderAgentWithTools(appCtx)
+	executeAgent(cfg, agent, arguments)
 }
 
 func debugCommand(cfg *config.Config, args []string) {
@@ -389,7 +271,15 @@ func debugCommand(cfg *config.Config, args []string) {
 		arguments["error_log"] = *logs // Agent expects "error_log"
 	}
 
-	callAgent(cfg, "debugger", arguments)
+	// Create and execute agent
+	appCtx, err := NewAppContext(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize: %v\n", err)
+		os.Exit(1)
+	}
+
+	agent := NewDebuggerAgentWithTools(appCtx)
+	executeAgent(cfg, agent, arguments)
 }
 
 func reviewCommand(cfg *config.Config, args []string) {
@@ -417,7 +307,15 @@ func reviewCommand(cfg *config.Config, args []string) {
 		arguments["pr_number"] = *prNumber
 	}
 
-	callAgent(cfg, "reviewer", arguments)
+	// Create and execute agent
+	appCtx, err := NewAppContext(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize: %v\n", err)
+		os.Exit(1)
+	}
+
+	agent := NewReviewerAgentWithTools(appCtx)
+	executeAgent(cfg, agent, arguments)
 }
 
 func triageCommand(cfg *config.Config, args []string) {
@@ -445,7 +343,15 @@ func triageCommand(cfg *config.Config, args []string) {
 		arguments["error_log"] = *errorLogs // Agent expects "error_log"
 	}
 
-	callAgent(cfg, "triager", arguments)
+	// Create and execute agent
+	appCtx, err := NewAppContext(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize: %v\n", err)
+		os.Exit(1)
+	}
+
+	agent := NewTriagerAgentWithTools(appCtx)
+	executeAgent(cfg, agent, arguments)
 }
 
 func blogCommand(cfg *config.Config, args []string) {
@@ -472,9 +378,17 @@ func blogCommand(cfg *config.Config, args []string) {
 			arguments["title"] = *title
 		}
 
-		callAgent(cfg, "blog_orchestrator", arguments)
+		// Create and execute blog orchestrator
+		appCtx, err := NewAppContext(cfg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to initialize: %v\n", err)
+			os.Exit(1)
+		}
+
+		agent := NewBlogOrchestratorAgentWithTools(appCtx)
+		executeAgent(cfg, agent, arguments)
 	} else if *content != "" {
-		// Simple blog post (direct to writer)
+		// Simple blog post - use blog_notion tool directly
 		if *title == "" {
 			fmt.Fprintln(os.Stderr, "Error: -title is required for simple blog posts")
 			fs.Usage()
@@ -483,12 +397,31 @@ func blogCommand(cfg *config.Config, args []string) {
 
 		fmt.Printf("Creating blog post: %s\n", *title)
 
-		arguments := map[string]interface{}{
-			"title":   *title,
-			"content": *content,
+		// For simple posts, use the blog notion tool directly
+		appCtx, err := NewAppContext(cfg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to initialize: %v\n", err)
+			os.Exit(1)
 		}
 
-		callMCPTool(cfg, "blog_writer", arguments)
+		ctx := context.Background()
+		result, err := appCtx.BlogNotionTool.Execute(ctx, map[string]interface{}{
+			"action":  "create",
+			"title":   *title,
+			"content": *content,
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to create blog post: %v\n", err)
+			os.Exit(1)
+		}
+
+		if result.Success {
+			fmt.Println("\n✅ Blog post created successfully!")
+			fmt.Println(result.Output)
+		} else {
+			fmt.Printf("\n❌ Failed to create blog post: %s\n", result.Error)
+			os.Exit(1)
+		}
 	} else {
 		fmt.Fprintln(os.Stderr, "Error: either -prompt (for orchestrated posts) or -content (for simple posts) is required")
 		fmt.Fprintln(os.Stderr, "\nExamples:")
@@ -511,12 +444,35 @@ func statusCommand(cfg *config.Config, args []string) {
 	jobID := fs.Args()[0]
 	fmt.Printf("Getting status for job: %s\n", jobID)
 
-	// Build arguments
-	arguments := map[string]interface{}{
-		"job_id": jobID,
+	// Get job status directly from job manager
+	jobMgr, err := jobs.NewManager("/tmp/pedrocli-jobs")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize job manager: %v\n", err)
+		os.Exit(1)
 	}
 
-	callMCPTool(cfg, "get_job_status", arguments)
+	job, err := jobMgr.Get(jobID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to get job status: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("\nJob: %s\n", job.ID)
+	fmt.Printf("Type: %s\n", job.Type)
+	fmt.Printf("Status: %s\n", job.Status)
+	fmt.Printf("Created: %s\n", job.CreatedAt.Format(time.RFC3339))
+	if job.StartedAt != nil {
+		fmt.Printf("Started: %s\n", job.StartedAt.Format(time.RFC3339))
+	}
+	if job.CompletedAt != nil {
+		fmt.Printf("Completed: %s\n", job.CompletedAt.Format(time.RFC3339))
+	}
+	if job.Error != "" {
+		fmt.Printf("Error: %s\n", job.Error)
+	}
+	if job.Output != nil {
+		fmt.Println("Output:", job.Output)
+	}
 }
 
 func listCommand(cfg *config.Config, args []string) {
@@ -525,7 +481,35 @@ func listCommand(cfg *config.Config, args []string) {
 
 	fmt.Println("Listing all jobs...")
 
-	callMCPTool(cfg, "list_jobs", map[string]interface{}{})
+	// List jobs directly from job manager
+	jobMgr, err := jobs.NewManager("/tmp/pedrocli-jobs")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize job manager: %v\n", err)
+		os.Exit(1)
+	}
+
+	jobList := jobMgr.List()
+	if len(jobList) == 0 {
+		fmt.Println("\nNo jobs found.")
+		return
+	}
+
+	fmt.Printf("\nFound %d job(s):\n\n", len(jobList))
+	for _, job := range jobList {
+		status := string(job.Status)
+		switch job.Status {
+		case jobs.StatusCompleted:
+			status = "✅ " + status
+		case jobs.StatusFailed:
+			status = "❌ " + status
+		case jobs.StatusRunning:
+			status = "🔄 " + status
+		case jobs.StatusPending:
+			status = "⏳ " + status
+		}
+
+		fmt.Printf("%s [%s] %s\n", job.ID, status, truncate(job.Description, 50))
+	}
 }
 
 func cancelCommand(cfg *config.Config, args []string) {
@@ -541,10 +525,26 @@ func cancelCommand(cfg *config.Config, args []string) {
 	jobID := fs.Args()[0]
 	fmt.Printf("Canceling job: %s\n", jobID)
 
-	// Build arguments
-	arguments := map[string]interface{}{
-		"job_id": jobID,
+	// Cancel job directly using job manager
+	jobMgr, err := jobs.NewManager("/tmp/pedrocli-jobs")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize job manager: %v\n", err)
+		os.Exit(1)
 	}
 
-	callMCPTool(cfg, "cancel_job", arguments)
+	if err := jobMgr.Cancel(jobID); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to cancel job: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("✅ Job cancelled successfully")
+}
+
+// truncate truncates a string to maxLen characters
+func truncate(s string, maxLen int) string {
+	s = strings.ReplaceAll(s, "\n", " ")
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
 }
