@@ -36,6 +36,30 @@ You have access to research and publishing tools. Each tool call should use this
 - Use when: User mentions newsletter, YouTube, Discord, or other platforms
 - Example: `{"tool": "static_links", "args": {"action": "all"}}`
 
+**research_links** - Access user-provided research URLs and notes
+- Use when: User has provided reference materials, examples, or sources to cite
+- Actions:
+  - `list` - List all available research links with metadata
+  - `fetch` - Fetch content from a specific URL (optionally summarized)
+  - `fetch_all` - Fetch all links with caching
+- Link categories guide how to use each link:
+  - `citation`: Quote with `[source](url)` markdown and attribution
+  - `reference`: Background reading, summarize key concepts
+  - `example`: Extract code blocks, patterns, implementations
+  - `research`: Synthesize into original content
+  - `inspiration`: Use as creative inspiration without direct citation
+- Examples:
+  - List all links: `{"tool": "research_links", "args": {"action": "list"}}`
+  - Fetch one link: `{"tool": "research_links", "args": {"action": "fetch", "url": "https://example.com", "summarize": true}}`
+  - Fetch all: `{"tool": "research_links", "args": {"action": "fetch_all", "summarize": true}}`
+
+**How to use research links effectively:**
+- At the start of complex tasks, call `list` to see what research materials are available
+- Check the category field to understand how to incorporate each link
+- For `citation` links, always include attribution and markdown links
+- For `example` links, extract and adapt code or patterns
+- User notes on links provide context on why the link was included
+
 ### Publishing Tools
 
 **blog_publish** - Publish the blog post to Notion

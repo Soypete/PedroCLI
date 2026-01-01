@@ -10,6 +10,7 @@ import (
 
 	"github.com/soypete/pedrocli/pkg/agents"
 	"github.com/soypete/pedrocli/pkg/jobs"
+	"github.com/soypete/pedrocli/pkg/tools"
 )
 
 // CreateJobRequest represents the job creation request
@@ -31,6 +32,10 @@ type CreateJobRequest struct {
 	Bio        string `json:"bio"`         // For add_guest
 	Email      string `json:"email"`       // For add_guest
 	FocusTopic string `json:"focus_topic"` // For review_news_summary
+
+	// Research links - user-provided URLs for reference/citation
+	ResearchLinks []tools.ResearchLink `json:"research_links,omitempty"`
+	PlainNotes    string               `json:"plain_notes,omitempty"` // General notes without URLs
 }
 
 // JobResponse represents the job response
@@ -113,6 +118,10 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		req.Bio = r.FormValue("bio")
 		req.Email = r.FormValue("email")
 		req.FocusTopic = r.FormValue("focus_topic")
+
+		// Research links
+		req.ResearchLinks = parseResearchLinksFromForm(r)
+		req.PlainNotes = r.FormValue("plain_notes")
 
 		if req.Type == "" {
 			respondJSON(w, http.StatusBadRequest, JobResponse{
@@ -202,6 +211,14 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 			Error:   fmt.Sprintf("Unknown job type: %s", req.Type),
 		})
 		return
+	}
+
+	// Add research links to args if provided
+	if len(req.ResearchLinks) > 0 {
+		args["research_links"] = req.ResearchLinks
+	}
+	if req.PlainNotes != "" {
+		args["plain_notes"] = req.PlainNotes
 	}
 
 	// Execute the agent
@@ -373,6 +390,47 @@ func truncateString(s string, maxLen int) string {
 	return s[:maxLen-3] + "..."
 }
 
+// parseResearchLinksFromForm extracts research links from form data
+// Expects arrays: link_url[], link_title[], link_category[], link_labels[]
+func parseResearchLinksFromForm(r *http.Request) []tools.ResearchLink {
+	urls := r.Form["link_url[]"]
+	titles := r.Form["link_title[]"]
+	categories := r.Form["link_category[]"]
+	labels := r.Form["link_labels[]"]
+
+	links := make([]tools.ResearchLink, 0)
+	for i, url := range urls {
+		url = strings.TrimSpace(url)
+		if url == "" {
+			continue
+		}
+
+		link := tools.ResearchLink{URL: url}
+
+		if i < len(titles) && titles[i] != "" {
+			link.Title = strings.TrimSpace(titles[i])
+		}
+		if i < len(categories) && categories[i] != "" {
+			link.Category = strings.TrimSpace(categories[i])
+		}
+		if i < len(labels) && labels[i] != "" {
+			// Parse comma-separated labels
+			labelParts := strings.Split(labels[i], ",")
+			link.Labels = make([]string, 0, len(labelParts))
+			for _, l := range labelParts {
+				l = strings.TrimSpace(l)
+				if l != "" {
+					link.Labels = append(link.Labels, l)
+				}
+			}
+		}
+
+		links = append(links, link)
+	}
+
+	return links
+}
+
 // BlogRequest represents a blog post creation request
 type BlogRequest struct {
 	Title     string `json:"title"`
@@ -380,6 +438,10 @@ type BlogRequest struct {
 	Content   string `json:"content"`   // Legacy field for direct content
 	SkipAI    bool   `json:"skip_ai"`   // Skip AI expansion, post directly
 	Publish   bool   `json:"publish"`   // Publish to Notion (default true)
+
+	// Research links - user-provided URLs for reference/citation
+	ResearchLinks []tools.ResearchLink `json:"research_links,omitempty"`
+	PlainNotes    string               `json:"plain_notes,omitempty"` // General notes without URLs
 }
 
 // BlogResponse represents the blog post creation response
@@ -427,6 +489,10 @@ func (s *Server) handleBlog(w http.ResponseWriter, r *http.Request) {
 		req.Content = r.FormValue("content")
 		req.SkipAI = r.FormValue("skip_ai") == "true"
 		req.Publish = r.FormValue("publish") != "false" // Default to true
+
+		// Research links
+		req.ResearchLinks = parseResearchLinksFromForm(r)
+		req.PlainNotes = r.FormValue("plain_notes")
 	}
 
 	// Support legacy "content" field as dictation
@@ -456,6 +522,13 @@ func (s *Server) handleBlog(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Title != "" {
 		args["title"] = req.Title
+	}
+	// Add research links to args if provided
+	if len(req.ResearchLinks) > 0 {
+		args["research_links"] = req.ResearchLinks
+	}
+	if req.PlainNotes != "" {
+		args["plain_notes"] = req.PlainNotes
 	}
 
 	// Create and execute the blog orchestrator agent
@@ -518,6 +591,10 @@ type OrchestratedBlogRequest struct {
 	Title   string `json:"title"`   // Optional initial title
 	Prompt  string `json:"prompt"`  // Complex prompt describing the blog post
 	Publish bool   `json:"publish"` // Whether to auto-publish to Notion after generation
+
+	// Research links - user-provided URLs for reference/citation
+	ResearchLinks []tools.ResearchLink `json:"research_links,omitempty"`
+	PlainNotes    string               `json:"plain_notes,omitempty"` // General notes without URLs
 }
 
 // OrchestratedBlogResponse represents the orchestrated blog response
@@ -562,6 +639,10 @@ func (s *Server) handleBlogOrchestrate(w http.ResponseWriter, r *http.Request) {
 		req.Title = r.FormValue("title")
 		req.Prompt = r.FormValue("prompt")
 		req.Publish = r.FormValue("publish") == "true"
+
+		// Research links
+		req.ResearchLinks = parseResearchLinksFromForm(r)
+		req.PlainNotes = r.FormValue("plain_notes")
 	}
 
 	// Validate
@@ -580,6 +661,13 @@ func (s *Server) handleBlogOrchestrate(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Title != "" {
 		args["title"] = req.Title
+	}
+	// Add research links to args if provided
+	if len(req.ResearchLinks) > 0 {
+		args["research_links"] = req.ResearchLinks
+	}
+	if req.PlainNotes != "" {
+		args["plain_notes"] = req.PlainNotes
 	}
 
 	// Create and execute the blog orchestrator agent

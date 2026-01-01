@@ -104,6 +104,13 @@ func (o *BlogOrchestratorAgent) Execute(ctx context.Context, input map[string]in
 		title = "Orchestrated Blog Post"
 	}
 
+	// Register research_links tool if provided
+	if researchLinks, ok := input["research_links"].([]tools.ResearchLink); ok && len(researchLinks) > 0 {
+		plainNotes, _ := input["plain_notes"].(string)
+		researchLinksTool := tools.NewResearchLinksToolFromLinks(researchLinks, plainNotes)
+		o.RegisterResearchTool(researchLinksTool)
+	}
+
 	// Create job
 	job, err := o.jobManager.Create(ctx, "blog_orchestrator", "Orchestrate: "+title, input)
 	if err != nil {

@@ -8,6 +8,7 @@ import (
 	"github.com/soypete/pedrocli/pkg/jobs"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/llmcontext"
+	"github.com/soypete/pedrocli/pkg/tools"
 )
 
 // TriagerAgent diagnoses issues without fixing them
@@ -60,6 +61,13 @@ func (t *TriagerAgent) Execute(ctx context.Context, input map[string]interface{}
 	description, ok := input["description"].(string)
 	if !ok {
 		return nil, fmt.Errorf("missing 'description' in input")
+	}
+
+	// Register research_links tool if provided
+	if researchLinks, ok := input["research_links"].([]tools.ResearchLink); ok && len(researchLinks) > 0 {
+		plainNotes, _ := input["plain_notes"].(string)
+		researchLinksTool := tools.NewResearchLinksToolFromLinks(researchLinks, plainNotes)
+		t.RegisterTool(researchLinksTool)
 	}
 
 	// Create job

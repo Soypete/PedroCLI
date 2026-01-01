@@ -70,6 +70,13 @@ func (a *DynamicBlogAgent) Execute(ctx context.Context, input map[string]interfa
 	// Check if publish is requested
 	shouldPublish, _ := input["publish"].(bool)
 
+	// Register research_links tool if provided
+	if researchLinks, ok := input["research_links"].([]tools.ResearchLink); ok && len(researchLinks) > 0 {
+		plainNotes, _ := input["plain_notes"].(string)
+		researchLinksTool := tools.NewResearchLinksToolFromLinks(researchLinks, plainNotes)
+		a.RegisterResearchTool(researchLinksTool)
+	}
+
 	// Create job
 	job, err := a.jobManager.Create(ctx, "blog_dynamic", "Dynamic Blog: "+title, input)
 	if err != nil {
