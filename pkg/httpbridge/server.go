@@ -29,6 +29,7 @@ func NewServer(cfg *config.Config, mcpClient *mcp.Client, ctx context.Context) *
 	templates := template.Must(template.ParseFiles(
 		"pkg/web/templates/base.html",
 		"pkg/web/templates/index.html",
+		"pkg/web/templates/vision.html",
 		"pkg/web/templates/components/job_card.html",
 	))
 
@@ -73,6 +74,14 @@ func (s *Server) setupRoutes() {
 	// Voice transcription routes
 	s.mux.HandleFunc("/api/voice/transcribe", s.handleVoiceTranscribe)
 	s.mux.HandleFunc("/api/voice/status", s.handleVoiceStatus)
+
+	// Vision routes
+	s.mux.HandleFunc("/vision", s.handleVisionPage)
+	s.mux.HandleFunc("/api/vision", s.handleVision)
+	s.mux.HandleFunc("/api/vision/analyze", s.handleVisionAnalyze)
+
+	// Serve generated images
+	s.mux.Handle("/images/", http.StripPrefix("/images/", http.FileServer(http.Dir(s.config.Vision.StoragePath))))
 }
 
 // Run starts the HTTP server
