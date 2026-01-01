@@ -20,7 +20,7 @@ type InferenceExecutor struct {
 	contextMgr   *llmcontext.Manager
 	maxRounds    int
 	currentRound int
-	systemPrompt string                  // Custom system prompt (if set)
+	systemPrompt string                   // Custom system prompt (if set)
 	formatter    toolformat.ToolFormatter // Model-specific tool formatter
 }
 
@@ -31,7 +31,7 @@ func NewInferenceExecutor(agent *BaseAgent, contextMgr *llmcontext.Manager) *Inf
 		contextMgr:   contextMgr,
 		maxRounds:    agent.config.Limits.MaxInferenceRuns,
 		currentRound: 0,
-		systemPrompt: "",                       // Will use agent's default if empty
+		systemPrompt: "",                             // Will use agent's default if empty
 		formatter:    &toolformat.GenericFormatter{}, // Default formatter
 	}
 }

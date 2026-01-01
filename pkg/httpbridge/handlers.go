@@ -324,14 +324,14 @@ func (s *Server) handleGetJob(w http.ResponseWriter, r *http.Request, jobID stri
 		}
 	} else {
 		respondJSON(w, http.StatusOK, map[string]interface{}{
-			"job_id":      job.ID,
-			"type":        job.Type,
-			"status":      job.Status,
-			"description": job.Description,
-			"created_at":  job.CreatedAt,
-			"started_at":  job.StartedAt,
+			"job_id":       job.ID,
+			"type":         job.Type,
+			"status":       job.Status,
+			"description":  job.Description,
+			"created_at":   job.CreatedAt,
+			"started_at":   job.StartedAt,
 			"completed_at": job.CompletedAt,
-			"error":       job.Error,
+			"error":        job.Error,
 		})
 	}
 }
