@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/soypete/pedrocli/pkg/logits"
 )
 
 // TestTool runs tests and parses results
@@ -173,5 +175,63 @@ func (t *TestTool) parseGoTestOutput(output string) *Result {
 	return &Result{
 		Success: success,
 		Output:  summary,
+	}
+}
+
+// Metadata returns rich tool metadata for discovery and LLM guidance
+func (t *TestTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Schema: &logits.JSONSchema{
+			Type: "object",
+			Properties: map[string]*logits.JSONSchema{
+				"type": {
+					Type:        "string",
+					Enum:        []interface{}{"go", "npm", "python"},
+					Description: "Test framework type (default: go)",
+				},
+				"package": {
+					Type:        "string",
+					Description: "Go package to test (default: ./...)",
+				},
+				"verbose": {
+					Type:        "boolean",
+					Description: "Enable verbose output",
+				},
+				"run": {
+					Type:        "string",
+					Description: "Regex pattern to run specific tests (Go)",
+				},
+				"count": {
+					Type:        "integer",
+					Description: "Run tests n times (Go)",
+				},
+				"script": {
+					Type:        "string",
+					Description: "npm script to run (default: test)",
+				},
+				"module": {
+					Type:        "string",
+					Description: "Python module/directory to test",
+				},
+			},
+		},
+		Category:    CategoryBuild,
+		Optionality: ToolRequired,
+		UsageHint:   "ALWAYS run tests after making changes to verify correctness. Use specific packages for faster feedback.",
+		Examples: []ToolExample{
+			{
+				Description: "Run all Go tests",
+				Input:       map[string]interface{}{"type": "go"},
+			},
+			{
+				Description: "Run specific Go test",
+				Input:       map[string]interface{}{"type": "go", "run": "TestFileTool", "verbose": true},
+			},
+			{
+				Description: "Run npm tests",
+				Input:       map[string]interface{}{"type": "npm"},
+			},
+		},
+		Produces: []string{"test_results"},
 	}
 }

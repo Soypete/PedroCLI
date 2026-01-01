@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/soypete/pedrocli/pkg/fileio"
+	"github.com/soypete/pedrocli/pkg/logits"
 )
 
 // FileTool provides cross-platform file operations using pure Go (no sed/awk)
@@ -198,6 +199,57 @@ func (f *FileTool) delete(args map[string]interface{}) (*Result, error) {
 		Output:        fmt.Sprintf("Deleted %s", path),
 		ModifiedFiles: []string{absPath},
 	}, nil
+}
+
+// Metadata returns rich tool metadata for discovery and LLM guidance
+func (f *FileTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Schema: &logits.JSONSchema{
+			Type: "object",
+			Properties: map[string]*logits.JSONSchema{
+				"action": {
+					Type:        "string",
+					Enum:        []interface{}{"read", "write", "replace", "append", "delete"},
+					Description: "The file operation to perform",
+				},
+				"path": {
+					Type:        "string",
+					Description: "The file path to operate on",
+				},
+				"content": {
+					Type:        "string",
+					Description: "Content for write/append operations",
+				},
+				"old": {
+					Type:        "string",
+					Description: "Text to find for replace operation",
+				},
+				"new": {
+					Type:        "string",
+					Description: "Replacement text for replace operation",
+				},
+			},
+			Required: []string{"action", "path"},
+		},
+		Category:    CategoryCode,
+		Optionality: ToolRequired,
+		UsageHint:   "Always read a file before modifying it. Use code_edit for precise line-based changes.",
+		Examples: []ToolExample{
+			{
+				Description: "Read a file",
+				Input:       map[string]interface{}{"action": "read", "path": "main.go"},
+			},
+			{
+				Description: "Write a new file",
+				Input:       map[string]interface{}{"action": "write", "path": "config.json", "content": `{"key": "value"}`},
+			},
+			{
+				Description: "Replace text in a file",
+				Input:       map[string]interface{}{"action": "replace", "path": "main.go", "old": "oldFunc", "new": "newFunc"},
+			},
+		},
+		Produces: []string{"file_content"},
+	}
 }
 
 // GetFileInfo returns file metadata including language detection

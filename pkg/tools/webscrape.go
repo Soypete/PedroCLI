@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/soypete/pedrocli/pkg/config"
+	"github.com/soypete/pedrocli/pkg/logits"
 	"github.com/soypete/pedrocli/pkg/webscrape"
 	"github.com/soypete/pedrocli/pkg/webscrape/handlers"
 )
@@ -511,4 +512,96 @@ func (w *WebScrapeTool) Close() error {
 		return w.fetcher.Close()
 	}
 	return nil
+}
+
+// Metadata returns rich tool metadata for discovery and LLM guidance
+func (w *WebScrapeTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Schema: &logits.JSONSchema{
+			Type: "object",
+			Properties: map[string]*logits.JSONSchema{
+				"action": {
+					Type: "string",
+					Enum: []interface{}{
+						"fetch_url", "search_web", "fetch_github_file", "fetch_github_readme",
+						"fetch_github_directory", "search_github_code", "fetch_gitlab_file",
+						"fetch_gitlab_readme", "fetch_stackoverflow_question", "search_stackoverflow",
+						"extract_code_from_url",
+					},
+					Description: "The web scraping action to perform",
+				},
+				"url": {
+					Type:        "string",
+					Description: "URL to fetch (for fetch_url, extract_code_from_url)",
+				},
+				"query": {
+					Type:        "string",
+					Description: "Search query (for search_web, search_github_code, search_stackoverflow)",
+				},
+				"owner": {
+					Type:        "string",
+					Description: "GitHub repository owner",
+				},
+				"repo": {
+					Type:        "string",
+					Description: "GitHub repository name",
+				},
+				"path": {
+					Type:        "string",
+					Description: "File or directory path within repository",
+				},
+				"ref": {
+					Type:        "string",
+					Description: "Git ref (branch/tag/commit), defaults to main",
+				},
+				"project": {
+					Type:        "string",
+					Description: "GitLab project path (e.g., 'group/project')",
+				},
+				"question_id": {
+					Type:        "string",
+					Description: "Stack Overflow question ID",
+				},
+				"language": {
+					Type:        "string",
+					Description: "Programming language filter",
+				},
+				"max_results": {
+					Type:        "number",
+					Description: "Maximum number of results to return",
+				},
+			},
+			Required: []string{"action"},
+		},
+		Category:             CategoryResearch,
+		Optionality:          ToolOptional,
+		UsageHint:            "Use to fetch code examples, documentation, or search for solutions from GitHub, GitLab, Stack Overflow, or general web.",
+		RequiresCapabilities: []string{"network"},
+		Examples: []ToolExample{
+			{
+				Description: "Fetch a file from GitHub",
+				Input: map[string]interface{}{
+					"action": "fetch_github_file",
+					"owner":  "anthropics",
+					"repo":   "claude-code",
+					"path":   "README.md",
+				},
+			},
+			{
+				Description: "Search Stack Overflow",
+				Input: map[string]interface{}{
+					"action": "search_stackoverflow",
+					"query":  "golang context timeout",
+				},
+			},
+			{
+				Description: "Search web for documentation",
+				Input: map[string]interface{}{
+					"action": "search_web",
+					"query":  "Go http client best practices",
+				},
+			},
+		},
+		Produces: []string{"code_examples", "documentation", "web_content"},
+	}
 }

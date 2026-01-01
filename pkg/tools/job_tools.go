@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/soypete/pedrocli/pkg/jobs"
+	"github.com/soypete/pedrocli/pkg/logits"
 )
 
 // GetJobStatusTool implements get_job_status
@@ -75,6 +76,33 @@ func (t *GetJobStatusTool) Execute(ctx context.Context, args map[string]interfac
 	}, nil
 }
 
+// Metadata returns rich tool metadata for discovery and LLM guidance
+func (t *GetJobStatusTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Schema: &logits.JSONSchema{
+			Type: "object",
+			Properties: map[string]*logits.JSONSchema{
+				"job_id": {
+					Type:        "string",
+					Description: "The ID of the job to check status for",
+				},
+			},
+			Required: []string{"job_id"},
+		},
+		Category:    CategoryUtility,
+		Optionality: ToolOptional,
+		UsageHint:   "Use to check the status of a background job.",
+		Examples: []ToolExample{
+			{
+				Description: "Get status of a job",
+				Input:       map[string]interface{}{"job_id": "job-123456"},
+			},
+		},
+		Consumes: []string{"job_id"},
+		Produces: []string{"job_status"},
+	}
+}
+
 // ListJobsTool implements list_jobs
 type ListJobsTool struct {
 	jobManager *jobs.Manager
@@ -115,6 +143,27 @@ func (t *ListJobsTool) Execute(ctx context.Context, args map[string]interface{})
 		Success: true,
 		Output:  output,
 	}, nil
+}
+
+// Metadata returns rich tool metadata for discovery and LLM guidance
+func (t *ListJobsTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Schema: &logits.JSONSchema{
+			Type:       "object",
+			Properties: map[string]*logits.JSONSchema{},
+			Required:   []string{},
+		},
+		Category:    CategoryUtility,
+		Optionality: ToolOptional,
+		UsageHint:   "Use to list all running and completed jobs.",
+		Examples: []ToolExample{
+			{
+				Description: "List all jobs",
+				Input:       map[string]interface{}{},
+			},
+		},
+		Produces: []string{"job_list"},
+	}
 }
 
 // CancelJobTool implements cancel_job
@@ -158,4 +207,30 @@ func (t *CancelJobTool) Execute(ctx context.Context, args map[string]interface{}
 		Success: true,
 		Output:  fmt.Sprintf("Job %s cancelled successfully", jobID),
 	}, nil
+}
+
+// Metadata returns rich tool metadata for discovery and LLM guidance
+func (t *CancelJobTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Schema: &logits.JSONSchema{
+			Type: "object",
+			Properties: map[string]*logits.JSONSchema{
+				"job_id": {
+					Type:        "string",
+					Description: "The ID of the job to cancel",
+				},
+			},
+			Required: []string{"job_id"},
+		},
+		Category:    CategoryUtility,
+		Optionality: ToolOptional,
+		UsageHint:   "Use to cancel a running job.",
+		Examples: []ToolExample{
+			{
+				Description: "Cancel a job",
+				Input:       map[string]interface{}{"job_id": "job-123456"},
+			},
+		},
+		Consumes: []string{"job_id"},
+	}
 }

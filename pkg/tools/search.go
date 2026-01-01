@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/soypete/pedrocli/pkg/logits"
 )
 
 // SearchTool provides code search capabilities (grep, find files)
@@ -437,6 +439,74 @@ func (s *SearchTool) buildDefinitionPatterns(name string, language string) []str
 	}
 
 	return patterns
+}
+
+// Metadata returns rich tool metadata for discovery and LLM guidance
+func (s *SearchTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Schema: &logits.JSONSchema{
+			Type: "object",
+			Properties: map[string]*logits.JSONSchema{
+				"action": {
+					Type:        "string",
+					Enum:        []interface{}{"grep", "find_files", "find_in_file", "find_definition"},
+					Description: "The search operation to perform",
+				},
+				"pattern": {
+					Type:        "string",
+					Description: "Regex pattern for grep/find_in_file, or glob for find_files",
+				},
+				"directory": {
+					Type:        "string",
+					Description: "Directory to search in (optional)",
+				},
+				"file_pattern": {
+					Type:        "string",
+					Description: "Glob pattern to filter files (for grep)",
+				},
+				"path": {
+					Type:        "string",
+					Description: "File path (for find_in_file)",
+				},
+				"name": {
+					Type:        "string",
+					Description: "Definition name to find (for find_definition)",
+				},
+				"language": {
+					Type:        "string",
+					Enum:        []interface{}{"go", "python", "javascript", "typescript"},
+					Description: "Language hint for find_definition",
+				},
+				"case_insensitive": {
+					Type:        "boolean",
+					Description: "Case insensitive search",
+				},
+				"max_results": {
+					Type:        "integer",
+					Description: "Maximum results to return (default: 100)",
+				},
+			},
+			Required: []string{"action"},
+		},
+		Category:    CategoryCode,
+		Optionality: ToolRequired,
+		UsageHint:   "Always use this tool before modifying code to find the right files. Use find_definition to locate functions/types by name.",
+		Examples: []ToolExample{
+			{
+				Description: "Search for error handling patterns in Go files",
+				Input:       map[string]interface{}{"action": "grep", "pattern": "func.*Error", "file_pattern": "*.go"},
+			},
+			{
+				Description: "Find a function definition",
+				Input:       map[string]interface{}{"action": "find_definition", "name": "HandleRequest", "language": "go"},
+			},
+			{
+				Description: "Find all Go test files",
+				Input:       map[string]interface{}{"action": "find_files", "pattern": "*_test.go"},
+			},
+		},
+		Produces: []string{"search_results", "file_list"},
+	}
 }
 
 // isCodeFile checks if a file is a code file based on extension

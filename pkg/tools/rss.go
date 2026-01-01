@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/soypete/pedrocli/pkg/config"
+	"github.com/soypete/pedrocli/pkg/logits"
 )
 
 // RSSItem represents an item from an RSS feed
@@ -404,4 +405,44 @@ func stripHTMLTags(s string) string {
 	}
 
 	return result.String()
+}
+
+// Metadata returns rich tool metadata for discovery and LLM guidance
+func (t *RSSFeedTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Schema: &logits.JSONSchema{
+			Type: "object",
+			Properties: map[string]*logits.JSONSchema{
+				"action": {
+					Type:        "string",
+					Enum:        []interface{}{"fetch", "get_configured"},
+					Description: "Use get_configured for author's feed, fetch for custom URL",
+				},
+				"url": {
+					Type:        "string",
+					Description: "RSS/Atom feed URL (for fetch action)",
+				},
+				"limit": {
+					Type:        "integer",
+					Description: "Maximum items to return (default: 5)",
+				},
+			},
+			Required: []string{"action"},
+		},
+		Category:             CategoryResearch,
+		Optionality:          ToolOptional,
+		UsageHint:            "Use for recent blog posts, newsletter sections, or \"You might have missed\" content.",
+		RequiresCapabilities: []string{"network"},
+		Examples: []ToolExample{
+			{
+				Description: "Get recent posts from configured blog",
+				Input:       map[string]interface{}{"action": "get_configured", "limit": 3},
+			},
+			{
+				Description: "Fetch from a specific feed",
+				Input:       map[string]interface{}{"action": "fetch", "url": "https://example.com/feed.xml"},
+			},
+		},
+		Produces: []string{"feed_items", "citations"},
+	}
 }
