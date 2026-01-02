@@ -475,7 +475,9 @@ func (t *ResearchLinksTool) FormatAsMarkdown() string {
 	categoryOrder := []string{"citation", "reference", "example", "research", "inspiration"}
 	for _, cat := range categoryOrder {
 		if links, exists := byCategory[cat]; exists {
-			md.WriteString(fmt.Sprintf("**%s:**\n", strings.Title(cat)))
+			// Capitalize first letter manually to avoid deprecated strings.Title
+			catTitle := strings.ToUpper(cat[:1]) + cat[1:]
+			md.WriteString(fmt.Sprintf("**%s:**\n", catTitle))
 			for _, link := range links {
 				title := link.Title
 				if title == "" {
