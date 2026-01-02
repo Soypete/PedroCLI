@@ -9,10 +9,10 @@ CREATE TABLE IF NOT EXISTS oauth_tokens (
     refresh_token TEXT,                  -- For OAuth2 refresh flow (NULL for API keys)
     token_type TEXT DEFAULT 'Bearer',    -- "Bearer", "Basic", etc.
     scope TEXT,                          -- Space-separated OAuth scopes
-    expires_at DATETIME,                 -- When token expires (NULL for non-expiring keys)
-    last_refreshed DATETIME,             -- When we last refreshed
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP,                 -- When token expires (NULL for non-expiring keys)
+    last_refreshed TIMESTAMP,             -- When we last refreshed
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(provider, service)            -- One token per provider+service combo
 );
 

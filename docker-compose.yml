@@ -1,6 +1,25 @@
 version: '3.8'
 
 services:
+  # PostgreSQL database for job tracking
+  postgres:
+    image: postgres:15-alpine
+    container_name: pedrocli-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: pedrocli
+      POSTGRES_PASSWORD: pedrocli
+      POSTGRES_DB: pedrocli
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pedrocli"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Ollama service for LLM inference
   ollama:
     image: ollama/ollama:latest

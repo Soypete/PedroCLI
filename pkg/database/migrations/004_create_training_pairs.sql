@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS training_pairs (
     quality_score REAL, -- for filtering, 0.0-1.0
     included_in_training INTEGER DEFAULT 0,
     metadata TEXT, -- JSON blob for flexible storage
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Index for filtering by source type

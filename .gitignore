@@ -32,3 +32,5 @@ coverage.out
 # Config files (don't commit actual configs, only examples)
 .pedrocli.json
 .env
+*.db
+postgres-data/

@@ -8,6 +8,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"           // PostgreSQL driver
 	_ "github.com/mattn/go-sqlite3" // SQLite driver
+	"github.com/pressly/goose/v3"
 )
 
 //go:embed migrations/*.sql
@@ -42,8 +44,24 @@ type Config struct {
 	SSLMode  string `json:"ssl_mode"` // PostgreSQL SSL mode
 }
 
-// DefaultConfig returns default database configuration using SQLite.
+// DefaultConfig returns default database configuration.
+// Checks DATABASE_URL environment variable first, falls back to SQLite.
 func DefaultConfig() *Config {
+	// Check for DATABASE_URL environment variable (Postgres connection string)
+	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
+		// Parse DATABASE_URL (format: postgres://user:password@host:port/database?sslmode=disable)
+		return &Config{
+			Driver:   "postgres",
+			Host:     "localhost",
+			Port:     5432,
+			Database: "pedrocli",
+			User:     "pedrocli",
+			Password: "pedrocli",
+			SSLMode:  "disable",
+		}
+	}
+
+	// Fall back to SQLite for local development
 	return &Config{
 		Driver:   "sqlite",
 		Database: "pedrocli.db",
@@ -107,7 +125,7 @@ func (d *DB) Driver() string {
 	return d.driver
 }
 
-// Migrate runs all pending database migrations.
+// Migrate runs all pending database migrations using goose.
 func (d *DB) Migrate(ctx context.Context) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -116,32 +134,21 @@ func (d *DB) Migrate(ctx context.Context) error {
 		return nil
 	}
 
-	// Create migrations tracking table
-	if err := d.createMigrationsTable(ctx); err != nil {
-		return fmt.Errorf("failed to create migrations table: %w", err)
+	// Set the embedded filesystem for goose
+	goose.SetBaseFS(migrationsFS)
+
+	// Set the dialect based on driver
+	dialect := "postgres"
+	if d.driver == "sqlite3" {
+		dialect = "sqlite3"
+	}
+	if err := goose.SetDialect(dialect); err != nil {
+		return fmt.Errorf("failed to set goose dialect: %w", err)
 	}
 
-	// Get list of migration files
-	migrations, err := d.getMigrationFiles()
-	if err != nil {
-		return fmt.Errorf("failed to list migrations: %w", err)
-	}
-
-	// Get already applied migrations
-	applied, err := d.getAppliedMigrations(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get applied migrations: %w", err)
-	}
-
-	// Apply pending migrations
-	for _, migration := range migrations {
-		if applied[migration] {
-			continue
-		}
-
-		if err := d.applyMigration(ctx, migration); err != nil {
-			return fmt.Errorf("failed to apply migration %s: %w", migration, err)
-		}
+	// Run migrations
+	if err := goose.Up(d.DB, "migrations"); err != nil {
+		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
 	d.migrated = true
@@ -212,10 +219,13 @@ func (d *DB) applyMigration(ctx context.Context, filename string) error {
 		return fmt.Errorf("failed to read migration file: %w", err)
 	}
 
-	// Adapt SQL for SQLite if needed
+	// Parse goose migration format to extract only the "Up" section
 	sql := string(content)
+	upSQL := d.extractGooseUpSection(sql)
+
+	// Adapt SQL for SQLite if needed
 	if d.driver == "sqlite3" {
-		sql = d.adaptSQLForSQLite(sql)
+		upSQL = d.adaptSQLForSQLite(upSQL)
 	}
 
 	tx, err := d.BeginTx(ctx, nil)
@@ -225,7 +235,7 @@ func (d *DB) applyMigration(ctx context.Context, filename string) error {
 	defer func() { _ = tx.Rollback() }()
 
 	// Execute migration
-	if _, err := tx.ExecContext(ctx, sql); err != nil {
+	if _, err := tx.ExecContext(ctx, upSQL); err != nil {
 		return fmt.Errorf("failed to execute migration: %w", err)
 	}
 
@@ -237,8 +247,39 @@ func (d *DB) applyMigration(ctx context.Context, filename string) error {
 	return tx.Commit()
 }
 
+// extractGooseUpSection extracts only the "Up" section from a goose migration file.
+func (d *DB) extractGooseUpSection(content string) string {
+	lines := strings.Split(content, "\n")
+	var upLines []string
+	inUpSection := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Start of Up section
+		if strings.HasPrefix(trimmed, "-- +goose Up") {
+			inUpSection = true
+			continue
+		}
+
+		// Start of Down section - stop collecting
+		if strings.HasPrefix(trimmed, "-- +goose Down") {
+			break
+		}
+
+		// Collect lines in Up section
+		if inUpSection {
+			upLines = append(upLines, line)
+		}
+	}
+
+	return strings.Join(upLines, "\n")
+}
+
 // adaptSQLForSQLite modifies PostgreSQL SQL to work with SQLite.
 func (d *DB) adaptSQLForSQLite(sql string) string {
+	// Replace TIMESTAMP with DATETIME
+	sql = strings.ReplaceAll(sql, "TIMESTAMP", "DATETIME")
 	// Replace UUID with TEXT
 	sql = strings.ReplaceAll(sql, "UUID", "TEXT")
 	// Replace JSONB with TEXT (SQLite stores JSON as text)

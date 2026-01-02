@@ -1,4 +1,4 @@
-.PHONY: build build-mac build-linux build-all test test-coverage test-coverage-report install clean run-cli run-http serve build-http build-calendar fmt lint tidy migrate-up migrate-down migrate-status migrate-reset migrate-redo db-reset db-fresh
+.PHONY: build build-mac build-linux build-all test test-coverage test-coverage-report install clean run-cli run-http serve build-http build-calendar fmt lint tidy migrate-up migrate-down migrate-status migrate-reset migrate-redo db-reset db-fresh postgres-up postgres-down postgres-logs postgres-shell
 
 # Default build for current platform (CLI, HTTP server, and calendar MCP server)
 build:
@@ -103,3 +103,31 @@ db-fresh:
 	rm -f /var/pedro/repos/pedro.db
 	go run cmd/pedrocli/main.go migrate up
 	@echo "Fresh database created"
+
+# PostgreSQL Docker Management
+postgres-up:
+	@echo "Starting PostgreSQL..."
+	@mkdir -p postgres-data
+	@docker run -d \
+		--name pedrocli-postgres \
+		-p 5432:5432 \
+		-e POSTGRES_USER=pedrocli \
+		-e POSTGRES_PASSWORD=pedrocli \
+		-e POSTGRES_DB=pedrocli \
+		-v $(PWD)/postgres-data:/var/lib/postgresql/data \
+		postgres:15-alpine || echo "Container may already exist"
+	@echo "Waiting for PostgreSQL to be ready..."
+	@sleep 3
+	@docker exec pedrocli-postgres pg_isready -U pedrocli || sleep 2
+	@echo "PostgreSQL is ready at postgres://pedrocli:pedrocli@localhost:5432/pedrocli"
+
+postgres-down:
+	@echo "Stopping PostgreSQL..."
+	@docker stop pedrocli-postgres || true
+	@docker rm pedrocli-postgres || true
+
+postgres-logs:
+	docker logs -f pedrocli-postgres
+
+postgres-shell:
+	docker exec -it pedrocli-postgres psql -U pedrocli -d pedrocli
