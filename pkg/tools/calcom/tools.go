@@ -66,7 +66,7 @@ func (t *CalComTool) getClient(ctx context.Context) (*Client, error) {
 	// Get API key using 3-tier fallback
 	apiKey, err := t.getAPIKey(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("Cal.com API key not configured: %w", err)
+		return nil, fmt.Errorf("cal.com API key not configured: %w", err)
 	}
 
 	// Get base URL from config or use default
