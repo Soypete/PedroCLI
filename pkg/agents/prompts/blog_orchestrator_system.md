@@ -27,6 +27,19 @@ When you need to gather external data, these tools are available:
    - Action: `get_all`, `get_social`, `get_custom`, `get_youtube_placeholder`
    - Returns: Discord, Twitter, YouTube, LinkedIn, LinkTree, Newsletter links
 
+4. **research_links** - Access user-provided research URLs and notes
+   - Action: `list` - Get all links with metadata (URL, title, notes, category, labels)
+   - Action: `fetch` with `url` and optional `summarize: true` - Fetch content from a specific URL
+   - Action: `fetch_all` with optional `summarize: true` - Fetch all links (cached)
+   - Categories guide usage:
+     - `citation`: Quote with proper attribution and `[source](url)` markdown
+     - `reference`: Background reading, summarize key concepts without direct quotes
+     - `example`: Extract code blocks, patterns, or implementations
+     - `research`: Synthesize insights into original content
+     - `inspiration`: Creative inspiration without direct citation
+   - When research_links are available, always call `list` first to see what the user provided
+   - User notes on links explain why the link was included and how to use it
+
 ## Multi-Phase Process
 
 ### Phase 1: Analyze the Prompt
@@ -50,7 +63,8 @@ Output format for Phase 1:
   "research_tasks": [
     {"type": "calendar", "params": {"action": "list_events"}},
     {"type": "rss_feed", "params": {"action": "get_configured", "limit": 5}},
-    {"type": "static_links", "params": {"action": "get_all"}}
+    {"type": "static_links", "params": {"action": "get_all"}},
+    {"type": "research_links", "params": {"action": "list"}}
   ],
   "include_newsletter": true,
   "estimated_word_count": 1500
