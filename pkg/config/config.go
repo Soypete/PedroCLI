@@ -265,7 +265,7 @@ type Cohost struct {
 // CalComConfig contains Cal.com scheduling configuration
 type CalComConfig struct {
 	Enabled bool   `json:"enabled"`
-	APIKey  string `json:"api_key,omitempty"` // Cal.com API key (prefer env var CAL_API_KEY)
+	APIKey  string `json:"api_key,omitempty"`  // Cal.com API key (prefer env var CAL_API_KEY)
 	BaseURL string `json:"base_url,omitempty"` // Optional: custom API URL for self-hosted Cal.com
 }
 

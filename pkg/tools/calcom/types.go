@@ -24,26 +24,26 @@ type Booking struct {
 	CustomInputs map[string]interface{} `json:"customInputs,omitempty"`
 
 	// Timestamps
-	CreatedAt time.Time  `json:"createdAt"`
-	UpdatedAt time.Time  `json:"updatedAt"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 
 	// Meeting details
-	Location    string `json:"location,omitempty"`
-	MeetingURL  string `json:"meetingUrl,omitempty"`
+	Location   string `json:"location,omitempty"`
+	MeetingURL string `json:"meetingUrl,omitempty"`
 
 	// Cancellation
-	CancellationReason string     `json:"cancellationReason,omitempty"`
-	RescheduledFrom    string     `json:"rescheduledFromUid,omitempty"`
-	RescheduledTo      string     `json:"rescheduledToUid,omitempty"`
+	CancellationReason string `json:"cancellationReason,omitempty"`
+	RescheduledFrom    string `json:"rescheduledFromUid,omitempty"`
+	RescheduledTo      string `json:"rescheduledToUid,omitempty"`
 }
 
 // Attendee represents a booking attendee
 type Attendee struct {
-	Name      string `json:"name"`
-	Email     string `json:"email"`
-	TimeZone  string `json:"timeZone"`
-	Locale    string `json:"locale,omitempty"`
-	Guests    []string `json:"guests,omitempty"`
+	Name     string   `json:"name"`
+	Email    string   `json:"email"`
+	TimeZone string   `json:"timeZone"`
+	Locale   string   `json:"locale,omitempty"`
+	Guests   []string `json:"guests,omitempty"`
 }
 
 // EventType represents a Cal.com event type (booking page)
@@ -92,12 +92,12 @@ type Location struct {
 
 // Schedule represents an availability schedule
 type Schedule struct {
-	ID           int              `json:"id"`
-	Name         string           `json:"name"`
-	TimeZone     string           `json:"timeZone"`
-	IsDefault    bool             `json:"isDefault"`
-	Availability []TimeSlot       `json:"availability"`
-	DateOverrides []DateOverride  `json:"dateOverrides,omitempty"`
+	ID            int            `json:"id"`
+	Name          string         `json:"name"`
+	TimeZone      string         `json:"timeZone"`
+	IsDefault     bool           `json:"isDefault"`
+	Availability  []TimeSlot     `json:"availability"`
+	DateOverrides []DateOverride `json:"dateOverrides,omitempty"`
 }
 
 // TimeSlot represents a recurring availability slot
@@ -116,9 +116,9 @@ type DateOverride struct {
 
 // AvailableSlot represents an available booking slot
 type AvailableSlot struct {
-	Time   time.Time              `json:"time"`
-	Users  []int                  `json:"users,omitempty"`
-	Attendees int                 `json:"attendees,omitempty"`
+	Time      time.Time `json:"time"`
+	Users     []int     `json:"users,omitempty"`
+	Attendees int       `json:"attendees,omitempty"`
 }
 
 // BusyTime represents a busy/unavailable time period
@@ -142,8 +142,8 @@ type User struct {
 	DefaultScheduleID int `json:"defaultScheduleId,omitempty"`
 
 	// Avatar/branding
-	Avatar      string `json:"avatar,omitempty"`
-	BrandColor  string `json:"brandColor,omitempty"`
+	Avatar         string `json:"avatar,omitempty"`
+	BrandColor     string `json:"brandColor,omitempty"`
 	DarkBrandColor string `json:"darkBrandColor,omitempty"`
 }
 
