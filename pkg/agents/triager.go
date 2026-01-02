@@ -92,6 +92,25 @@ func (t *TriagerAgent) Execute(ctx context.Context, input map[string]interface{}
 		}
 		defer contextMgr.Cleanup()
 
+		// Set context_dir for the job (LLM conversation storage)
+		if err := t.jobManager.SetContextDir(bgCtx, job.ID, contextMgr.GetJobDir()); err != nil {
+			t.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, fmt.Errorf("failed to set context_dir: %w", err))
+			return
+		}
+
+		// Setup repository if repo info provided, otherwise use current directory
+		workDir, err := t.setupWorkDirectory(bgCtx, job.ID, input)
+		if err != nil {
+			t.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
+			return
+		}
+
+		// Set work_dir for the job
+		if err := t.jobManager.SetWorkDir(bgCtx, job.ID, workDir); err != nil {
+			t.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, fmt.Errorf("failed to set work_dir: %w", err))
+			return
+		}
+
 		// Build triage prompt
 		userPrompt := t.buildTriagePrompt(input)
 
@@ -108,8 +127,9 @@ func (t *TriagerAgent) Execute(ctx context.Context, input map[string]interface{}
 
 		// Update job with results
 		output := map[string]interface{}{
-			"job_dir": contextMgr.GetJobDir(),
-			"status":  "completed",
+			"status":   "completed",
+			"job_dir":  contextMgr.GetJobDir(),
+			"work_dir": workDir,
 		}
 
 		t.jobManager.Update(bgCtx, job.ID, jobs.StatusCompleted, output, nil)

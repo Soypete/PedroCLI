@@ -68,6 +68,25 @@ func (b *BuilderAgent) Execute(ctx context.Context, input map[string]interface{}
 		}
 		defer contextMgr.Cleanup()
 
+		// Set context_dir for the job (LLM conversation storage)
+		if err := b.jobManager.SetContextDir(bgCtx, job.ID, contextMgr.GetJobDir()); err != nil {
+			b.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, fmt.Errorf("failed to set context_dir: %w", err))
+			return
+		}
+
+		// Setup repository if repo info provided, otherwise use current directory
+		workDir, err := b.setupWorkDirectory(bgCtx, job.ID, input)
+		if err != nil {
+			b.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
+			return
+		}
+
+		// Set work_dir for the job
+		if err := b.jobManager.SetWorkDir(bgCtx, job.ID, workDir); err != nil {
+			b.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, fmt.Errorf("failed to set work_dir: %w", err))
+			return
+		}
+
 		// Build initial prompt
 		userPrompt := b.buildInitialPrompt(input)
 
@@ -84,8 +103,9 @@ func (b *BuilderAgent) Execute(ctx context.Context, input map[string]interface{}
 
 		// Update job with results
 		output := map[string]interface{}{
-			"status":  "completed",
-			"job_dir": contextMgr.GetJobDir(),
+			"status":   "completed",
+			"job_dir":  contextMgr.GetJobDir(),
+			"work_dir": workDir,
 		}
 
 		b.jobManager.Update(bgCtx, job.ID, jobs.StatusCompleted, output, nil)
