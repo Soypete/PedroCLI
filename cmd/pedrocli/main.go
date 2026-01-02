@@ -137,7 +137,7 @@ For more information: https://github.com/soypete/pedrocli`)
 }
 
 // pollJobStatus polls for job status until completion
-func pollJobStatus(ctx context.Context, jobMgr *jobs.Manager, jobID string) error {
+func pollJobStatus(ctx context.Context, jobMgr jobs.JobManager, jobID string) error {
 	fmt.Printf("\n⏳ Job %s is running...\n", jobID)
 	fmt.Println("Checking status every 5 seconds. Press Ctrl+C to stop watching (job will continue in background).")
 
@@ -186,6 +186,7 @@ func executeAgent(cfg *config.Config, agent agents.Agent, arguments map[string]i
 		fmt.Fprintf(os.Stderr, "Failed to initialize: %v\n", err)
 		os.Exit(1)
 	}
+	defer appCtx.Close()
 
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.Limits.MaxTaskDurationMinutes)*time.Minute)
@@ -444,14 +445,15 @@ func statusCommand(cfg *config.Config, args []string) {
 	jobID := fs.Args()[0]
 	fmt.Printf("Getting status for job: %s\n", jobID)
 
-	// Get job status directly from job manager
-	jobMgr, err := jobs.NewManager("/tmp/pedrocli-jobs")
+	// Initialize app context with database-backed job manager
+	appCtx, err := NewAppContext(cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to initialize job manager: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Failed to initialize: %v\n", err)
 		os.Exit(1)
 	}
+	defer appCtx.Close()
 
-	job, err := jobMgr.Get(context.Background(), jobID)
+	job, err := appCtx.JobManager.Get(context.Background(), jobID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to get job status: %v\n", err)
 		os.Exit(1)
@@ -481,14 +483,15 @@ func listCommand(cfg *config.Config, args []string) {
 
 	fmt.Println("Listing all jobs...")
 
-	// List jobs directly from job manager
-	jobMgr, err := jobs.NewManager("/tmp/pedrocli-jobs")
+	// Initialize app context with database-backed job manager
+	appCtx, err := NewAppContext(cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to initialize job manager: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Failed to initialize: %v\n", err)
 		os.Exit(1)
 	}
+	defer appCtx.Close()
 
-	jobList, err := jobMgr.List(context.Background())
+	jobList, err := appCtx.JobManager.List(context.Background())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to list jobs: %v\n", err)
 		os.Exit(1)
@@ -529,14 +532,15 @@ func cancelCommand(cfg *config.Config, args []string) {
 	jobID := fs.Args()[0]
 	fmt.Printf("Canceling job: %s\n", jobID)
 
-	// Cancel job directly using job manager
-	jobMgr, err := jobs.NewManager("/tmp/pedrocli-jobs")
+	// Initialize app context with database-backed job manager
+	appCtx, err := NewAppContext(cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to initialize job manager: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Failed to initialize: %v\n", err)
 		os.Exit(1)
 	}
+	defer appCtx.Close()
 
-	if err := jobMgr.Cancel(context.Background(), jobID); err != nil {
+	if err := appCtx.JobManager.Cancel(context.Background(), jobID); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to cancel job: %v\n", err)
 		os.Exit(1)
 	}
