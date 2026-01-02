@@ -65,6 +65,7 @@ func (l *LlamaCppClient) Infer(ctx context.Context, req *InferenceRequest) (*Inf
 		"-p", fullPrompt,
 		"-ngl", fmt.Sprintf("%d", l.nGpuLayers),
 		"--no-display-prompt", // Don't echo the prompt
+		"--jinja",             // Enable jinja templates for tool calling
 	}
 
 	// Add grammar constraints if configured
