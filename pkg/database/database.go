@@ -284,6 +284,9 @@ func (d *DB) adaptSQLForSQLite(sql string) string {
 	sql = strings.ReplaceAll(sql, "UUID", "TEXT")
 	// Replace JSONB with TEXT (SQLite stores JSON as text)
 	sql = strings.ReplaceAll(sql, "JSONB", "TEXT")
+	// Remove JSONB casts (::jsonb) since SQLite doesn't support them
+	sql = strings.ReplaceAll(sql, "::jsonb", "")
+	sql = strings.ReplaceAll(sql, "::JSONB", "")
 	// Replace BIGINT with INTEGER
 	sql = strings.ReplaceAll(sql, "BIGINT", "INTEGER")
 	// Remove ON DELETE CASCADE (SQLite needs PRAGMA foreign_keys = ON)
