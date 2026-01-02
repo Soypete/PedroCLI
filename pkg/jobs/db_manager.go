@@ -47,13 +47,13 @@ func (m *DBManager) Create(ctx context.Context, jobType, description string, inp
 
 	// Create the job in the database
 	dbJob := &storage.Job{
-		ID:          id,
-		JobType:     storage.JobType(jobType),
-		Status:      storage.JobStatusPending,
-		Description: description,
+		ID:           id,
+		JobType:      storage.JobType(jobType),
+		Status:       storage.JobStatusPending,
+		Description:  description,
 		InputPayload: inputJSON,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 
 	if err := m.store.Create(ctx, dbJob); err != nil {

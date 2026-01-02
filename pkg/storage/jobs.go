@@ -57,12 +57,12 @@ type Job struct {
 
 // ConversationEntry represents a single entry in the job's conversation history.
 type ConversationEntry struct {
-	Role      string                 `json:"role"`                 // "user", "assistant", "tool_call", "tool_result"
-	Content   string                 `json:"content,omitempty"`    // For user/assistant messages
-	Tool      string                 `json:"tool,omitempty"`       // For tool_call/tool_result
-	Args      map[string]interface{} `json:"args,omitempty"`       // For tool_call
-	Result    interface{}            `json:"result,omitempty"`     // For tool_result
-	Success   *bool                  `json:"success,omitempty"`    // For tool_result
+	Role      string                 `json:"role"`              // "user", "assistant", "tool_call", "tool_result"
+	Content   string                 `json:"content,omitempty"` // For user/assistant messages
+	Tool      string                 `json:"tool,omitempty"`    // For tool_call/tool_result
+	Args      map[string]interface{} `json:"args,omitempty"`    // For tool_call
+	Result    interface{}            `json:"result,omitempty"`  // For tool_result
+	Success   *bool                  `json:"success,omitempty"` // For tool_result
 	Timestamp time.Time              `json:"timestamp"`
 }
 
