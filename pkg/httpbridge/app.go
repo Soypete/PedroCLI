@@ -36,6 +36,9 @@ type AppContext struct {
 	RSSFeedTool     tools.Tool
 	StaticLinksTool tools.Tool
 	BlogNotionTool  tools.Tool
+
+	// Scheduling tools
+	CalComTool tools.Tool
 }
 
 // NewAppContext creates and initializes the application context with database-backed job manager.
@@ -113,6 +116,11 @@ func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, erro
 	appCtx.StaticLinksTool = tools.NewStaticLinksTool(cfg)
 	appCtx.BlogNotionTool = tools.NewBlogNotionTool(cfg)
 
+	// Initialize scheduling tools
+	if cfg.CalCom.Enabled {
+		appCtx.CalComTool = tools.NewCalComTool(cfg, nil) // nil tokenManager for now
+	}
+
 	return appCtx, nil
 }
 
@@ -155,6 +163,13 @@ func registerCodeTools(agent interface{ RegisterTool(tools.Tool) }, ctx *AppCont
 	}
 }
 
+// registerSchedulingTools registers scheduling tools (Cal.com) with an agent
+func registerSchedulingTools(agent interface{ RegisterTool(tools.Tool) }, ctx *AppContext) {
+	if ctx.CalComTool != nil {
+		agent.RegisterTool(ctx.CalComTool)
+	}
+}
+
 // NewBuilderAgentWithTools creates a fully configured builder agent
 func (ctx *AppContext) NewBuilderAgent() *agents.BuilderAgent {
 	agent := agents.NewBuilderAgent(ctx.Config, ctx.Backend, ctx.JobManager)
@@ -189,6 +204,7 @@ func (ctx *AppContext) NewBlogOrchestratorAgent() *agents.BlogOrchestratorAgent 
 	agent.RegisterResearchTool(ctx.RSSFeedTool)
 	agent.RegisterResearchTool(ctx.StaticLinksTool)
 	agent.RegisterNotionTool(ctx.BlogNotionTool)
+	registerSchedulingTools(agent, ctx)
 	return agent
 }
 
@@ -198,5 +214,6 @@ func (ctx *AppContext) NewDynamicBlogAgent() *agents.DynamicBlogAgent {
 	agent.RegisterResearchTool(ctx.RSSFeedTool)
 	agent.RegisterResearchTool(ctx.StaticLinksTool)
 	agent.RegisterNotionTool(ctx.BlogNotionTool)
+	registerSchedulingTools(agent, ctx)
 	return agent
 }

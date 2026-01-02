@@ -466,6 +466,98 @@ The web UI also supports browser-based speech recognition (Chrome/Edge) as a fal
 | Ollama | 11434 | LLM inference API |
 | PostgreSQL | 5432 | Blog storage (if enabled) |
 
+### Cal.com Scheduling Integration
+
+PedroCLI integrates with Cal.com for scheduling and booking management. This enables agents to create booking links, manage calendars, and handle podcast episode scheduling.
+
+#### Setup
+
+1. **Get your Cal.com API key**:
+   - Log into Cal.com (https://app.cal.com or your self-hosted instance)
+   - Go to **Settings** → **Developer** → **API Keys**
+   - Click **"+ Add"** button
+   - Name the key (e.g., "Pedro CLI")
+   - Click **Save** and **immediately copy the key** (format: `cal_live_xxx...`)
+
+2. **Store in 1Password** (recommended):
+   ```bash
+   # .env file
+   CAL_API_KEY="op://pedro/calcom_api_key/credential"
+   ```
+
+3. **Configure in `.pedrocli.json`**:
+   ```json
+   {
+     "calcom": {
+       "enabled": true,
+       "api_key": "",  // Leave empty to use env var CAL_API_KEY
+       "base_url": "https://api.cal.com/v1"  // Optional: for self-hosted Cal.com
+     }
+   }
+   ```
+
+4. **Run with API key** (if using 1Password):
+   ```bash
+   op run --env-file=.env -- ./pedrocli-http-server
+   ```
+
+#### Available Actions
+
+The Cal.com tool supports the following actions:
+
+**Bookings**:
+- `get_bookings` - List all bookings (filterable by status)
+- `get_booking` - Get specific booking details
+- `create_booking` - Create a new booking
+- `reschedule_booking` - Reschedule an existing booking
+- `cancel_booking` - Cancel a booking
+
+**Event Types** (booking pages):
+- `get_event_types` - List all event types
+- `get_event_type` - Get event type details
+- `create_event_type` - Create a new booking page
+- `update_event_type` - Update event type settings
+- `delete_event_type` - Delete an event type
+
+**Availability**:
+- `get_schedules` - List availability schedules
+- `get_availability` - Get available time slots for an event type
+- `get_busy_times` - Get busy/unavailable periods
+
+**User**:
+- `get_me` - Get authenticated user profile
+
+#### Example Usage
+
+```json
+{
+  "tool": "cal_com",
+  "args": {
+    "action": "get_event_types"
+  }
+}
+```
+
+```json
+{
+  "tool": "cal_com",
+  "args": {
+    "action": "create_event_type",
+    "title": "Podcast Interview",
+    "slug": "podcast-60min",
+    "length": 60,
+    "description": "60-minute podcast interview for SoypeteTech"
+  }
+}
+```
+
+#### Podcast Workflow
+
+For podcast scheduling, agents can:
+1. Fetch episode template from Notion
+2. Create Cal.com event type with template as description
+3. Return shareable booking link for guests
+
 ## Development Workflow
 
 ### Adding a New Tool
