@@ -220,6 +220,20 @@ func (a *BaseAgent) executeInferenceWithSystemPrompt(ctx context.Context, contex
 		return nil, err
 	}
 
+	// Generate and set GBNF grammar for tool calling if backend supports it
+	if a.registry != nil {
+		if llamacppBackend, ok := a.llm.(*llm.LlamaCppClient); ok {
+			// Generate grammar from tool registry
+			grammar, err := a.registry.GenerateToolCallGrammar()
+			if err == nil && grammar != nil {
+				// Set grammar and configure for structured output
+				llamacppBackend.SetGrammar(grammar.String())
+				llamacppBackend.ConfigureForToolCalls()
+			}
+			// If grammar generation fails, continue without it (graceful degradation)
+		}
+	}
+
 	// Perform inference
 	response, err := a.llm.Infer(ctx, &llm.InferenceRequest{
 		SystemPrompt: systemPrompt,
