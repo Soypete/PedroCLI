@@ -83,7 +83,7 @@ const (
 )
 
 // ToolCallFilter enforces tool call format at the logit level.
-// It ensures output follows: {"name": "<tool_name>", "args": {...}}
+// It ensures output follows: {"tool": "<tool_name>", "args": {...}}
 type ToolCallFilter struct {
 	StatefulFilter
 
@@ -168,8 +168,8 @@ func (f *ToolCallFilter) Apply(logits []float32, ctx *GenerationContext) []float
 		return f.maskToLiteral(logits, "{")
 
 	case StateExpectingToolName:
-		// Only allow '"name"' tokens
-		return f.maskToLiteral(logits, `"name"`)
+		// Only allow '"tool"' tokens
+		return f.maskToLiteral(logits, `"tool"`)
 
 	case StateExpectingNameValue:
 		// Only allow valid tool names
@@ -323,7 +323,7 @@ func (f *ToolCallFilter) updateParseState() {
 		}
 
 	case StateExpectingToolName:
-		if strings.Contains(text, `"name"`) {
+		if strings.Contains(text, `"tool"`) {
 			f.parseState = StateExpectingNameValue
 		}
 
@@ -459,7 +459,7 @@ func (f *ToolCallFilter) ParseToolCall() (*ParsedToolCall, error) {
 
 // ParsedToolCall represents a parsed tool call.
 type ParsedToolCall struct {
-	Name string                 `json:"name"`
+	Tool string                 `json:"tool"`
 	Args map[string]interface{} `json:"args"`
 }
 

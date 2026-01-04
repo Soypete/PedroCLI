@@ -2,6 +2,8 @@ package agents
 
 import (
 	"context"
+	"fmt"
+	"os"
 
 	"github.com/soypete/pedrocli/pkg/config"
 	"github.com/soypete/pedrocli/pkg/jobs"
@@ -220,18 +222,31 @@ func (a *BaseAgent) executeInferenceWithSystemPrompt(ctx context.Context, contex
 		return nil, err
 	}
 
-	// Generate and set GBNF grammar for tool calling if backend supports it
-	if a.registry != nil {
+	// Generate and set GBNF grammar for tool calling if backend supports it AND grammar is enabled
+	if a.registry != nil && a.config.Model.EnableGrammar {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Grammar enabled, attempting grammar generation\n")
 		if llamacppBackend, ok := a.llm.(*llm.LlamaCppClient); ok {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Successfully cast to LlamaCppClient\n")
 			// Generate grammar from tool registry
 			grammar, err := a.registry.GenerateToolCallGrammar()
-			if err == nil && grammar != nil {
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Grammar generation failed: %v\n", err)
+			} else if grammar == nil {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Grammar is nil\n")
+			} else {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Grammar generated successfully, length: %d bytes\n", len(grammar.String()))
 				// Set grammar and configure for structured output
 				llamacppBackend.SetGrammar(grammar.String())
 				llamacppBackend.ConfigureForToolCalls()
+				fmt.Fprintf(os.Stderr, "[DEBUG] Grammar applied and tool call config set\n")
 			}
-			// If grammar generation fails, continue without it (graceful degradation)
+		} else {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Type assertion to LlamaCppClient failed, backend type: %T\n", a.llm)
 		}
+	} else if a.config.Model.EnableGrammar {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Grammar enabled but registry is nil!\n")
+	} else {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Grammar disabled in config (enable_grammar: false)\n")
 	}
 
 	// Perform inference

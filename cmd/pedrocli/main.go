@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
@@ -178,6 +179,39 @@ func pollJobStatus(ctx context.Context, jobMgr jobs.JobManager, jobID string) er
 	}
 }
 
+// checkGrammarAndConfirm checks if grammar is enabled and asks for user confirmation
+// Returns false if user wants to abort
+func checkGrammarAndConfirm(cfg *config.Config) bool {
+	if !cfg.Model.EnableGrammar {
+		return true // Grammar disabled, proceed
+	}
+
+	fmt.Fprintln(os.Stderr, "\n⚠️  WARNING: GBNF Grammar is ENABLED")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "Grammar constraints may NOT work well for complex autonomous coding tasks.")
+	fmt.Fprintln(os.Stderr, "They work better for:")
+	fmt.Fprintln(os.Stderr, "  - Structured content generation (blog posts, podcasts)")
+	fmt.Fprintln(os.Stderr, "  - Simple command execution")
+	fmt.Fprintln(os.Stderr, "  - Form filling with defined fields")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "For code generation with multiple tools and complex arguments,")
+	fmt.Fprintln(os.Stderr, "we recommend trying WITHOUT grammar first.")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "To disable grammar, set 'enable_grammar: false' in your config file.")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprint(os.Stderr, "Continue with grammar enabled? [y/N]: ")
+
+	reader := bufio.NewReader(os.Stdin)
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading input: %v\n", err)
+		return false
+	}
+
+	response = strings.TrimSpace(strings.ToLower(response))
+	return response == "y" || response == "yes"
+}
+
 // executeAgent executes an agent and polls for completion
 func executeAgent(cfg *config.Config, agent agents.Agent, arguments map[string]interface{}) {
 	// Initialize app context for job manager
@@ -223,6 +257,12 @@ func buildCommand(cfg *config.Config, args []string) {
 		os.Exit(1)
 	}
 
+	// Check grammar configuration and get user confirmation if enabled
+	if !checkGrammarAndConfirm(cfg) {
+		fmt.Fprintln(os.Stderr, "Aborted by user.")
+		os.Exit(1)
+	}
+
 	fmt.Printf("Building feature: %s\n", *description)
 	if *issue != "" {
 		fmt.Printf("Issue: %s\n", *issue)
@@ -256,6 +296,12 @@ func debugCommand(cfg *config.Config, args []string) {
 	if *symptoms == "" {
 		fmt.Fprintln(os.Stderr, "Error: -symptoms is required")
 		fs.Usage()
+		os.Exit(1)
+	}
+
+	// Check grammar configuration and get user confirmation if enabled
+	if !checkGrammarAndConfirm(cfg) {
+		fmt.Fprintln(os.Stderr, "Aborted by user.")
 		os.Exit(1)
 	}
 
@@ -295,6 +341,12 @@ func reviewCommand(cfg *config.Config, args []string) {
 		os.Exit(1)
 	}
 
+	// Check grammar configuration and get user confirmation if enabled
+	if !checkGrammarAndConfirm(cfg) {
+		fmt.Fprintln(os.Stderr, "Aborted by user.")
+		os.Exit(1)
+	}
+
 	fmt.Printf("Reviewing branch: %s\n", *branch)
 	if *prNumber != "" {
 		fmt.Printf("PR: %s\n", *prNumber)
@@ -328,6 +380,12 @@ func triageCommand(cfg *config.Config, args []string) {
 	if *description == "" {
 		fmt.Fprintln(os.Stderr, "Error: -description is required")
 		fs.Usage()
+		os.Exit(1)
+	}
+
+	// Check grammar configuration and get user confirmation if enabled
+	if !checkGrammarAndConfirm(cfg) {
+		fmt.Fprintln(os.Stderr, "Aborted by user.")
 		os.Exit(1)
 	}
 
