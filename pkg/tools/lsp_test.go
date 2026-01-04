@@ -113,11 +113,11 @@ func TestLSPToolExtractPosition(t *testing.T) {
 	tool := NewLSPTool(nil, "/tmp/workspace")
 
 	tests := []struct {
-		name        string
-		args        map[string]interface{}
-		wantLine    int
-		wantCol     int
-		wantErr     bool
+		name     string
+		args     map[string]interface{}
+		wantLine int
+		wantCol  int
+		wantErr  bool
 	}{
 		{
 			name:     "valid float64",

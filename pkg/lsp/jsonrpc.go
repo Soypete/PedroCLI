@@ -14,11 +14,11 @@ import (
 // JSONRPCMessage represents a JSON-RPC 2.0 message.
 type JSONRPCMessage struct {
 	JSONRPC string          `json:"jsonrpc"`
-	ID      *int64          `json:"id,omitempty"`      // Request/Response ID
-	Method  string          `json:"method,omitempty"`  // Request/Notification method
-	Params  json.RawMessage `json:"params,omitempty"`  // Request/Notification params
-	Result  json.RawMessage `json:"result,omitempty"`  // Response result
-	Error   *JSONRPCError   `json:"error,omitempty"`   // Response error
+	ID      *int64          `json:"id,omitempty"`     // Request/Response ID
+	Method  string          `json:"method,omitempty"` // Request/Notification method
+	Params  json.RawMessage `json:"params,omitempty"` // Request/Notification params
+	Result  json.RawMessage `json:"result,omitempty"` // Response result
+	Error   *JSONRPCError   `json:"error,omitempty"`  // Response error
 }
 
 // JSONRPCError represents a JSON-RPC 2.0 error.
@@ -195,9 +195,7 @@ func (c *JSONRPCConn) readLoop() {
 	for !c.closed.Load() {
 		msg, err := c.readMessage()
 		if err != nil {
-			if !c.closed.Load() {
-				// Log error but continue - some servers send malformed messages
-			}
+			// Skip read errors - connection may be closed or server sent malformed message
 			continue
 		}
 
