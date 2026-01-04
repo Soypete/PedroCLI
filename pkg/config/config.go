@@ -343,6 +343,7 @@ type CustomLink struct {
 
 // DatabaseConfig contains database configuration
 type DatabaseConfig struct {
+	Driver   string `json:"driver"`   // "postgres" or "sqlite"
 	Host     string `json:"host"`
 	Port     int    `json:"port"`
 	User     string `json:"user"`

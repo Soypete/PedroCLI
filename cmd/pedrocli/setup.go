@@ -46,7 +46,19 @@ func NewAppContext(cfg *config.Config) (*AppContext, error) {
 	}
 
 	// Create database connection
-	dbCfg := database.DefaultConfig()
+	dbCfg := &database.Config{
+		Driver:   cfg.Database.Driver,
+		Host:     cfg.Database.Host,
+		Port:     cfg.Database.Port,
+		Database: cfg.Database.Database,
+		User:     cfg.Database.User,
+		Password: cfg.Database.Password,
+		SSLMode:  cfg.Database.SSLMode,
+	}
+	// If no driver specified in config, use defaults
+	if dbCfg.Driver == "" {
+		dbCfg = database.DefaultConfig()
+	}
 	db, err := database.New(dbCfg)
 	if err != nil {
 		return nil, err

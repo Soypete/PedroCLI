@@ -33,6 +33,11 @@
   },
   "database": {
     "driver": "postgres",
-    "dsn": "postgres://pedrocli:pedrocli@localhost:5432/pedrocli?sslmode=disable"
+    "host": "localhost",
+    "port": 5432,
+    "user": "pedrocli",
+    "password": "pedrocli",
+    "database": "pedrocli",
+    "ssl_mode": "disable"
   }
 }
