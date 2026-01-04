@@ -214,8 +214,8 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Call MCP tool (SAME AS CLI)
-	result, err := s.mcpClient.CallTool(s.ctx, req.Type, args)
+	// Call tool via bridge
+	result, err := s.bridge.CallTool(s.ctx, req.Type, args)
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, JobResponse{
 			Success: false,
@@ -224,8 +224,16 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !result.Success {
+		respondJSON(w, http.StatusInternalServerError, JobResponse{
+			Success: false,
+			Error:   result.Error,
+		})
+		return
+	}
+
 	// Extract job ID from response
-	jobID, err := extractJobID(result.Content[0].Text)
+	jobID, err := extractJobID(result.Output)
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, JobResponse{
 			Success: false,
@@ -237,7 +245,7 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 	// Return response
 	response := JobResponse{
 		JobID:   jobID,
-		Message: result.Content[0].Text,
+		Message: result.Output,
 		Success: true,
 	}
 
@@ -258,10 +266,10 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleListJobs lists all jobs via MCP
+// handleListJobs lists all jobs via bridge
 func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
-	// Call MCP list_jobs tool (SAME AS CLI)
-	result, err := s.mcpClient.CallTool(s.ctx, "list_jobs", map[string]interface{}{})
+	// Call list_jobs tool via bridge
+	result, err := s.bridge.CallTool(s.ctx, "list_jobs", map[string]interface{}{})
 	if err != nil {
 		// Log the error for debugging
 		fmt.Printf("Error listing jobs: %v\n", err)
@@ -283,7 +291,7 @@ func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if we have content
-	if len(result.Content) == 0 {
+	if result.Output == "" {
 		fmt.Println("Warning: list_jobs returned no content")
 		if r.Header.Get("HX-Request") == "true" {
 			// No jobs - don't auto-refresh
@@ -307,21 +315,21 @@ func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
 			<div class="bg-gray-50 p-4 rounded border border-gray-200">
 				<pre class="text-sm text-gray-700 whitespace-pre-wrap">%s</pre>
 			</div>
-		</div>`, result.Content[0].Text)
+		</div>`, result.Output)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(html))
 	} else {
 		respondJSON(w, http.StatusOK, map[string]string{
-			"jobs": result.Content[0].Text,
+			"jobs": result.Output,
 		})
 	}
 }
 
-// handleGetJob gets a single job status via MCP
+// handleGetJob gets a single job status via bridge
 func (s *Server) handleGetJob(w http.ResponseWriter, r *http.Request, jobID string) {
-	// Call MCP get_job_status tool (SAME AS CLI)
-	result, err := s.mcpClient.CallTool(s.ctx, "get_job_status", map[string]interface{}{
+	// Call get_job_status tool via bridge
+	result, err := s.bridge.CallTool(s.ctx, "get_job_status", map[string]interface{}{
 		"job_id": jobID,
 	})
 	if err != nil {
@@ -335,7 +343,7 @@ func (s *Server) handleGetJob(w http.ResponseWriter, r *http.Request, jobID stri
 	if r.Header.Get("HX-Request") == "true" {
 		// Return HTMX-compatible HTML
 		data := map[string]interface{}{
-			"status_text": result.Content[0].Text,
+			"status_text": result.Output,
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := s.templates.ExecuteTemplate(w, "job_card.html", data); err != nil {
@@ -343,15 +351,15 @@ func (s *Server) handleGetJob(w http.ResponseWriter, r *http.Request, jobID stri
 		}
 	} else {
 		respondJSON(w, http.StatusOK, map[string]string{
-			"status": result.Content[0].Text,
+			"status": result.Output,
 		})
 	}
 }
 
-// handleCancelJob cancels a job via MCP
+// handleCancelJob cancels a job via bridge
 func (s *Server) handleCancelJob(w http.ResponseWriter, r *http.Request, jobID string) {
-	// Call MCP cancel_job tool (SAME AS CLI)
-	result, err := s.mcpClient.CallTool(s.ctx, "cancel_job", map[string]interface{}{
+	// Call cancel_job tool via bridge
+	result, err := s.bridge.CallTool(s.ctx, "cancel_job", map[string]interface{}{
 		"job_id": jobID,
 	})
 	if err != nil {
@@ -362,8 +370,8 @@ func (s *Server) handleCancelJob(w http.ResponseWriter, r *http.Request, jobID s
 	}
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
-		"message": result.Content[0].Text,
-		"success": true,
+		"message": result.Output,
+		"success": result.Success,
 	})
 }
 
@@ -471,8 +479,8 @@ func (s *Server) handleBlog(w http.ResponseWriter, r *http.Request) {
 		args["title"] = req.Title
 	}
 
-	// Call the blog_orchestrator agent via MCP
-	result, err := s.mcpClient.CallTool(s.ctx, "blog_orchestrator", args)
+	// Call the blog_orchestrator agent via bridge
+	result, err := s.bridge.CallTool(s.ctx, "blog_orchestrator", args)
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, BlogResponse{
 			Success: false,
@@ -481,8 +489,16 @@ func (s *Server) handleBlog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !result.Success {
+		respondJSON(w, http.StatusInternalServerError, BlogResponse{
+			Success: false,
+			Error:   result.Error,
+		})
+		return
+	}
+
 	// Extract job ID from response
-	jobID, err := extractJobID(result.Content[0].Text)
+	jobID, err := extractJobID(result.Output)
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, BlogResponse{
 			Success: false,
@@ -507,7 +523,7 @@ func (s *Server) handleBlogDirect(w http.ResponseWriter, req BlogRequest) {
 	}
 
 	// Call blog_publish tool directly with the raw dictation as content
-	result, err := s.mcpClient.CallTool(s.ctx, "blog_publish", map[string]interface{}{
+	result, err := s.bridge.CallTool(s.ctx, "blog_publish", map[string]interface{}{
 		"title":          title,
 		"expanded_draft": req.Dictation,
 	})
@@ -519,26 +535,17 @@ func (s *Server) handleBlogDirect(w http.ResponseWriter, req BlogRequest) {
 		return
 	}
 
-	if result.IsError {
-		errorMsg := "Unknown error"
-		if len(result.Content) > 0 {
-			errorMsg = result.Content[0].Text
-		}
+	if !result.Success {
 		respondJSON(w, http.StatusInternalServerError, BlogResponse{
 			Success: false,
-			Error:   errorMsg,
+			Error:   result.Error,
 		})
 		return
 	}
 
-	message := "Blog post created"
-	if len(result.Content) > 0 {
-		message = result.Content[0].Text
-	}
-
 	respondJSON(w, http.StatusOK, BlogResponse{
 		Success: true,
-		Message: message,
+		Message: result.Output,
 	})
 }
 
@@ -619,8 +626,8 @@ func (s *Server) handleBlogOrchestrate(w http.ResponseWriter, r *http.Request) {
 		args["title"] = req.Title
 	}
 
-	// Call the blog_orchestrator agent via MCP
-	result, err := s.mcpClient.CallTool(s.ctx, "blog_orchestrator", args)
+	// Call the blog_orchestrator agent via bridge
+	result, err := s.bridge.CallTool(s.ctx, "blog_orchestrator", args)
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, OrchestratedBlogResponse{
 			Success: false,
@@ -629,8 +636,16 @@ func (s *Server) handleBlogOrchestrate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !result.Success {
+		respondJSON(w, http.StatusInternalServerError, OrchestratedBlogResponse{
+			Success: false,
+			Error:   result.Error,
+		})
+		return
+	}
+
 	// Extract job ID from response
-	jobID, err := extractJobID(result.Content[0].Text)
+	jobID, err := extractJobID(result.Output)
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, OrchestratedBlogResponse{
 			Success: false,
@@ -662,17 +677,17 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if MCP client is running
-	mcpRunning := s.mcpClient.IsRunning()
+	// Check if bridge is healthy
+	bridgeHealthy := s.bridge.IsHealthy()
 
 	status := "healthy"
-	if !mcpRunning {
+	if !bridgeHealthy {
 		status = "degraded"
 	}
 
 	respondJSON(w, http.StatusOK, HealthResponse{
 		Status:     status,
-		MCPRunning: mcpRunning,
+		MCPRunning: bridgeHealthy, // Keep field name for API compatibility
 		Timestamp:  time.Now().Format(time.RFC3339),
 	})
 }

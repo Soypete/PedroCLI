@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/soypete/pedrocli/pkg/mcp"
+	"github.com/soypete/pedrocli/pkg/toolformat"
 )
 
 // SSEClient represents a connected SSE client
@@ -30,16 +31,45 @@ type SSEMessage struct {
 type SSEBroadcaster struct {
 	clients    map[string]*SSEClient
 	mutex      sync.RWMutex
-	mcpClient  *mcp.Client
+	bridge     toolformat.ToolBridge
+	mcpClient  *mcp.Client // Keep for backwards compatibility
 	ctx        context.Context
 	lastStatus map[string]string // jobID -> last known status
 }
 
-// NewSSEBroadcaster creates a new SSE broadcaster
+// NewSSEBroadcaster creates a new SSE broadcaster (legacy - uses MCP client)
 func NewSSEBroadcaster(mcpClient *mcp.Client, ctx context.Context) *SSEBroadcaster {
+	// Create MCP adapter bridge
+	bridge := &toolformat.MCPClientAdapter{
+		MCPCaller: func(ctx context.Context, name string, args map[string]interface{}) (string, bool, error) {
+			result, err := mcpClient.CallTool(ctx, name, args)
+			if err != nil {
+				return "", true, err
+			}
+			if len(result.Content) == 0 {
+				return "", result.IsError, nil
+			}
+			return result.Content[0].Text, result.IsError, nil
+		},
+		MCPHealthy: func() bool {
+			return mcpClient.IsRunning()
+		},
+	}
+
 	return &SSEBroadcaster{
 		clients:    make(map[string]*SSEClient),
+		bridge:     bridge,
 		mcpClient:  mcpClient,
+		ctx:        ctx,
+		lastStatus: make(map[string]string),
+	}
+}
+
+// NewSSEBroadcasterWithBridge creates a new SSE broadcaster with a ToolBridge
+func NewSSEBroadcasterWithBridge(bridge toolformat.ToolBridge, ctx context.Context) *SSEBroadcaster {
+	return &SSEBroadcaster{
+		clients:    make(map[string]*SSEClient),
+		bridge:     bridge,
 		ctx:        ctx,
 		lastStatus: make(map[string]string),
 	}
@@ -108,20 +138,20 @@ func (b *SSEBroadcaster) StartPolling(pollInterval time.Duration) {
 
 // pollJobs checks job statuses and broadcasts updates
 func (b *SSEBroadcaster) pollJobs() {
-	// Get list of all jobs from MCP
-	result, err := b.mcpClient.CallTool(b.ctx, "list_jobs", map[string]interface{}{})
+	// Get list of all jobs using bridge
+	result, err := b.bridge.CallTool(b.ctx, "list_jobs", map[string]interface{}{})
 	if err != nil {
 		fmt.Printf("Error polling jobs: %v\n", err)
 		return
 	}
 
-	if len(result.Content) == 0 {
+	if !result.Success || result.Output == "" {
 		return
 	}
 
 	// Parse job list (assuming it's plain text for now)
 	// In a real implementation, we'd parse the structured data
-	jobListText := result.Content[0].Text
+	jobListText := result.Output
 
 	// For each job we're tracking, check if status changed
 	b.mutex.RLock()
@@ -147,18 +177,18 @@ func (b *SSEBroadcaster) pollJobs() {
 
 // checkJobStatus checks a single job's status and broadcasts if changed
 func (b *SSEBroadcaster) checkJobStatus(jobID string) {
-	result, err := b.mcpClient.CallTool(b.ctx, "get_job_status", map[string]interface{}{
+	result, err := b.bridge.CallTool(b.ctx, "get_job_status", map[string]interface{}{
 		"job_id": jobID,
 	})
 	if err != nil {
 		return
 	}
 
-	if len(result.Content) == 0 {
+	if !result.Success || result.Output == "" {
 		return
 	}
 
-	currentStatus := result.Content[0].Text
+	currentStatus := result.Output
 
 	// Check if status changed
 	b.mutex.Lock()
@@ -228,11 +258,11 @@ func (b *SSEBroadcaster) ServeHTTP(w http.ResponseWriter, r *http.Request, jobID
 func (b *SSEBroadcaster) sendInitialStatus(w http.ResponseWriter, flusher http.Flusher, jobID string) {
 	if jobID == "*" {
 		// Send full job list
-		result, err := b.mcpClient.CallTool(b.ctx, "list_jobs", map[string]interface{}{})
-		if err == nil && len(result.Content) > 0 {
+		result, err := b.bridge.CallTool(b.ctx, "list_jobs", map[string]interface{}{})
+		if err == nil && result.Success && result.Output != "" {
 			msg := SSEMessage{
 				Event: "list",
-				Data:  result.Content[0].Text,
+				Data:  result.Output,
 			}
 			data, _ := json.Marshal(msg)
 			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", msg.Event, string(data))
@@ -240,15 +270,15 @@ func (b *SSEBroadcaster) sendInitialStatus(w http.ResponseWriter, flusher http.F
 		}
 	} else {
 		// Send specific job status
-		result, err := b.mcpClient.CallTool(b.ctx, "get_job_status", map[string]interface{}{
+		result, err := b.bridge.CallTool(b.ctx, "get_job_status", map[string]interface{}{
 			"job_id": jobID,
 		})
-		if err == nil && len(result.Content) > 0 {
+		if err == nil && result.Success && result.Output != "" {
 			msg := SSEMessage{
 				Event: "update",
 				Data: map[string]interface{}{
 					"job_id": jobID,
-					"status": result.Content[0].Text,
+					"status": result.Output,
 				},
 			}
 			data, _ := json.Marshal(msg)

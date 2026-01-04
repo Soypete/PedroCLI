@@ -5,15 +5,13 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/soypete/pedrocli/pkg/cli"
 	"github.com/soypete/pedrocli/pkg/config"
 	depcheck "github.com/soypete/pedrocli/pkg/init"
-	"github.com/soypete/pedrocli/pkg/mcp"
 )
 
 const version = "0.2.0-dev"
@@ -138,54 +136,24 @@ Examples:
 For more information: https://github.com/soypete/pedrocli`)
 }
 
-// startMCPClient starts the MCP server and returns a client
-func startMCPClient(cfg *config.Config) (*mcp.Client, context.Context, context.CancelFunc, error) {
-	// Find the MCP server binary
-	serverPath, err := findMCPServer()
+// startBridge starts the CLI bridge and returns it
+func startBridge(cfg *config.Config) (*cli.CLIBridge, error) {
+	// Get working directory
+	workDir, err := os.Getwd()
 	if err != nil {
-		return nil, nil, nil, err
+		workDir = "."
 	}
 
-	// Create client
-	client := mcp.NewClient(serverPath, []string{})
-
-	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-
-	// Start server
-	if err := client.Start(ctx); err != nil {
-		cancel()
-		return nil, nil, nil, fmt.Errorf("failed to start MCP server: %w", err)
+	bridge, err := cli.NewCLIBridge(cli.CLIBridgeConfig{
+		UseDirect: false, // Use MCP subprocess for now (can be toggled via config later)
+		Config:    cfg,
+		WorkDir:   workDir,
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	return client, ctx, cancel, nil
-}
-
-// findMCPServer finds the MCP server binary
-func findMCPServer() (string, error) {
-	// Try current directory first
-	localPath := "./pedrocli-server"
-	if _, err := os.Stat(localPath); err == nil {
-		abs, _ := filepath.Abs(localPath)
-		return abs, nil
-	}
-
-	// Try in same directory as the CLI binary
-	exePath, err := os.Executable()
-	if err == nil {
-		serverPath := filepath.Join(filepath.Dir(exePath), "pedrocli-server")
-		if _, err := os.Stat(serverPath); err == nil {
-			return serverPath, nil
-		}
-	}
-
-	// Try $PATH
-	serverPath, err := exec.LookPath("pedrocli-server")
-	if err == nil {
-		return serverPath, nil
-	}
-
-	return "", fmt.Errorf("pedrocli-server not found. Please build it with 'make build-server'")
+	return bridge, nil
 }
 
 // extractJobID extracts job ID from agent response text
@@ -200,7 +168,7 @@ func extractJobID(text string) (string, error) {
 }
 
 // pollJobStatus polls for job status until completion
-func pollJobStatus(ctx context.Context, client *mcp.Client, jobID string) error {
+func pollJobStatus(ctx context.Context, bridge *cli.CLIBridge, jobID string) error {
 	fmt.Printf("\n⏳ Job %s is running...\n", jobID)
 	fmt.Println("Checking status every 5 seconds. Press Ctrl+C to stop watching (job will continue in background).")
 
@@ -214,7 +182,7 @@ func pollJobStatus(ctx context.Context, client *mcp.Client, jobID string) error 
 			return ctx.Err()
 		case <-ticker.C:
 			// Call get_job_status
-			response, err := client.CallTool(ctx, "get_job_status", map[string]interface{}{
+			result, err := bridge.CallTool(ctx, "get_job_status", map[string]interface{}{
 				"job_id": jobID,
 			})
 			if err != nil {
@@ -223,8 +191,8 @@ func pollJobStatus(ctx context.Context, client *mcp.Client, jobID string) error 
 			}
 
 			// Extract status from response
-			if len(response.Content) > 0 && response.Content[0].Type == "text" {
-				status := response.Content[0].Text
+			if result.Success && result.Output != "" {
+				status := result.Output
 
 				// Only print if status changed
 				if status != lastStatus {
@@ -277,42 +245,43 @@ func buildCommand(cfg *config.Config, args []string) {
 
 // callAgent is a helper function to call an agent and poll for completion
 func callAgent(cfg *config.Config, agentName string, arguments map[string]interface{}) {
-	// Start MCP client
-	client, ctx, cancel, err := startMCPClient(cfg)
+	// Start bridge
+	bridge, err := startBridge(cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to start MCP client: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Failed to start bridge: %v\n", err)
 		os.Exit(1)
 	}
-	defer cancel()
-	defer client.Stop()
+	defer bridge.Close()
+
+	ctx := bridge.Context()
 
 	// Call agent
 	fmt.Printf("\nStarting %s job...\n", agentName)
-	response, err := client.CallTool(ctx, agentName, arguments)
+	result, err := bridge.CallTool(ctx, agentName, arguments)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to call %s: %v\n", agentName, err)
 		os.Exit(1)
 	}
 
-	// Extract job ID from response
-	if response.IsError {
+	// Check for error
+	if !result.Success {
 		fmt.Printf("\n❌ Failed to start %s job:\n", agentName)
-		for _, block := range response.Content {
-			if block.Type == "text" {
-				fmt.Println(block.Text)
-			}
+		if result.Error != "" {
+			fmt.Println(result.Error)
+		}
+		if result.Output != "" {
+			fmt.Println(result.Output)
 		}
 		os.Exit(1)
 	}
 
+	// Extract job ID from response
 	var jobID string
-	for _, block := range response.Content {
-		if block.Type == "text" {
-			fmt.Println(block.Text)
-			jobID, err = extractJobID(block.Text)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
-			}
+	if result.Output != "" {
+		fmt.Println(result.Output)
+		jobID, err = extractJobID(result.Output)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
 		}
 	}
 
@@ -322,7 +291,7 @@ func callAgent(cfg *config.Config, agentName string, arguments map[string]interf
 	}
 
 	// Poll for status
-	if err := pollJobStatus(ctx, client, jobID); err != nil {
+	if err := pollJobStatus(ctx, bridge, jobID); err != nil {
 		if err == context.Canceled || err == context.DeadlineExceeded {
 			fmt.Println("\n⚠️  Stopped watching job. Job continues in background.")
 			fmt.Printf("Use 'pedrocli status %s' to check progress.\n", jobID)
@@ -330,20 +299,19 @@ func callAgent(cfg *config.Config, agentName string, arguments map[string]interf
 	}
 }
 
-// callMCPTool is a helper function to call an MCP tool and display the response
-func callMCPTool(cfg *config.Config, toolName string, arguments map[string]interface{}) {
-	// Start MCP client
-	client, ctx, cancel, err := startMCPClient(cfg)
+// callTool is a helper function to call a tool and display the response
+func callTool(cfg *config.Config, toolName string, arguments map[string]interface{}) {
+	// Start bridge
+	bridge, err := startBridge(cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to start MCP client: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Failed to start bridge: %v\n", err)
 		os.Exit(1)
 	}
-	defer cancel()
-	defer client.Stop()
+	defer bridge.Close()
 
 	// Call tool
 	fmt.Printf("\nCalling %s...\n", toolName)
-	response, err := client.CallTool(ctx, toolName, arguments)
+	result, err := bridge.CallTool(bridge.Context(), toolName, arguments)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to call %s: %v\n", toolName, err)
 		os.Exit(1)
@@ -351,16 +319,17 @@ func callMCPTool(cfg *config.Config, toolName string, arguments map[string]inter
 
 	// Display response
 	fmt.Println()
-	if response.IsError {
+	if !result.Success {
 		fmt.Println("❌ Operation failed:")
+		if result.Error != "" {
+			fmt.Println(result.Error)
+		}
 	} else {
 		fmt.Println("✅ Operation completed:")
 	}
 
-	for _, block := range response.Content {
-		if block.Type == "text" {
-			fmt.Println(block.Text)
-		}
+	if result.Output != "" {
+		fmt.Println(result.Output)
 	}
 }
 
@@ -488,7 +457,7 @@ func blogCommand(cfg *config.Config, args []string) {
 			"content": *content,
 		}
 
-		callMCPTool(cfg, "blog_writer", arguments)
+		callTool(cfg, "blog_writer", arguments)
 	} else {
 		fmt.Fprintln(os.Stderr, "Error: either -prompt (for orchestrated posts) or -content (for simple posts) is required")
 		fmt.Fprintln(os.Stderr, "\nExamples:")
@@ -516,7 +485,7 @@ func statusCommand(cfg *config.Config, args []string) {
 		"job_id": jobID,
 	}
 
-	callMCPTool(cfg, "get_job_status", arguments)
+	callTool(cfg, "get_job_status", arguments)
 }
 
 func listCommand(cfg *config.Config, args []string) {
@@ -525,7 +494,7 @@ func listCommand(cfg *config.Config, args []string) {
 
 	fmt.Println("Listing all jobs...")
 
-	callMCPTool(cfg, "list_jobs", map[string]interface{}{})
+	callTool(cfg, "list_jobs", map[string]interface{}{})
 }
 
 func cancelCommand(cfg *config.Config, args []string) {
@@ -546,5 +515,5 @@ func cancelCommand(cfg *config.Config, args []string) {
 		"job_id": jobID,
 	}
 
-	callMCPTool(cfg, "cancel_job", arguments)
+	callTool(cfg, "cancel_job", arguments)
 }

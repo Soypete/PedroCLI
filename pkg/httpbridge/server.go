@@ -9,20 +9,44 @@ import (
 
 	"github.com/soypete/pedrocli/pkg/config"
 	"github.com/soypete/pedrocli/pkg/mcp"
+	"github.com/soypete/pedrocli/pkg/toolformat"
 )
 
 // Server represents the HTTP server
 type Server struct {
 	config       *config.Config
-	mcpClient    *mcp.Client
+	bridge       toolformat.ToolBridge
+	mcpClient    *mcp.Client // Keep for backwards compatibility during migration
 	ctx          context.Context
 	mux          *http.ServeMux
 	templates    *template.Template
 	sseBroadcast *SSEBroadcaster
 }
 
-// NewServer creates a new HTTP server
+// NewServer creates a new HTTP server (legacy - uses MCP client)
 func NewServer(cfg *config.Config, mcpClient *mcp.Client, ctx context.Context) *Server {
+	// Create MCP adapter bridge for backwards compatibility
+	bridge := &toolformat.MCPClientAdapter{
+		MCPCaller: func(ctx context.Context, name string, args map[string]interface{}) (string, bool, error) {
+			result, err := mcpClient.CallTool(ctx, name, args)
+			if err != nil {
+				return "", true, err
+			}
+			if len(result.Content) == 0 {
+				return "", result.IsError, nil
+			}
+			return result.Content[0].Text, result.IsError, nil
+		},
+		MCPHealthy: func() bool {
+			return mcpClient.IsRunning()
+		},
+	}
+
+	return NewServerWithBridge(cfg, bridge, mcpClient, ctx)
+}
+
+// NewServerWithBridge creates a new HTTP server with a ToolBridge
+func NewServerWithBridge(cfg *config.Config, bridge toolformat.ToolBridge, mcpClient *mcp.Client, ctx context.Context) *Server {
 	mux := http.NewServeMux()
 
 	// Load HTML templates (must load all files individually, ** glob doesn't work)
@@ -33,10 +57,11 @@ func NewServer(cfg *config.Config, mcpClient *mcp.Client, ctx context.Context) *
 	))
 
 	// Create SSE broadcaster
-	sseBroadcast := NewSSEBroadcaster(mcpClient, ctx)
+	sseBroadcast := NewSSEBroadcasterWithBridge(bridge, ctx)
 
 	server := &Server{
 		config:       cfg,
+		bridge:       bridge,
 		mcpClient:    mcpClient,
 		ctx:          ctx,
 		mux:          mux,
