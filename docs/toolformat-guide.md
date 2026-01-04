@@ -555,3 +555,63 @@ registry.Register(&toolformat.ToolDefinition{
 | Claude | `ClaudeFormatter` | `claude` |
 | GPT-4/3.5 | `OpenAIFormatter` | `gpt-4`, `gpt-3.5`, `openai` |
 | Other | `GenericFormatter` | (fallback) |
+
+---
+
+## Execution Modes
+
+PedroCLI supports two execution modes:
+
+### 1. MCP Subprocess Mode (Default)
+
+The CLI spawns `pedrocli-server` as a subprocess and communicates via JSON-RPC over stdio. This is useful for:
+- Backward compatibility
+- When you need isolated agent execution
+- When connecting to third-party MCP servers
+
+```json
+{
+  "execution": {
+    "direct_mode": false
+  }
+}
+```
+
+### 2. Direct Mode (In-Process)
+
+Tools and agents run directly in the CLI process using goroutines. This provides:
+- Faster startup (no subprocess spawn)
+- Single binary operation
+- Better resource sharing
+- Simpler deployment
+
+Enable in config:
+```json
+{
+  "execution": {
+    "direct_mode": true
+  }
+}
+```
+
+### Third-Party MCP Servers
+
+You can configure additional MCP servers to connect to:
+
+```json
+{
+  "execution": {
+    "direct_mode": true,
+    "mcp_servers": [
+      {
+        "name": "calendar",
+        "command": "/path/to/calendar-mcp-server",
+        "args": ["--port", "9000"],
+        "env": ["GOOGLE_CREDENTIALS=/path/to/creds.json"]
+      }
+    ]
+  }
+}
+```
+
+When in direct mode, built-in tools execute in-process while third-party MCP servers are called via the HybridBridge

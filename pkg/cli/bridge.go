@@ -8,8 +8,11 @@ import (
 	"path/filepath"
 
 	"github.com/soypete/pedrocli/pkg/config"
+	"github.com/soypete/pedrocli/pkg/jobs"
+	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/mcp"
 	"github.com/soypete/pedrocli/pkg/toolformat"
+	"github.com/soypete/pedrocli/pkg/tools"
 )
 
 // CLIBridge provides a unified interface for the CLI to call tools
@@ -23,16 +26,29 @@ type CLIBridge struct {
 
 // CLIBridgeConfig configures the CLI bridge
 type CLIBridgeConfig struct {
-	UseDirect bool           // If true, use direct execution instead of MCP
+	UseDirect bool           // If true, use direct execution instead of MCP (overrides config)
 	Config    *config.Config // App config
 	WorkDir   string         // Working directory for tools
 }
 
-// NewCLIBridge creates a new CLI bridge
-// If useDirect is false, it spawns an MCP server subprocess
-// If useDirect is true, it creates a direct tool executor
-func NewCLIBridge(cfg CLIBridgeConfig) (*CLIBridge, error) {
+// shouldUseDirect determines if direct mode should be used
+func (cfg CLIBridgeConfig) shouldUseDirect() bool {
+	// Explicit override takes precedence
 	if cfg.UseDirect {
+		return true
+	}
+	// Check config setting
+	if cfg.Config != nil && cfg.Config.Execution.DirectMode {
+		return true
+	}
+	return false
+}
+
+// NewCLIBridge creates a new CLI bridge
+// Uses direct execution if config.Execution.DirectMode is true or UseDirect is set
+// Otherwise spawns an MCP server subprocess
+func NewCLIBridge(cfg CLIBridgeConfig) (*CLIBridge, error) {
+	if cfg.shouldUseDirect() {
 		return newDirectBridge(cfg)
 	}
 	return newMCPBridge(cfg)
@@ -85,6 +101,57 @@ func newDirectBridge(cfg CLIBridgeConfig) (*CLIBridge, error) {
 	registry, err := factory.CreateRegistryForMode(toolformat.ModeAll)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tool registry: %w", err)
+	}
+
+	// Register job management tools
+	jobManager, err := jobs.NewManager("/tmp/pedrocli-jobs")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create job manager: %w", err)
+	}
+
+	// Register job tools
+	jobTools := []tools.Tool{
+		tools.NewGetJobStatusTool(jobManager),
+		tools.NewListJobsTool(jobManager),
+		tools.NewCancelJobTool(jobManager),
+	}
+
+	for _, tool := range jobTools {
+		def := &toolformat.ToolDefinition{
+			Name:        tool.Name(),
+			Description: tool.Description(),
+			Category:    toolformat.CategoryJob,
+			Parameters:  toolformat.GetSchemaForTool(tool.Name()),
+			Handler: func(t tools.Tool) toolformat.ToolHandler {
+				return func(args map[string]interface{}) (*toolformat.ToolResult, error) {
+					result, err := t.Execute(context.Background(), args)
+					if err != nil {
+						return &toolformat.ToolResult{Success: false, Error: err.Error()}, nil
+					}
+					return &toolformat.ToolResult{
+						Success: result.Success,
+						Output:  result.Output,
+						Error:   result.Error,
+					}, nil
+				}
+			}(tool),
+		}
+		registry.Register(def)
+	}
+
+	// Create LLM backend for agents
+	backend, err := llm.NewBackend(cfg.Config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create LLM backend: %w", err)
+	}
+
+	// Create agent factory and register agents
+	agentFactory := toolformat.NewAgentFactory(cfg.Config, backend, jobManager, cfg.WorkDir)
+	agentFactory.WithCodeTools(agentFactory.CreateCodeTools())
+	agentFactory.WithBlogTools(agentFactory.CreateBlogTools())
+
+	if err := agentFactory.RegisterAgentsInRegistry(registry); err != nil {
+		return nil, fmt.Errorf("failed to register agents: %w", err)
 	}
 
 	// Get formatter for configured model
