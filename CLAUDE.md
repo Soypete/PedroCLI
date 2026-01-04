@@ -558,6 +558,90 @@ For podcast scheduling, agents can:
 2. Create Cal.com event type with template as description
 3. Return shareable booking link for guests
 
+#### Riverside.fm Integration for Podcasts
+
+Cal.com has native integration with Riverside.fm for high-quality podcast recording. You can set up Riverside in two ways:
+
+**Option 1: Native Cal.com + Riverside Integration** (Recommended)
+1. Connect Riverside to your Cal.com account:
+   - Log into Cal.com → Settings → Apps
+   - Search for "Riverside" and install the app
+   - Connect your Riverside account
+2. Create event types with Riverside location type:
+   ```json
+   {
+     "tool": "cal_com",
+     "args": {
+       "action": "create_event_type",
+       "title": "SoypeteTech Podcast Interview",
+       "slug": "podcast-interview-60min",
+       "length": 60,
+       "description": "60-minute interview for SoypeteTech podcast. We'll discuss your expertise in [TOPIC]. Recording happens on Riverside.fm for professional audio/video quality.",
+       "locations": [
+         {
+           "type": "integration",
+           "integration": "riverside"
+         }
+       ]
+     }
+   }
+   ```
+
+**Option 2: Direct Riverside Studio Link**
+If you have a dedicated Riverside studio, you can provide the direct link:
+```json
+{
+  "tool": "cal_com",
+  "args": {
+    "action": "create_event_type",
+    "title": "SoypeteTech Podcast Interview",
+    "slug": "podcast-interview-60min",
+    "length": 60,
+    "description": "60-minute interview for SoypeteTech podcast. We'll discuss your expertise in [TOPIC]. Recording happens on Riverside.fm for professional audio/video quality.",
+    "locations": [
+      {
+        "type": "link",
+        "link": "https://riverside.fm/studio/soypete-tech-podcast",
+        "displayLocationLabel": "Riverside Studio"
+      }
+    ]
+  }
+}
+```
+
+**Complete Podcast Setup Example**:
+```json
+{
+  "tool": "cal_com",
+  "args": {
+    "action": "create_event_type",
+    "title": "SoypeteTech Deep Dive - 90min",
+    "slug": "soypete-deep-dive-90",
+    "length": 90,
+    "description": "Extended 90-minute technical deep dive for SoypeteTech podcast. Topics: Cloud-native development, Go programming, AI/ML engineering, developer tools.\n\nFormat:\n- 5 min: Intro & guest background\n- 75 min: Technical discussion\n- 10 min: Rapid-fire Q&A\n\nRecording on Riverside.fm for studio-quality audio/video.",
+    "locations": [
+      {
+        "type": "integration",
+        "integration": "riverside"
+      }
+    ],
+    "minimumBookingNotice": 1440,
+    "beforeEventBuffer": 15,
+    "afterEventBuffer": 15,
+    "requiresConfirmation": true
+  }
+}
+```
+
+This creates a podcast booking page with:
+- 90-minute duration
+- Riverside.fm integration for recording
+- 24-hour minimum notice (1440 minutes)
+- 15-minute buffer before/after (prep time)
+- Manual confirmation required (screen guests)
+
+The booking link will be returned in the response as `bookingURL` (e.g., `https://cal.com/yourname/soypete-deep-dive-90`).
+
 ## Development Workflow
 
 ### Adding a New Tool
