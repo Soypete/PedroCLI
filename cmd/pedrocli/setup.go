@@ -35,6 +35,9 @@ type AppContext struct {
 	RSSFeedTool     tools.Tool
 	StaticLinksTool tools.Tool
 	BlogNotionTool  tools.Tool
+
+	// Tool Registry for grammar generation
+	ToolRegistry *tools.ToolRegistry
 }
 
 // NewAppContext creates and initializes the application context with database-backed job manager.
@@ -112,6 +115,18 @@ func NewAppContext(cfg *config.Config) (*AppContext, error) {
 	appCtx.StaticLinksTool = tools.NewStaticLinksTool(cfg)
 	appCtx.BlogNotionTool = tools.NewBlogNotionTool(cfg)
 
+	// Create and populate tool registry for grammar generation
+	registry := tools.NewToolRegistry()
+	// Register code tools as ExtendedTools (they implement Metadata())
+	registry.Register(appCtx.FileTool)
+	registry.Register(appCtx.CodeEditTool)
+	registry.Register(appCtx.SearchTool)
+	registry.Register(appCtx.NavigateTool)
+	registry.Register(appCtx.GitTool)
+	registry.Register(appCtx.BashTool)
+	registry.Register(appCtx.TestTool)
+	appCtx.ToolRegistry = registry
+
 	return appCtx, nil
 }
 
@@ -134,30 +149,68 @@ func registerCodeTools(agent interface{ RegisterTool(tools.Tool) }, ctx *AppCont
 	agent.RegisterTool(ctx.TestTool)
 }
 
-// NewBuilderAgentWithTools creates a fully configured builder agent
+// NewBuilderAgentWithTools creates a fully configured builder agent with registry
 func NewBuilderAgentWithTools(ctx *AppContext) *agents.BuilderAgent {
-	agent := agents.NewBuilderAgent(ctx.Config, ctx.Backend, ctx.JobManager)
+	// Create base with registry for grammar generation
+	base := agents.NewCodingBaseAgentWithRegistry(
+		"builder",
+		"Build new features autonomously and create draft PRs",
+		ctx.Config,
+		ctx.Backend,
+		ctx.JobManager,
+		ctx.ToolRegistry,
+	)
+
+	// Still register tools to agent's tool map for execution
+	agent := &agents.BuilderAgent{CodingBaseAgent: base}
 	registerCodeTools(agent, ctx)
 	return agent
 }
 
-// NewDebuggerAgentWithTools creates a fully configured debugger agent
+// NewDebuggerAgentWithTools creates a fully configured debugger agent with registry
 func NewDebuggerAgentWithTools(ctx *AppContext) *agents.DebuggerAgent {
-	agent := agents.NewDebuggerAgent(ctx.Config, ctx.Backend, ctx.JobManager)
+	base := agents.NewCodingBaseAgentWithRegistry(
+		"debugger",
+		"Debug and fix issues autonomously",
+		ctx.Config,
+		ctx.Backend,
+		ctx.JobManager,
+		ctx.ToolRegistry,
+	)
+
+	agent := &agents.DebuggerAgent{CodingBaseAgent: base}
 	registerCodeTools(agent, ctx)
 	return agent
 }
 
-// NewReviewerAgentWithTools creates a fully configured reviewer agent
+// NewReviewerAgentWithTools creates a fully configured reviewer agent with registry
 func NewReviewerAgentWithTools(ctx *AppContext) *agents.ReviewerAgent {
-	agent := agents.NewReviewerAgent(ctx.Config, ctx.Backend, ctx.JobManager)
+	base := agents.NewCodingBaseAgentWithRegistry(
+		"reviewer",
+		"Review code and provide feedback",
+		ctx.Config,
+		ctx.Backend,
+		ctx.JobManager,
+		ctx.ToolRegistry,
+	)
+
+	agent := &agents.ReviewerAgent{CodingBaseAgent: base}
 	registerCodeTools(agent, ctx)
 	return agent
 }
 
-// NewTriagerAgentWithTools creates a fully configured triager agent
+// NewTriagerAgentWithTools creates a fully configured triager agent with registry
 func NewTriagerAgentWithTools(ctx *AppContext) *agents.TriagerAgent {
-	agent := agents.NewTriagerAgent(ctx.Config, ctx.Backend, ctx.JobManager)
+	base := agents.NewCodingBaseAgentWithRegistry(
+		"triager",
+		"Diagnose issues without fixing them",
+		ctx.Config,
+		ctx.Backend,
+		ctx.JobManager,
+		ctx.ToolRegistry,
+	)
+
+	agent := &agents.TriagerAgent{CodingBaseAgent: base}
 	registerCodeTools(agent, ctx)
 	return agent
 }
