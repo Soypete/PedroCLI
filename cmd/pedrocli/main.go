@@ -1,20 +1,21 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 
-	"github.com/soypete/pedrocli/pkg/cli"
+	"github.com/soypete/pedrocli/pkg/agents"
 	"github.com/soypete/pedrocli/pkg/config"
 	depcheck "github.com/soypete/pedrocli/pkg/init"
+	"github.com/soypete/pedrocli/pkg/jobs"
 )
 
-const version = "0.2.0-dev"
+const version = "0.3.0-dev"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -136,38 +137,8 @@ Examples:
 For more information: https://github.com/soypete/pedrocli`)
 }
 
-// startBridge starts the CLI bridge and returns it
-func startBridge(cfg *config.Config) (*cli.CLIBridge, error) {
-	// Get working directory
-	workDir, err := os.Getwd()
-	if err != nil {
-		workDir = "."
-	}
-
-	bridge, err := cli.NewCLIBridge(cli.CLIBridgeConfig{
-		Config:  cfg,
-		WorkDir: workDir,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return bridge, nil
-}
-
-// extractJobID extracts job ID from agent response text
-func extractJobID(text string) (string, error) {
-	// Look for "Job job-XXXXX started"
-	re := regexp.MustCompile(`Job (job-\d+)`)
-	matches := re.FindStringSubmatch(text)
-	if len(matches) < 2 {
-		return "", fmt.Errorf("could not extract job ID from response: %s", text)
-	}
-	return matches[1], nil
-}
-
 // pollJobStatus polls for job status until completion
-func pollJobStatus(ctx context.Context, bridge *cli.CLIBridge, jobID string) error {
+func pollJobStatus(ctx context.Context, jobMgr jobs.JobManager, jobID string) error {
 	fmt.Printf("\n⏳ Job %s is running...\n", jobID)
 	fmt.Println("Checking status every 5 seconds. Press Ctrl+C to stop watching (job will continue in background).")
 
@@ -180,35 +151,96 @@ func pollJobStatus(ctx context.Context, bridge *cli.CLIBridge, jobID string) err
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			// Call get_job_status
-			result, err := bridge.CallTool(ctx, "get_job_status", map[string]interface{}{
-				"job_id": jobID,
-			})
+			job, err := jobMgr.Get(ctx, jobID)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: Failed to check status: %v\n", err)
 				continue
 			}
 
-			// Extract status from response
-			if result.Success && result.Output != "" {
-				status := result.Output
+			// Build status string
+			status := fmt.Sprintf("Status: %s", job.Status)
 
-				// Only print if status changed
-				if status != lastStatus {
-					fmt.Println(status)
-					lastStatus = status
-				}
-
-				// Check if job is complete
-				if strings.Contains(strings.ToLower(status), "completed") {
-					fmt.Println("\n✅ Job completed successfully!")
-					return nil
-				}
-				if strings.Contains(strings.ToLower(status), "failed") {
-					fmt.Println("\n❌ Job failed!")
-					return fmt.Errorf("job failed")
-				}
+			// Only print if status changed
+			if status != lastStatus {
+				fmt.Println(status)
+				lastStatus = status
 			}
+
+			// Check if job is complete
+			if job.Status == jobs.StatusCompleted {
+				fmt.Println("\n✅ Job completed successfully!")
+				return nil
+			}
+			if job.Status == jobs.StatusFailed {
+				fmt.Printf("\n❌ Job failed: %s\n", job.Error)
+				return fmt.Errorf("job failed: %s", job.Error)
+			}
+		}
+	}
+}
+
+// checkGrammarAndConfirm checks if grammar is enabled and asks for user confirmation
+// Returns false if user wants to abort
+func checkGrammarAndConfirm(cfg *config.Config) bool {
+	if !cfg.Model.EnableGrammar {
+		return true // Grammar disabled, proceed
+	}
+
+	fmt.Fprintln(os.Stderr, "\n⚠️  WARNING: GBNF Grammar is ENABLED")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "Grammar constraints may NOT work well for complex autonomous coding tasks.")
+	fmt.Fprintln(os.Stderr, "They work better for:")
+	fmt.Fprintln(os.Stderr, "  - Structured content generation (blog posts, podcasts)")
+	fmt.Fprintln(os.Stderr, "  - Simple command execution")
+	fmt.Fprintln(os.Stderr, "  - Form filling with defined fields")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "For code generation with multiple tools and complex arguments,")
+	fmt.Fprintln(os.Stderr, "we recommend trying WITHOUT grammar first.")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "To disable grammar, set 'enable_grammar: false' in your config file.")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprint(os.Stderr, "Continue with grammar enabled? [y/N]: ")
+
+	reader := bufio.NewReader(os.Stdin)
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading input: %v\n", err)
+		return false
+	}
+
+	response = strings.TrimSpace(strings.ToLower(response))
+	return response == "y" || response == "yes"
+}
+
+// executeAgent executes an agent and polls for completion
+func executeAgent(cfg *config.Config, agent agents.Agent, arguments map[string]interface{}) {
+	// Initialize app context for job manager
+	appCtx, err := NewAppContext(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize: %v\n", err)
+		os.Exit(1)
+	}
+	defer appCtx.Close()
+
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.Limits.MaxTaskDurationMinutes)*time.Minute)
+	defer cancel()
+
+	// Execute the agent
+	fmt.Printf("\nStarting %s job...\n", agent.Name())
+	job, err := agent.Execute(ctx, arguments)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to start %s: %v\n", agent.Name(), err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Job %s started\n", job.ID)
+
+	// Poll for status
+	if err := pollJobStatus(ctx, appCtx.JobManager, job.ID); err != nil {
+		if err == context.Canceled || err == context.DeadlineExceeded {
+			fmt.Println("\n⚠️  Stopped watching job. Job continues in background.")
+			fmt.Printf("Use 'pedrocli status %s' to check progress.\n", job.ID)
 		}
 	}
 }
@@ -225,12 +257,18 @@ func buildCommand(cfg *config.Config, args []string) {
 		os.Exit(1)
 	}
 
+	// Check grammar configuration and get user confirmation if enabled
+	if !checkGrammarAndConfirm(cfg) {
+		fmt.Fprintln(os.Stderr, "Aborted by user.")
+		os.Exit(1)
+	}
+
 	fmt.Printf("Building feature: %s\n", *description)
 	if *issue != "" {
 		fmt.Printf("Issue: %s\n", *issue)
 	}
 
-	// Build arguments for the tool
+	// Build arguments for the agent
 	arguments := map[string]interface{}{
 		"description": *description,
 	}
@@ -238,98 +276,15 @@ func buildCommand(cfg *config.Config, args []string) {
 		arguments["issue"] = *issue
 	}
 
-	// Call builder agent and poll for completion
-	callAgent(cfg, "builder", arguments)
-}
-
-// callAgent is a helper function to call an agent and poll for completion
-func callAgent(cfg *config.Config, agentName string, arguments map[string]interface{}) {
-	// Start bridge
-	bridge, err := startBridge(cfg)
+	// Create and execute agent
+	appCtx, err := NewAppContext(cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to start bridge: %v\n", err)
-		os.Exit(1)
-	}
-	defer bridge.Close()
-
-	ctx := bridge.Context()
-
-	// Call agent
-	fmt.Printf("\nStarting %s job...\n", agentName)
-	result, err := bridge.CallTool(ctx, agentName, arguments)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to call %s: %v\n", agentName, err)
+		fmt.Fprintf(os.Stderr, "Failed to initialize: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Check for error
-	if !result.Success {
-		fmt.Printf("\n❌ Failed to start %s job:\n", agentName)
-		if result.Error != "" {
-			fmt.Println(result.Error)
-		}
-		if result.Output != "" {
-			fmt.Println(result.Output)
-		}
-		os.Exit(1)
-	}
-
-	// Extract job ID from response
-	var jobID string
-	if result.Output != "" {
-		fmt.Println(result.Output)
-		jobID, err = extractJobID(result.Output)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
-		}
-	}
-
-	if jobID == "" {
-		fmt.Println("\n⚠️  Job started but couldn't extract job ID. Check 'pedrocli list' for status.")
-		return
-	}
-
-	// Poll for status
-	if err := pollJobStatus(ctx, bridge, jobID); err != nil {
-		if err == context.Canceled || err == context.DeadlineExceeded {
-			fmt.Println("\n⚠️  Stopped watching job. Job continues in background.")
-			fmt.Printf("Use 'pedrocli status %s' to check progress.\n", jobID)
-		}
-	}
-}
-
-// callTool is a helper function to call a tool and display the response
-func callTool(cfg *config.Config, toolName string, arguments map[string]interface{}) {
-	// Start bridge
-	bridge, err := startBridge(cfg)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to start bridge: %v\n", err)
-		os.Exit(1)
-	}
-	defer bridge.Close()
-
-	// Call tool
-	fmt.Printf("\nCalling %s...\n", toolName)
-	result, err := bridge.CallTool(bridge.Context(), toolName, arguments)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to call %s: %v\n", toolName, err)
-		os.Exit(1)
-	}
-
-	// Display response
-	fmt.Println()
-	if !result.Success {
-		fmt.Println("❌ Operation failed:")
-		if result.Error != "" {
-			fmt.Println(result.Error)
-		}
-	} else {
-		fmt.Println("✅ Operation completed:")
-	}
-
-	if result.Output != "" {
-		fmt.Println(result.Output)
-	}
+	agent := NewBuilderAgentWithTools(appCtx)
+	executeAgent(cfg, agent, arguments)
 }
 
 func debugCommand(cfg *config.Config, args []string) {
@@ -341,6 +296,12 @@ func debugCommand(cfg *config.Config, args []string) {
 	if *symptoms == "" {
 		fmt.Fprintln(os.Stderr, "Error: -symptoms is required")
 		fs.Usage()
+		os.Exit(1)
+	}
+
+	// Check grammar configuration and get user confirmation if enabled
+	if !checkGrammarAndConfirm(cfg) {
+		fmt.Fprintln(os.Stderr, "Aborted by user.")
 		os.Exit(1)
 	}
 
@@ -357,7 +318,15 @@ func debugCommand(cfg *config.Config, args []string) {
 		arguments["error_log"] = *logs // Agent expects "error_log"
 	}
 
-	callAgent(cfg, "debugger", arguments)
+	// Create and execute agent
+	appCtx, err := NewAppContext(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize: %v\n", err)
+		os.Exit(1)
+	}
+
+	agent := NewDebuggerAgentWithTools(appCtx)
+	executeAgent(cfg, agent, arguments)
 }
 
 func reviewCommand(cfg *config.Config, args []string) {
@@ -369,6 +338,12 @@ func reviewCommand(cfg *config.Config, args []string) {
 	if *branch == "" {
 		fmt.Fprintln(os.Stderr, "Error: -branch is required")
 		fs.Usage()
+		os.Exit(1)
+	}
+
+	// Check grammar configuration and get user confirmation if enabled
+	if !checkGrammarAndConfirm(cfg) {
+		fmt.Fprintln(os.Stderr, "Aborted by user.")
 		os.Exit(1)
 	}
 
@@ -385,7 +360,15 @@ func reviewCommand(cfg *config.Config, args []string) {
 		arguments["pr_number"] = *prNumber
 	}
 
-	callAgent(cfg, "reviewer", arguments)
+	// Create and execute agent
+	appCtx, err := NewAppContext(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize: %v\n", err)
+		os.Exit(1)
+	}
+
+	agent := NewReviewerAgentWithTools(appCtx)
+	executeAgent(cfg, agent, arguments)
 }
 
 func triageCommand(cfg *config.Config, args []string) {
@@ -397,6 +380,12 @@ func triageCommand(cfg *config.Config, args []string) {
 	if *description == "" {
 		fmt.Fprintln(os.Stderr, "Error: -description is required")
 		fs.Usage()
+		os.Exit(1)
+	}
+
+	// Check grammar configuration and get user confirmation if enabled
+	if !checkGrammarAndConfirm(cfg) {
+		fmt.Fprintln(os.Stderr, "Aborted by user.")
 		os.Exit(1)
 	}
 
@@ -413,7 +402,15 @@ func triageCommand(cfg *config.Config, args []string) {
 		arguments["error_log"] = *errorLogs // Agent expects "error_log"
 	}
 
-	callAgent(cfg, "triager", arguments)
+	// Create and execute agent
+	appCtx, err := NewAppContext(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize: %v\n", err)
+		os.Exit(1)
+	}
+
+	agent := NewTriagerAgentWithTools(appCtx)
+	executeAgent(cfg, agent, arguments)
 }
 
 func blogCommand(cfg *config.Config, args []string) {
@@ -440,9 +437,17 @@ func blogCommand(cfg *config.Config, args []string) {
 			arguments["title"] = *title
 		}
 
-		callAgent(cfg, "blog_orchestrator", arguments)
+		// Create and execute blog orchestrator
+		appCtx, err := NewAppContext(cfg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to initialize: %v\n", err)
+			os.Exit(1)
+		}
+
+		agent := NewBlogOrchestratorAgentWithTools(appCtx)
+		executeAgent(cfg, agent, arguments)
 	} else if *content != "" {
-		// Simple blog post (direct to writer)
+		// Simple blog post - use blog_notion tool directly
 		if *title == "" {
 			fmt.Fprintln(os.Stderr, "Error: -title is required for simple blog posts")
 			fs.Usage()
@@ -451,12 +456,31 @@ func blogCommand(cfg *config.Config, args []string) {
 
 		fmt.Printf("Creating blog post: %s\n", *title)
 
-		arguments := map[string]interface{}{
-			"title":   *title,
-			"content": *content,
+		// For simple posts, use the blog notion tool directly
+		appCtx, err := NewAppContext(cfg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to initialize: %v\n", err)
+			os.Exit(1)
 		}
 
-		callTool(cfg, "blog_writer", arguments)
+		ctx := context.Background()
+		result, err := appCtx.BlogNotionTool.Execute(ctx, map[string]interface{}{
+			"action":  "create",
+			"title":   *title,
+			"content": *content,
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to create blog post: %v\n", err)
+			os.Exit(1)
+		}
+
+		if result.Success {
+			fmt.Println("\n✅ Blog post created successfully!")
+			fmt.Println(result.Output)
+		} else {
+			fmt.Printf("\n❌ Failed to create blog post: %s\n", result.Error)
+			os.Exit(1)
+		}
 	} else {
 		fmt.Fprintln(os.Stderr, "Error: either -prompt (for orchestrated posts) or -content (for simple posts) is required")
 		fmt.Fprintln(os.Stderr, "\nExamples:")
@@ -479,12 +503,36 @@ func statusCommand(cfg *config.Config, args []string) {
 	jobID := fs.Args()[0]
 	fmt.Printf("Getting status for job: %s\n", jobID)
 
-	// Build arguments
-	arguments := map[string]interface{}{
-		"job_id": jobID,
+	// Initialize app context with database-backed job manager
+	appCtx, err := NewAppContext(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize: %v\n", err)
+		os.Exit(1)
+	}
+	defer appCtx.Close()
+
+	job, err := appCtx.JobManager.Get(context.Background(), jobID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to get job status: %v\n", err)
+		os.Exit(1)
 	}
 
-	callTool(cfg, "get_job_status", arguments)
+	fmt.Printf("\nJob: %s\n", job.ID)
+	fmt.Printf("Type: %s\n", job.Type)
+	fmt.Printf("Status: %s\n", job.Status)
+	fmt.Printf("Created: %s\n", job.CreatedAt.Format(time.RFC3339))
+	if job.StartedAt != nil {
+		fmt.Printf("Started: %s\n", job.StartedAt.Format(time.RFC3339))
+	}
+	if job.CompletedAt != nil {
+		fmt.Printf("Completed: %s\n", job.CompletedAt.Format(time.RFC3339))
+	}
+	if job.Error != "" {
+		fmt.Printf("Error: %s\n", job.Error)
+	}
+	if job.Output != nil {
+		fmt.Println("Output:", job.Output)
+	}
 }
 
 func listCommand(cfg *config.Config, args []string) {
@@ -493,7 +541,40 @@ func listCommand(cfg *config.Config, args []string) {
 
 	fmt.Println("Listing all jobs...")
 
-	callTool(cfg, "list_jobs", map[string]interface{}{})
+	// Initialize app context with database-backed job manager
+	appCtx, err := NewAppContext(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize: %v\n", err)
+		os.Exit(1)
+	}
+	defer appCtx.Close()
+
+	jobList, err := appCtx.JobManager.List(context.Background())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to list jobs: %v\n", err)
+		os.Exit(1)
+	}
+	if len(jobList) == 0 {
+		fmt.Println("\nNo jobs found.")
+		return
+	}
+
+	fmt.Printf("\nFound %d job(s):\n\n", len(jobList))
+	for _, job := range jobList {
+		status := string(job.Status)
+		switch job.Status {
+		case jobs.StatusCompleted:
+			status = "✅ " + status
+		case jobs.StatusFailed:
+			status = "❌ " + status
+		case jobs.StatusRunning:
+			status = "🔄 " + status
+		case jobs.StatusPending:
+			status = "⏳ " + status
+		}
+
+		fmt.Printf("%s [%s] %s\n", job.ID, status, truncate(job.Description, 50))
+	}
 }
 
 func cancelCommand(cfg *config.Config, args []string) {
@@ -509,10 +590,27 @@ func cancelCommand(cfg *config.Config, args []string) {
 	jobID := fs.Args()[0]
 	fmt.Printf("Canceling job: %s\n", jobID)
 
-	// Build arguments
-	arguments := map[string]interface{}{
-		"job_id": jobID,
+	// Initialize app context with database-backed job manager
+	appCtx, err := NewAppContext(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize: %v\n", err)
+		os.Exit(1)
+	}
+	defer appCtx.Close()
+
+	if err := appCtx.JobManager.Cancel(context.Background(), jobID); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to cancel job: %v\n", err)
+		os.Exit(1)
 	}
 
-	callTool(cfg, "cancel_job", arguments)
+	fmt.Println("✅ Job cancelled successfully")
+}
+
+// truncate truncates a string to maxLen characters
+func truncate(s string, maxLen int) string {
+	s = strings.ReplaceAll(s, "\n", " ")
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
 }

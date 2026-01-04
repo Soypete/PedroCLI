@@ -2,6 +2,8 @@ package agents
 
 import (
 	"context"
+	"fmt"
+	"os"
 
 	"github.com/soypete/pedrocli/pkg/config"
 	"github.com/soypete/pedrocli/pkg/jobs"
@@ -220,21 +222,40 @@ func (a *BaseAgent) executeInferenceWithSystemPrompt(ctx context.Context, contex
 		return nil, err
 	}
 
-	// Build inference request
-	req := &llm.InferenceRequest{
+	// Generate and set GBNF grammar for tool calling if backend supports it AND grammar is enabled
+	if a.registry != nil && a.config.Model.EnableGrammar {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Grammar enabled, attempting grammar generation\n")
+		if llamacppBackend, ok := a.llm.(*llm.LlamaCppClient); ok {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Successfully cast to LlamaCppClient\n")
+			// Generate grammar from tool registry
+			grammar, err := a.registry.GenerateToolCallGrammar()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Grammar generation failed: %v\n", err)
+			} else if grammar == nil {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Grammar is nil\n")
+			} else {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Grammar generated successfully, length: %d bytes\n", len(grammar.String()))
+				// Set grammar and configure for structured output
+				llamacppBackend.SetGrammar(grammar.String())
+				llamacppBackend.ConfigureForToolCalls()
+				fmt.Fprintf(os.Stderr, "[DEBUG] Grammar applied and tool call config set\n")
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Type assertion to LlamaCppClient failed, backend type: %T\n", a.llm)
+		}
+	} else if a.config.Model.EnableGrammar {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Grammar enabled but registry is nil!\n")
+	} else {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Grammar disabled in config (enable_grammar: false)\n")
+	}
+
+	// Perform inference
+	response, err := a.llm.Infer(ctx, &llm.InferenceRequest{
 		SystemPrompt: systemPrompt,
 		UserPrompt:   fullPrompt,
 		Temperature:  a.config.Model.Temperature,
 		MaxTokens:    8192, // Reserve for response
-	}
-
-	// Add tools if native tool calling is enabled
-	if a.config.Model.EnableTools && a.registry != nil {
-		req.Tools = a.convertToolsToDefinitions()
-	}
-
-	// Perform inference
-	response, err := a.llm.Infer(ctx, req)
+	})
 
 	if err != nil {
 		return nil, err
@@ -259,34 +280,4 @@ func (a *BaseAgent) executeTool(ctx context.Context, name string, args map[strin
 	}
 
 	return tool.Execute(ctx, args)
-}
-
-// convertToolsToDefinitions converts registered tools to LLM tool definitions for native API calling
-func (a *BaseAgent) convertToolsToDefinitions() []llm.ToolDefinition {
-	if a.registry == nil {
-		return nil
-	}
-
-	var toolDefs []llm.ToolDefinition
-	for _, extTool := range a.registry.List() {
-		metadata := extTool.Metadata()
-
-		// Convert JSONSchema to map for API
-		schema := make(map[string]interface{})
-		if metadata.Schema != nil {
-			schema["type"] = "object"
-			schema["properties"] = metadata.Schema.Properties
-			if len(metadata.Schema.Required) > 0 {
-				schema["required"] = metadata.Schema.Required
-			}
-		}
-
-		toolDefs = append(toolDefs, llm.ToolDefinition{
-			Name:        extTool.Name(),
-			Description: extTool.Description(),
-			Parameters:  schema,
-		})
-	}
-
-	return toolDefs
 }
