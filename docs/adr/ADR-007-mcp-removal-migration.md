@@ -39,7 +39,7 @@ The existing ADRs (001-006) propose dynamic tool architecture improvements but a
 - Dynamic tool registry (ADR-001)
 - LLM tool awareness via prompts (ADR-002)
 - Dynamic execution loop (ADR-003)
-- Logit-controlled generation (ADR-004)
+- ~~Logit-controlled generation (ADR-004)~~ → Superseded by native API tool calling
 - Unified agent architecture (ADR-005)
 - Optional tool catalog (ADR-006)
 

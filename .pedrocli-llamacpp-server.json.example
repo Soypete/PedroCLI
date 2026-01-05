@@ -7,27 +7,35 @@
     "temperature": 0.2,
     "enable_tools": true
   },
-  "project": {
-    "name": "YourProject",
-    "workdir": "/path/to/your/project",
-    "tech_stack": ["Go"]
-  },
-  "repo_storage": {
-    "database_path": "~/.pedrocli/pedrocli.db"
+  "execution": {
+    "direct_mode": true
   },
   "git": {
     "always_draft_pr": true,
     "branch_prefix": "pedrocli/",
     "remote": "origin"
   },
+  "tools": {
+    "allowed_bash_commands": ["git", "gh", "go", "npm", "cat", "ls", "head", "tail", "wc", "sort", "uniq"],
+    "forbidden_commands": ["sed", "grep", "find", "xargs", "rm", "mv", "dd", "sudo"]
+  },
+  "project": {
+    "name": "PedroCLI",
+    "workdir": ".",
+    "tech_stack": ["Go"]
+  },
   "limits": {
-    "max_task_duration_minutes": 60,
-    "max_inference_runs": 25
+    "max_task_duration_minutes": 30,
+    "max_inference_runs": 20
   },
   "debug": {
-    "enabled": true,
-    "keep_temp_files": true,
+    "enabled": false,
+    "keep_temp_files": false,
     "log_level": "info"
+  },
+  "platform": {
+    "os": "auto",
+    "shell": "/bin/sh"
   },
   "database": {
     "driver": "postgres",

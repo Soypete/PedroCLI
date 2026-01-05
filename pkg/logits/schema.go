@@ -262,7 +262,43 @@ func (c *schemaConverter) convertObject(schema *JSONSchema, ruleName string) (st
 	for name := range schema.Properties {
 		propNames = append(propNames, name)
 	}
-	sort.Strings(propNames)
+
+	// Special case: For tool call schemas, ensure tool identifier comes before args
+	// This prevents alphabetical sorting from putting "args" before "tool" or "name"
+	hasArgs := false
+	hasTool := false
+	hasName := false
+	for _, name := range propNames {
+		if name == "args" {
+			hasArgs = true
+		} else if name == "tool" {
+			hasTool = true
+		} else if name == "name" {
+			hasName = true
+		}
+	}
+
+	if hasArgs && (hasTool || hasName) {
+		// Force tool identifier before args
+		sorted := make([]string, 0, len(propNames))
+		if hasTool {
+			sorted = append(sorted, "tool")
+		}
+		if hasName {
+			sorted = append(sorted, "name")
+		}
+		sorted = append(sorted, "args")
+		// Add any other properties in sorted order
+		for _, name := range propNames {
+			if name != "tool" && name != "name" && name != "args" {
+				sorted = append(sorted, name)
+			}
+		}
+		propNames = sorted
+	} else {
+		// Normal alphabetical sorting for non-tool-call schemas
+		sort.Strings(propNames)
+	}
 
 	// Create required set
 	requiredSet := make(map[string]bool)
@@ -454,18 +490,18 @@ func (f *JSONSchemaFilter) Schema() *JSONSchema {
 }
 
 // ToolCallSchema creates a JSON Schema for tool call output.
-// The schema matches: {"name": "<tool_name>", "args": {...}}
+// The schema matches: {"tool": "<tool_name>", "args": {...}}
 func ToolCallSchema(toolName string, argsSchema *JSONSchema) *JSONSchema {
 	return &JSONSchema{
 		Type: "object",
 		Properties: map[string]*JSONSchema{
-			"name": {
+			"tool": {
 				Type:  "string",
 				Const: toolName,
 			},
 			"args": argsSchema,
 		},
-		Required: []string{"name", "args"},
+		Required: []string{"tool", "args"},
 	}
 }
 

@@ -1,4 +1,57 @@
-.PHONY: build build-mac build-linux build-all test test-coverage test-coverage-report install clean run-cli run-http serve build-http build-calendar fmt lint tidy migrate-up migrate-down migrate-status migrate-reset migrate-redo db-reset db-fresh postgres-up postgres-down postgres-logs postgres-shell
+.PHONY: build build-mac build-linux build-all test test-coverage test-coverage-report install clean run-cli run-http serve build-http build-calendar fmt lint tidy migrate-up migrate-down migrate-status migrate-reset migrate-redo db-reset db-fresh postgres-up postgres-down postgres-logs postgres-shell llama-server llama-health stop-llama whisper-server whisper-health stop-whisper
+
+# llama-server configuration
+LLAMA_PORT ?= 8082
+LLAMA_MODEL ?= $(shell find ~/.cache/huggingface/hub/models--bartowski--Qwen2.5-Coder-32B-Instruct-GGUF -name "*.gguf" -type f | head -1)
+LLAMA_CTX_SIZE ?= 16384
+LLAMA_N_GPU_LAYERS ?= -1
+LLAMA_THREADS ?= 8
+LLAMA_GRAMMAR ?=
+LLAMA_GRAMMAR_FILE ?=
+LLAMA_LOGIT_BIAS ?=
+
+# llama-server targets
+llama-server: ## Start llama-server for tool calling
+	@echo "Starting llama-server on port $(LLAMA_PORT)..."
+	@if [ -z "$(LLAMA_MODEL)" ]; then \
+		echo "Error: LLAMA_MODEL not found"; \
+		exit 1; \
+	fi
+	@llama-server \
+		--model $(LLAMA_MODEL) \
+		--port $(LLAMA_PORT) \
+		--ctx-size $(LLAMA_CTX_SIZE) \
+		--n-gpu-layers $(LLAMA_N_GPU_LAYERS) \
+		--threads $(LLAMA_THREADS) \
+		--jinja \
+		--log-disable \
+		--no-webui \
+		--metrics
+
+llama-health: ## Check llama-server health
+	@curl -s http://localhost:$(LLAMA_PORT)/health | jq . || echo "Server not running"
+
+stop-llama: ## Stop llama-server
+	@pkill -f llama-server || echo "No llama-server running"
+
+# whisper.cpp configuration
+WHISPER_PORT ?= 8081
+WHISPER_BIN ?= ~/Code/ml/whisper.cpp/build/bin/whisper-server
+WHISPER_MODEL ?= ~/Code/ml/whisper.cpp/models/ggml-base.en.bin
+
+# whisper.cpp targets
+whisper-server: ## Start whisper.cpp server for voice transcription
+	@echo "Starting whisper-server on port $(WHISPER_PORT)..."
+	@$(WHISPER_BIN) \
+		--model $(WHISPER_MODEL) \
+		--port $(WHISPER_PORT) \
+		--convert
+
+whisper-health: ## Check whisper-server health
+	@curl -s http://localhost:$(WHISPER_PORT)/health || echo "Server not running"
+
+stop-whisper: ## Stop whisper-server
+	@pkill -f whisper-server || echo "No whisper-server running"
 
 # Default build for current platform (CLI, HTTP server, and calendar MCP server)
 build:

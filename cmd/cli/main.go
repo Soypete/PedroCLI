@@ -17,7 +17,7 @@ func main() {
 	}
 
 	fmt.Printf("Pedroceli CLI v0.1.0\n")
-	fmt.Printf("Model: %s (%s)\n", cfg.Model.Type, cfg.Model.ModelPath)
+	fmt.Printf("Model: %s (%s)\n", cfg.Model.Type, cfg.Model.ModelName)
 	fmt.Printf("Context: %d tokens (usable: %d)\n", cfg.Model.ContextSize, cfg.Model.UsableContext)
 	fmt.Printf("\nCLI implementation coming soon in Phase 2!\n")
 	fmt.Printf("For now, use the MCP server directly: pedroceli-server\n")

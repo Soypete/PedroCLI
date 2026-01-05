@@ -41,32 +41,35 @@ type Config struct {
 
 // ModelConfig contains model configuration
 type ModelConfig struct {
-	Type          string  `json:"type"` // "llamacpp" or "ollama"
-	ModelPath     string  `json:"model_path,omitempty"`
-	LlamaCppPath  string  `json:"llamacpp_path,omitempty"`
-	ModelName     string  `json:"model_name,omitempty"` // for Ollama
-	OllamaURL     string  `json:"ollama_url,omitempty"` // Ollama API URL
+	// Generic settings (all backends)
+	Type          string  `json:"type"`       // "ollama" | "llamacpp" | "vllm" | "lmstudio"
+	ModelName     string  `json:"model_name"` // Model identifier
 	ContextSize   int     `json:"context_size"`
-	UsableContext int     `json:"usable_context,omitempty"`
-	NGpuLayers    int     `json:"n_gpu_layers,omitempty"`
+	UsableContext int     `json:"usable_context,omitempty"` // Auto-calculated if not provided
 	Temperature   float64 `json:"temperature"`
-	Threads       int     `json:"threads,omitempty"`
+	MaxTokens     int     `json:"max_tokens,omitempty"`
+
+	// HTTP-based backends (llamacpp-server, ollama, vllm, lmstudio)
+	ServerURL string `json:"server_url,omitempty"` // e.g., "http://localhost:8081"
+
+	// Tool calling
+	EnableTools bool `json:"enable_tools,omitempty"` // Enable native tool calling via chat template
 }
 
 // ExecutionConfig contains execution settings
 type ExecutionConfig struct {
-	RunOnSpark  bool   `json:"run_on_spark"`
-	SparkSSH    string `json:"spark_ssh,omitempty"`
-	DirectMode  bool   `json:"direct_mode,omitempty"` // Run tools/agents in-process instead of MCP subprocess
-	MCPServers  []MCPServerConfig `json:"mcp_servers,omitempty"` // Third-party MCP servers to connect to
+	RunOnSpark bool              `json:"run_on_spark"`
+	SparkSSH   string            `json:"spark_ssh,omitempty"`
+	DirectMode bool              `json:"direct_mode,omitempty"` // Run tools/agents in-process instead of MCP subprocess
+	MCPServers []MCPServerConfig `json:"mcp_servers,omitempty"` // Third-party MCP servers to connect to
 }
 
 // MCPServerConfig configures a third-party MCP server connection
 type MCPServerConfig struct {
-	Name    string   `json:"name"`              // Name for the server
-	Command string   `json:"command"`           // Command to start the server
-	Args    []string `json:"args,omitempty"`    // Arguments for the command
-	Env     []string `json:"env,omitempty"`     // Environment variables
+	Name    string   `json:"name"`           // Name for the server
+	Command string   `json:"command"`        // Command to start the server
+	Args    []string `json:"args,omitempty"` // Arguments for the command
+	Env     []string `json:"env,omitempty"`  // Environment variables
 }
 
 // GitConfig contains git settings
@@ -353,7 +356,7 @@ type CustomLink struct {
 
 // DatabaseConfig contains database configuration
 type DatabaseConfig struct {
-	Driver   string `json:"driver"`   // "postgres" or "sqlite"
+	Driver   string `json:"driver"` // "postgres" or "sqlite"
 	Host     string `json:"host"`
 	Port     int    `json:"port"`
 	User     string `json:"user"`
@@ -493,9 +496,6 @@ func (c *Config) setDefaults() {
 	if c.Model.UsableContext == 0 && c.Model.ContextSize > 0 {
 		c.Model.UsableContext = c.Model.ContextSize * 3 / 4
 	}
-	if c.Model.Threads == 0 {
-		c.Model.Threads = 8
-	}
 
 	// Git defaults
 	if c.Git.Remote == "" {
@@ -603,9 +603,6 @@ func (c *Config) setDefaults() {
 		if profile.UsableContext == 0 && profile.ContextSize > 0 {
 			profile.UsableContext = profile.ContextSize * 3 / 4
 		}
-		if profile.Threads == 0 {
-			profile.Threads = 8
-		}
 		c.ModelProfiles[name] = profile
 	}
 
@@ -706,31 +703,34 @@ func (c *Config) setDefaults() {
 // Validate validates the configuration
 func (c *Config) Validate() error {
 	// Validate model type
-	if c.Model.Type != "llamacpp" && c.Model.Type != "ollama" {
-		return fmt.Errorf("invalid model type: %s (must be 'llamacpp' or 'ollama')", c.Model.Type)
-	}
-
-	// Validate llama.cpp config
-	if c.Model.Type == "llamacpp" {
-		if c.Model.ModelPath == "" {
-			return fmt.Errorf("model_path is required for llamacpp backend")
-		}
-		if c.Model.LlamaCppPath == "" {
-			return fmt.Errorf("llamacpp_path is required for llamacpp backend")
-		}
-		if c.Model.ContextSize < 2048 {
-			return fmt.Errorf("context_size too small: %d (minimum 2048)", c.Model.ContextSize)
-		}
-		if c.Model.ContextSize > 200000 {
-			return fmt.Errorf("context_size suspiciously large: %d", c.Model.ContextSize)
+	validTypes := []string{"llamacpp", "ollama", "vllm", "lmstudio"}
+	isValidType := false
+	for _, validType := range validTypes {
+		if c.Model.Type == validType {
+			isValidType = true
+			break
 		}
 	}
+	if !isValidType {
+		return fmt.Errorf("invalid model type: %s (must be one of: llamacpp, ollama, vllm, lmstudio)", c.Model.Type)
+	}
 
-	// Validate Ollama config
-	if c.Model.Type == "ollama" {
-		if c.Model.ModelName == "" {
-			return fmt.Errorf("model_name is required for ollama backend")
-		}
+	// Validate model name
+	if c.Model.ModelName == "" {
+		return fmt.Errorf("model_name is required")
+	}
+
+	// Validate context size
+	if c.Model.ContextSize < 2048 {
+		return fmt.Errorf("context_size too small: %d (minimum 2048)", c.Model.ContextSize)
+	}
+	if c.Model.ContextSize > 200000 {
+		return fmt.Errorf("context_size suspiciously large: %d", c.Model.ContextSize)
+	}
+
+	// Validate ServerURL for HTTP-based backends
+	if c.Model.ServerURL == "" {
+		return fmt.Errorf("server_url is required (e.g., http://localhost:8081 for llamacpp, http://localhost:11434 for ollama)")
 	}
 
 	// Validate LSP config

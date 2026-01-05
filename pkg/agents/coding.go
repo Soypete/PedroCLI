@@ -57,16 +57,7 @@ func (a *CodingBaseAgent) buildDynamicCodingSystemPrompt() string {
 		toolSection = a.toolPromptGen.GenerateToolSection()
 	}
 
-	return a.promptMgr.GetCodingSystemPrompt() + `
-
-# Available Tools
-
-` + toolSection + `
-
-## Tool Call Format
-Use tools by providing JSON objects: {"tool": "tool_name", "args": {"key": "value"}}
-
-When you have completed all tasks successfully, respond with "TASK_COMPLETE".`
+	return a.promptMgr.GetCodingSystemPrompt() + "\n\n# Tools\n\n" + toolSection + "\n\nFormat: {\"tool\": \"name\", \"args\": {...}}\nWhen done: TASK_COMPLETE"
 }
 
 // buildStaticCodingSystemPrompt returns the legacy static system prompt

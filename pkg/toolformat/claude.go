@@ -162,7 +162,7 @@ func (f *ClaudeFormatter) FormatToolResult(call ToolCall, result *ToolResult) st
 		}
 		sb.WriteString(fmt.Sprintf("content: %s\n", content))
 	} else {
-		sb.WriteString(fmt.Sprintf("is_error: true\n"))
+		sb.WriteString("is_error: true\n")
 		sb.WriteString(fmt.Sprintf("content: %s\n", result.Error))
 	}
 

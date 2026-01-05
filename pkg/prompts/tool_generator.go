@@ -90,51 +90,23 @@ func (g *ToolPromptGenerator) FormatTool(tool tools.ExtendedTool) string {
 
 	meta := tool.Metadata()
 
-	// Tool header with optionality indicator
-	optionality := ""
-	if meta != nil {
-		switch meta.Optionality {
-		case tools.ToolRequired:
-			optionality = " (required)"
-		case tools.ToolOptional:
-			optionality = " (optional)"
-		case tools.ToolConditional:
-			optionality = " (conditional)"
-		}
-	}
-
-	sb.WriteString(fmt.Sprintf("## %s%s\n", tool.Name(), optionality))
+	// Tool header - just name, no optionality marker
+	sb.WriteString(fmt.Sprintf("## %s\n", tool.Name()))
 	sb.WriteString(tool.Description())
 	sb.WriteString("\n")
 
-	// Parameters section
-	if meta != nil && meta.Schema != nil {
-		params := g.formatParameters(meta.Schema)
-		if params != "" {
-			sb.WriteString("\n**Parameters:**\n")
-			sb.WriteString(params)
-		}
-	}
-
-	// Usage hint
-	if meta != nil && meta.UsageHint != "" {
-		sb.WriteString("\n**When to use:** ")
-		sb.WriteString(meta.UsageHint)
-		sb.WriteString("\n")
-	}
-
-	// Examples
+	// ONE example only (skip parameters - they're in the example)
 	if meta != nil && len(meta.Examples) > 0 {
-		sb.WriteString("\n**Examples:**\n")
-		for _, example := range meta.Examples {
-			sb.WriteString(g.formatExample(tool.Name(), example))
-		}
+		sb.WriteString(g.formatExample(tool.Name(), meta.Examples[0]))
 	}
 
 	return sb.String()
 }
 
 // formatParameters formats the schema properties as a parameter list
+// TODO: Part of old GBNF manual tool formatting system, superseded by native API
+//
+//nolint:unused // Kept for reference
 func (g *ToolPromptGenerator) formatParameters(schema *logits.JSONSchema) string {
 	if schema == nil || schema.Properties == nil || len(schema.Properties) == 0 {
 		return ""
@@ -164,6 +136,8 @@ func (g *ToolPromptGenerator) formatParameters(schema *logits.JSONSchema) string
 }
 
 // formatParameter formats a single parameter
+//
+//nolint:unused // Part of old GBNF system
 func (g *ToolPromptGenerator) formatParameter(name string, prop *logits.JSONSchema, required bool) string {
 	var sb strings.Builder
 
@@ -205,27 +179,16 @@ func (g *ToolPromptGenerator) formatParameter(name string, prop *logits.JSONSche
 
 // formatExample formats a tool example
 func (g *ToolPromptGenerator) formatExample(toolName string, example tools.ToolExample) string {
-	var sb strings.Builder
-
-	if example.Description != "" {
-		sb.WriteString(fmt.Sprintf("- %s:\n", example.Description))
-	} else {
-		sb.WriteString("- ")
-	}
-
-	// Format the tool call JSON
+	// Format the tool call JSON - no description, just the example
 	call := map[string]interface{}{
 		"tool": toolName,
 		"args": example.Input,
 	}
-	jsonBytes, err := json.MarshalIndent(call, "  ", "  ")
-	if err == nil {
-		sb.WriteString("  ```json\n  ")
-		sb.WriteString(string(jsonBytes))
-		sb.WriteString("\n  ```\n")
+	jsonBytes, err := json.MarshalIndent(call, "", "  ")
+	if err != nil {
+		return ""
 	}
-
-	return sb.String()
+	return string(jsonBytes) + "\n"
 }
 
 // GenerateToolCallFormat returns the standard tool call format instruction

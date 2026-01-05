@@ -46,6 +46,29 @@ make tidy               # Tidy dependencies
 # Access at http://localhost:8080
 ```
 
+### Running llama-server (LLM Backend)
+
+**IMPORTANT: GPU Layer Configuration**
+- Always use `-1` for `--n-gpu-layers` to offload ALL layers to GPU
+- Context size affects VRAM usage significantly
+- For 32B models on M1 Max (32GB RAM): use 16K context max
+- For 32K context: may need smaller models (7B/14B) or fewer GPU layers
+
+```bash
+# Start llama-server (uses make llama-server from project root)
+make llama-server
+
+# Or manually:
+llama-server \
+  --model ~/.cache/huggingface/.../model.gguf \
+  --port 8082 \
+  --ctx-size 16384 \
+  --n-gpu-layers -1 \  # Auto-detect (offloads all layers)
+  --jinja \
+  --no-webui \
+  --metrics
+```
+
 ### Running whisper.cpp (Voice Dictation)
 
 The web UI supports voice-to-text using whisper.cpp. To enable:
@@ -123,10 +146,11 @@ pkg/
 ├── prompts/         # Dynamic prompt generation (ADR-002)
 │   └── tool_generator.go  # Generate tool sections from registry
 │
-├── llm/             # LLM backend abstraction
-│   ├── interface.go # Backend interface
-│   ├── llamacpp.go  # llama.cpp integration
-│   ├── ollama.go    # Ollama integration
+├── llm/             # LLM backend abstraction (native tool calling)
+│   ├── interface.go # Backend interface with ToolDefinition support
+│   ├── server.go    # Generic HTTP client (OpenAI-compatible APIs)
+│   ├── llamacpp.go  # llama-server HTTP API wrapper
+│   ├── ollama.go    # Ollama HTTP API wrapper
 │   ├── tokens.go    # Token estimation and context window detection
 │   └── factory.go   # Backend factory
 │

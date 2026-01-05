@@ -2,7 +2,11 @@
 
 ## Status
 
-Proposed
+**Superseded** (2026-01-04)
+
+Superseded by native tool calling via llama-server HTTP API. See migration commit `ba04676` for details.
+
+**Original Status:** Proposed (never fully implemented)
 
 ## Context
 

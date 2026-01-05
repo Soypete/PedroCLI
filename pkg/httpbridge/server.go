@@ -8,45 +8,26 @@ import (
 	"time"
 
 	"github.com/soypete/pedrocli/pkg/config"
-	"github.com/soypete/pedrocli/pkg/mcp"
-	"github.com/soypete/pedrocli/pkg/toolformat"
 )
 
 // Server represents the HTTP server
 type Server struct {
 	config       *config.Config
-	bridge       toolformat.ToolBridge
-	mcpClient    *mcp.Client // Keep for backwards compatibility during migration
+	appCtx       *AppContext
 	ctx          context.Context
 	mux          *http.ServeMux
 	templates    *template.Template
 	sseBroadcast *SSEBroadcaster
 }
 
-// NewServer creates a new HTTP server (legacy - uses MCP client)
-func NewServer(cfg *config.Config, mcpClient *mcp.Client, ctx context.Context) *Server {
-	// Create MCP adapter bridge for backwards compatibility
-	bridge := &toolformat.MCPClientAdapter{
-		MCPCaller: func(ctx context.Context, name string, args map[string]interface{}) (string, bool, error) {
-			result, err := mcpClient.CallTool(ctx, name, args)
-			if err != nil {
-				return "", true, err
-			}
-			if len(result.Content) == 0 {
-				return "", result.IsError, nil
-			}
-			return result.Content[0].Text, result.IsError, nil
-		},
-		MCPHealthy: func() bool {
-			return mcpClient.IsRunning()
-		},
+// NewServer creates a new HTTP server with embedded dependencies
+func NewServer(cfg *config.Config, ctx context.Context) (*Server, error) {
+	// Create application context with all dependencies
+	appCtx, err := NewAppContext(cfg)
+	if err != nil {
+		return nil, err
 	}
 
-	return NewServerWithBridge(cfg, bridge, mcpClient, ctx)
-}
-
-// NewServerWithBridge creates a new HTTP server with a ToolBridge
-func NewServerWithBridge(cfg *config.Config, bridge toolformat.ToolBridge, mcpClient *mcp.Client, ctx context.Context) *Server {
 	mux := http.NewServeMux()
 
 	// Load HTML templates (must load all files individually, ** glob doesn't work)
@@ -57,12 +38,11 @@ func NewServerWithBridge(cfg *config.Config, bridge toolformat.ToolBridge, mcpCl
 	))
 
 	// Create SSE broadcaster
-	sseBroadcast := NewSSEBroadcasterWithBridge(bridge, ctx)
+	sseBroadcast := NewSSEBroadcaster(appCtx.JobManager, ctx)
 
 	server := &Server{
 		config:       cfg,
-		bridge:       bridge,
-		mcpClient:    mcpClient,
+		appCtx:       appCtx,
 		ctx:          ctx,
 		mux:          mux,
 		templates:    templates,
@@ -75,7 +55,7 @@ func NewServerWithBridge(cfg *config.Config, bridge toolformat.ToolBridge, mcpCl
 	// Start background polling for real-time updates (every 2 seconds)
 	go sseBroadcast.StartPolling(2 * time.Second)
 
-	return server
+	return server, nil
 }
 
 // setupRoutes configures all HTTP routes
@@ -104,6 +84,14 @@ func (s *Server) setupRoutes() {
 func (s *Server) Run(addr string) error {
 	log.Printf("Starting HTTP server on %s", addr)
 	return http.ListenAndServe(addr, s.mux)
+}
+
+// Close closes all server resources (database, etc.)
+func (s *Server) Close() error {
+	if s.appCtx != nil {
+		return s.appCtx.Close()
+	}
+	return nil
 }
 
 // handleIndex serves the main page

@@ -23,6 +23,16 @@ type InferenceRequest struct {
 	UserPrompt   string
 	Temperature  float64
 	MaxTokens    int
+
+	// Tools for native API-based tool calling
+	Tools []ToolDefinition `json:"tools,omitempty"`
+}
+
+// ToolDefinition defines a tool for native API-based tool calling
+type ToolDefinition struct {
+	Name        string
+	Description string
+	Parameters  map[string]interface{} // JSON Schema
 }
 
 // InferenceResponse represents a response from inference

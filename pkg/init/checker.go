@@ -3,9 +3,11 @@ package init
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/soypete/pedrocli/pkg/config"
 	"github.com/soypete/pedrocli/pkg/platform"
@@ -77,76 +79,61 @@ func (c *Checker) CheckAll() ([]CheckResult, error) {
 	return results, nil
 }
 
-// checkLlamaCpp checks if llama.cpp is available
+// checkLlamaCpp checks if llama-server is available
 func (c *Checker) checkLlamaCpp() CheckResult {
-	path := c.config.Model.LlamaCppPath
-
-	// Check if file exists
-	if _, err := os.Stat(path); err != nil {
-		return CheckResult{
-			Name:     "llama.cpp",
-			Required: true,
-			Found:    false,
-			Error:    fmt.Sprintf("llama-cli not found at %s", path),
-		}
+	// For server-based llamacpp, check if ServerURL is set
+	serverURL := c.config.Model.ServerURL
+	if serverURL == "" {
+		serverURL = "http://localhost:8082" // Default llama-server port
 	}
 
-	// Check if executable
-	if !isExecutable(path) {
+	// Try to reach the health endpoint
+	healthURL := serverURL + "/health"
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(healthURL)
+	if err != nil {
 		return CheckResult{
-			Name:     "llama.cpp",
+			Name:     "llama-server",
 			Required: true,
 			Found:    false,
-			Error:    fmt.Sprintf("%s is not executable", path),
+			Error:    fmt.Sprintf("llama-server not reachable at %s (try: make llama-server)", serverURL),
 		}
 	}
+	defer resp.Body.Close()
 
-	// Get version
-	cmd := exec.Command(path, "--version")
-	output, _ := cmd.CombinedOutput()
-	version := strings.TrimSpace(string(output))
+	if resp.StatusCode != http.StatusOK {
+		return CheckResult{
+			Name:     "llama-server",
+			Required: true,
+			Found:    false,
+			Error:    fmt.Sprintf("llama-server returned status %d at %s", resp.StatusCode, serverURL),
+		}
+	}
 
 	return CheckResult{
-		Name:     "llama.cpp",
+		Name:     "llama-server",
 		Required: true,
 		Found:    true,
-		Path:     path,
-		Version:  version,
+		Path:     serverURL,
+		Version:  "HTTP API",
 	}
 }
 
-// checkModelFile checks if the model file exists
+// checkModelFile checks if the model is available (server-based backends)
 func (c *Checker) checkModelFile() CheckResult {
-	modelPath := c.config.Model.ModelPath
-
-	if _, err := os.Stat(modelPath); err != nil {
-		return CheckResult{
-			Name:     "Model file",
-			Required: true,
-			Found:    false,
-			Error:    fmt.Sprintf("Model not found at %s", modelPath),
-		}
-	}
-
-	// Check file size (should be > 100MB for any real model)
-	info, _ := os.Stat(modelPath)
-	sizeMB := info.Size() / (1024 * 1024)
-
-	if sizeMB < 100 {
-		return CheckResult{
-			Name:     "Model file",
-			Required: true,
-			Found:    false,
-			Error:    fmt.Sprintf("Model file suspiciously small: %dMB", sizeMB),
-		}
+	// For server-based backends, the model is managed by the server
+	// Just return success since we already checked the server is running
+	modelName := c.config.Model.ModelName
+	if modelName == "" {
+		modelName = "default"
 	}
 
 	return CheckResult{
-		Name:     "Model file",
-		Required: true,
+		Name:     "Model",
+		Required: false,
 		Found:    true,
-		Path:     modelPath,
-		Version:  fmt.Sprintf("%dMB", sizeMB),
+		Path:     modelName,
+		Version:  "Loaded by server",
 	}
 }
 
@@ -368,6 +355,8 @@ func (c *Checker) formatErrors(failures []CheckResult) error {
 }
 
 // isExecutable checks if a file is executable
+//
+//nolint:unused // Utility function kept for potential future use
 func isExecutable(path string) bool {
 	info, err := os.Stat(path)
 	if err != nil {

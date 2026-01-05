@@ -220,27 +220,21 @@ func (a *BaseAgent) executeInferenceWithSystemPrompt(ctx context.Context, contex
 		return nil, err
 	}
 
-	// Generate and set GBNF grammar for tool calling if backend supports it
-	if a.registry != nil {
-		if llamacppBackend, ok := a.llm.(*llm.LlamaCppClient); ok {
-			// Generate grammar from tool registry
-			grammar, err := a.registry.GenerateToolCallGrammar()
-			if err == nil && grammar != nil {
-				// Set grammar and configure for structured output
-				llamacppBackend.SetGrammar(grammar.String())
-				llamacppBackend.ConfigureForToolCalls()
-			}
-			// If grammar generation fails, continue without it (graceful degradation)
-		}
-	}
-
-	// Perform inference
-	response, err := a.llm.Infer(ctx, &llm.InferenceRequest{
+	// Build inference request
+	req := &llm.InferenceRequest{
 		SystemPrompt: systemPrompt,
 		UserPrompt:   fullPrompt,
 		Temperature:  a.config.Model.Temperature,
 		MaxTokens:    8192, // Reserve for response
-	})
+	}
+
+	// Add tools if native tool calling is enabled
+	if a.config.Model.EnableTools && a.registry != nil {
+		req.Tools = a.convertToolsToDefinitions()
+	}
+
+	// Perform inference
+	response, err := a.llm.Infer(ctx, req)
 
 	if err != nil {
 		return nil, err
@@ -265,4 +259,34 @@ func (a *BaseAgent) executeTool(ctx context.Context, name string, args map[strin
 	}
 
 	return tool.Execute(ctx, args)
+}
+
+// convertToolsToDefinitions converts registered tools to LLM tool definitions for native API calling
+func (a *BaseAgent) convertToolsToDefinitions() []llm.ToolDefinition {
+	if a.registry == nil {
+		return nil
+	}
+
+	var toolDefs []llm.ToolDefinition
+	for _, extTool := range a.registry.List() {
+		metadata := extTool.Metadata()
+
+		// Convert JSONSchema to map for API
+		schema := make(map[string]interface{})
+		if metadata.Schema != nil {
+			schema["type"] = "object"
+			schema["properties"] = metadata.Schema.Properties
+			if len(metadata.Schema.Required) > 0 {
+				schema["required"] = metadata.Schema.Required
+			}
+		}
+
+		toolDefs = append(toolDefs, llm.ToolDefinition{
+			Name:        extTool.Name(),
+			Description: extTool.Description(),
+			Parameters:  schema,
+		})
+	}
+
+	return toolDefs
 }

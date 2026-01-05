@@ -61,7 +61,7 @@ func TestGenericFormatterParseToolCalls(t *testing.T) {
 			toolName: "file",
 		},
 		{
-			name: "Tool call in code block",
+			name:     "Tool call in code block",
 			response: "```json\n{\"tool\": \"git\", \"args\": {\"action\": \"status\"}}\n```",
 			expected: 1,
 			toolName: "git",

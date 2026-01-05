@@ -1,114 +1,57 @@
 package llm
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"strings"
-
 	"github.com/soypete/pedrocli/pkg/config"
 )
 
-// OllamaClient implements the Backend interface for Ollama
+// OllamaClient implements Backend for Ollama HTTP API
 type OllamaClient struct {
-	baseURL     string
-	modelName   string
-	temperature float64
+	*ServerClient
+	config *config.Config
 }
 
-// NewOllamaClient creates a new Ollama client
+// NewOllamaClient creates a new Ollama HTTP client
 func NewOllamaClient(cfg *config.Config) *OllamaClient {
 	return NewOllamaClientFromModel(cfg, cfg.Model)
 }
 
-// NewOllamaClientFromModel creates a new Ollama client from a specific model config
+// NewOllamaClientFromModel creates a client from a specific model config
 func NewOllamaClientFromModel(cfg *config.Config, modelCfg config.ModelConfig) *OllamaClient {
-	baseURL := modelCfg.OllamaURL
-	if baseURL == "" {
-		baseURL = "http://localhost:11434"
+	// Determine server URL
+	serverURL := modelCfg.ServerURL
+	if serverURL == "" {
+		serverURL = "http://localhost:11434" // Default Ollama port
 	}
+
+	// Determine model name
+	modelName := modelCfg.ModelName
+	if modelName == "" {
+		modelName = "qwen2.5-coder:32b" // Default model
+	}
+
+	// Determine context size (use auto-detection if not specified)
+	contextSize := modelCfg.ContextSize
+	if contextSize == 0 {
+		contextSize = getOllamaContextSize(modelName)
+	}
+
+	// Create server client using OpenAI-compatible endpoint
+	serverClient := NewServerClient(ServerClientConfig{
+		BaseURL:     serverURL,
+		ModelName:   modelName,
+		ContextSize: contextSize,
+		EnableTools: modelCfg.EnableTools,
+		APIPath:     "/v1/chat/completions", // Ollama supports OpenAI-compatible API
+	})
 
 	return &OllamaClient{
-		baseURL:     baseURL,
-		modelName:   modelCfg.ModelName,
-		temperature: modelCfg.Temperature,
+		ServerClient: serverClient,
+		config:       cfg,
 	}
 }
 
-// Infer performs one-shot inference using Ollama
-func (o *OllamaClient) Infer(ctx context.Context, req *InferenceRequest) (*InferenceResponse, error) {
-	// Build the full prompt
-	fullPrompt := o.buildPrompt(req)
-
-	// Build Ollama API request
-	ollamaReq := map[string]interface{}{
-		"model":  o.modelName,
-		"prompt": fullPrompt,
-		"stream": false,
-		"options": map[string]interface{}{
-			"temperature": req.Temperature,
-		},
-	}
-
-	// Marshal request
-	reqBody, err := json.Marshal(ollamaReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", o.baseURL+"/api/generate", bytes.NewReader(reqBody))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	// Execute request
-	client := &http.Client{}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("ollama API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Check status code
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("ollama API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	// Parse response
-	var ollamaResp struct {
-		Model           string `json:"model"`
-		Response        string `json:"response"`
-		Done            bool   `json:"done"`
-		Context         []int  `json:"context"`
-		TotalDuration   int64  `json:"total_duration"`
-		LoadDuration    int64  `json:"load_duration"`
-		PromptEvalCount int    `json:"prompt_eval_count"`
-		EvalCount       int    `json:"eval_count"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&ollamaResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	// Build response
-	response := &InferenceResponse{
-		Text:       strings.TrimSpace(ollamaResp.Response),
-		ToolCalls:  []ToolCall{}, // TODO: Parse tool calls from response
-		NextAction: "COMPLETE",   // TODO: Determine based on response
-		TokensUsed: ollamaResp.PromptEvalCount + ollamaResp.EvalCount,
-	}
-
-	return response, nil
-}
-
-// GetContextWindow returns the context window size for the model
-func (o *OllamaClient) GetContextWindow() int {
+// getOllamaContextSize returns the context window size for known Ollama models
+func getOllamaContextSize(modelName string) int {
 	// Known model context windows
 	modelContexts := map[string]int{
 		"qwen2.5-coder:7b":   32768,
@@ -135,34 +78,10 @@ func (o *OllamaClient) GetContextWindow() int {
 		"gemma2:27b":         8192,
 	}
 
-	if ctx, ok := modelContexts[o.modelName]; ok {
+	if ctx, ok := modelContexts[modelName]; ok {
 		return ctx
 	}
 
 	// Default conservative estimate
 	return 8192
-}
-
-// GetUsableContext returns the usable context size (75% of total)
-func (o *OllamaClient) GetUsableContext() int {
-	return o.GetContextWindow() * 3 / 4
-}
-
-// buildPrompt builds the full prompt from system and user prompts
-func (o *OllamaClient) buildPrompt(req *InferenceRequest) string {
-	var prompt strings.Builder
-
-	// System prompt
-	if req.SystemPrompt != "" {
-		prompt.WriteString("System: ")
-		prompt.WriteString(req.SystemPrompt)
-		prompt.WriteString("\n\n")
-	}
-
-	// User prompt
-	prompt.WriteString("User: ")
-	prompt.WriteString(req.UserPrompt)
-	prompt.WriteString("\n\nAssistant: ")
-
-	return prompt.String()
 }

@@ -145,9 +145,8 @@ func startBridge(cfg *config.Config) (*cli.CLIBridge, error) {
 	}
 
 	bridge, err := cli.NewCLIBridge(cli.CLIBridgeConfig{
-		UseDirect: false, // Use MCP subprocess for now (can be toggled via config later)
-		Config:    cfg,
-		WorkDir:   workDir,
+		Config:  cfg,
+		WorkDir: workDir,
 	})
 	if err != nil {
 		return nil, err

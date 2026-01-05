@@ -110,9 +110,8 @@ func (a *DynamicBlogAgent) Execute(ctx context.Context, input map[string]interfa
 
 // runDynamic executes the dynamic inference loop
 func (a *DynamicBlogAgent) runDynamic(ctx context.Context, contextMgr *llmcontext.Manager, prompt, title string, shouldPublish bool) (map[string]interface{}, error) {
-	// Create executor with model-specific formatting
-	modelName := a.config.Model.ModelName
-	executor := NewInferenceExecutorWithModel(a.BaseAgent, contextMgr, modelName)
+	// Create executor for dynamic blog generation
+	executor := NewInferenceExecutor(a.BaseAgent, contextMgr)
 	executor.SetSystemPrompt(blogDynamicSystemPrompt)
 
 	// Build initial prompt

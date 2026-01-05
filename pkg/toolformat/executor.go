@@ -8,11 +8,11 @@ import (
 
 // ExecutorConfig holds configuration for the tool executor
 type ExecutorConfig struct {
-	Formatter   ToolFormatter
-	Registry    *Registry
-	MaxRounds   int
-	Debug       bool
-	OnToolCall  func(call ToolCall)
+	Formatter    ToolFormatter
+	Registry     *Registry
+	MaxRounds    int
+	Debug        bool
+	OnToolCall   func(call ToolCall)
 	OnToolResult func(call ToolCall, result *ToolResult)
 }
 

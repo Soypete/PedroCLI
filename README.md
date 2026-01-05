@@ -192,23 +192,31 @@ Edit `.pedroceli.json`:
 
 ### Option 2: llama.cpp (Maximum Performance)
 
-For maximum performance on GPU:
+For maximum performance with GPU acceleration:
 
 ```bash
-# Install llama.cpp
+# 1. Install llama.cpp
 git clone https://github.com/ggerganov/llama.cpp
 cd llama.cpp
 make LLAMA_CUDA=1  # or LLAMA_METAL=1 for Mac
 
-# Download a GGUF model
-# Example: Qwen 2.5 Coder 32B from HuggingFace
+# 2. Download a GGUF model (example: Qwen 2.5 Coder 32B)
+# Models can be found on HuggingFace
 
-# Build PedroCLI
+# 3. Start llama-server (keeps model loaded in memory)
+llama-server \
+  --model /path/to/qwen2.5-coder-32b.gguf \
+  --port 8082 \
+  --ctx-size 32768 \
+  --n-gpu-layers 35 \
+  --jinja  # Enables native tool calling
+
+# 4. Build PedroCLI
 cd /path/to/PedroCLI
 make build
 
-# Create config
-cp .pedroceli.example.llamacpp.json .pedroceli.json
+# 5. Create config
+cp .pedroceli-llamacpp-server.json.example .pedroceli.json
 ```
 
 Edit `.pedroceli.json`:
@@ -216,12 +224,11 @@ Edit `.pedroceli.json`:
 {
   "model": {
     "type": "llamacpp",
-    "model_path": "/path/to/qwen2.5-coder-32b.gguf",
-    "llamacpp_path": "/path/to/llama-cli",
+    "server_url": "http://localhost:8082",
+    "model_name": "qwen2.5-coder-32b-instruct",
     "context_size": 32768,
-    "n_gpu_layers": -1,
     "temperature": 0.2,
-    "threads": 32
+    "enable_tools": true
   },
   "project": {
     "name": "My Project",
@@ -229,6 +236,11 @@ Edit `.pedroceli.json`:
   }
 }
 ```
+
+**Benefits of llama-server:**
+- **Native tool calling** via OpenAI-compatible API (better reliability)
+- Model stays loaded in RAM/VRAM (faster repeated inference)
+- No subprocess overhead - persistent HTTP server
 
 ## Usage
 
