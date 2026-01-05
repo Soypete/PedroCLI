@@ -28,24 +28,6 @@ builds:
       - -X main.commit={{.Commit}}
       - -X main.date={{.Date}}
 
-  - id: pedrocli-server
-    binary: pedrocli-server
-    main: ./cmd/mcp-server
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-      - darwin
-      - windows
-    goarch:
-      - amd64
-      - arm64
-    ldflags:
-      - -s -w
-      - -X main.version={{.Version}}
-      - -X main.commit={{.Commit}}
-      - -X main.date={{.Date}}
-
 archives:
   - id: pedrocli
     format: tar.gz
@@ -109,7 +91,6 @@ brews:
       system "#{bin}/pedrocli", "version"
     install: |
       bin.install "pedrocli"
-      bin.install "pedrocli-server"
 
       # Install example configs
       pkgshare.install ".pedroceli.example.ollama.json"

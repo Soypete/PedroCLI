@@ -5,15 +5,16 @@ import (
 	"fmt"
 
 	"github.com/soypete/pedrocli/pkg/jobs"
+	"github.com/soypete/pedrocli/pkg/logits"
 )
 
 // GetJobStatusTool implements get_job_status
 type GetJobStatusTool struct {
-	jobManager *jobs.Manager
+	jobManager jobs.JobManager
 }
 
 // NewGetJobStatusTool creates a new get job status tool
-func NewGetJobStatusTool(jobMgr *jobs.Manager) *GetJobStatusTool {
+func NewGetJobStatusTool(jobMgr jobs.JobManager) *GetJobStatusTool {
 	return &GetJobStatusTool{
 		jobManager: jobMgr,
 	}
@@ -36,7 +37,7 @@ func (t *GetJobStatusTool) Execute(ctx context.Context, args map[string]interfac
 		}, nil
 	}
 
-	job, err := t.jobManager.Get(jobID)
+	job, err := t.jobManager.Get(ctx, jobID)
 	if err != nil {
 		return &Result{
 			Success: false,
@@ -75,13 +76,40 @@ func (t *GetJobStatusTool) Execute(ctx context.Context, args map[string]interfac
 	}, nil
 }
 
+// Metadata returns rich tool metadata for discovery and LLM guidance
+func (t *GetJobStatusTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Schema: &logits.JSONSchema{
+			Type: "object",
+			Properties: map[string]*logits.JSONSchema{
+				"job_id": {
+					Type:        "string",
+					Description: "The ID of the job to check status for",
+				},
+			},
+			Required: []string{"job_id"},
+		},
+		Category:    CategoryUtility,
+		Optionality: ToolOptional,
+		UsageHint:   "Use to check the status of a background job.",
+		Examples: []ToolExample{
+			{
+				Description: "Get status of a job",
+				Input:       map[string]interface{}{"job_id": "job-123456"},
+			},
+		},
+		Consumes: []string{"job_id"},
+		Produces: []string{"job_status"},
+	}
+}
+
 // ListJobsTool implements list_jobs
 type ListJobsTool struct {
-	jobManager *jobs.Manager
+	jobManager jobs.JobManager
 }
 
 // NewListJobsTool creates a new list jobs tool
-func NewListJobsTool(jobMgr *jobs.Manager) *ListJobsTool {
+func NewListJobsTool(jobMgr jobs.JobManager) *ListJobsTool {
 	return &ListJobsTool{
 		jobManager: jobMgr,
 	}
@@ -96,7 +124,13 @@ func (t *ListJobsTool) Description() string {
 }
 
 func (t *ListJobsTool) Execute(ctx context.Context, args map[string]interface{}) (*Result, error) {
-	jobsList := t.jobManager.List()
+	jobsList, err := t.jobManager.List(ctx)
+	if err != nil {
+		return &Result{
+			Success: false,
+			Error:   fmt.Sprintf("Failed to list jobs: %v", err),
+		}, nil
+	}
 
 	if len(jobsList) == 0 {
 		return &Result{
@@ -117,13 +151,34 @@ func (t *ListJobsTool) Execute(ctx context.Context, args map[string]interface{})
 	}, nil
 }
 
+// Metadata returns rich tool metadata for discovery and LLM guidance
+func (t *ListJobsTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Schema: &logits.JSONSchema{
+			Type:       "object",
+			Properties: map[string]*logits.JSONSchema{},
+			Required:   []string{},
+		},
+		Category:    CategoryUtility,
+		Optionality: ToolOptional,
+		UsageHint:   "Use to list all running and completed jobs.",
+		Examples: []ToolExample{
+			{
+				Description: "List all jobs",
+				Input:       map[string]interface{}{},
+			},
+		},
+		Produces: []string{"job_list"},
+	}
+}
+
 // CancelJobTool implements cancel_job
 type CancelJobTool struct {
-	jobManager *jobs.Manager
+	jobManager jobs.JobManager
 }
 
 // NewCancelJobTool creates a new cancel job tool
-func NewCancelJobTool(jobMgr *jobs.Manager) *CancelJobTool {
+func NewCancelJobTool(jobMgr jobs.JobManager) *CancelJobTool {
 	return &CancelJobTool{
 		jobManager: jobMgr,
 	}
@@ -146,7 +201,7 @@ func (t *CancelJobTool) Execute(ctx context.Context, args map[string]interface{}
 		}, nil
 	}
 
-	err := t.jobManager.Cancel(jobID)
+	err := t.jobManager.Cancel(ctx, jobID)
 	if err != nil {
 		return &Result{
 			Success: false,
@@ -158,4 +213,30 @@ func (t *CancelJobTool) Execute(ctx context.Context, args map[string]interface{}
 		Success: true,
 		Output:  fmt.Sprintf("Job %s cancelled successfully", jobID),
 	}, nil
+}
+
+// Metadata returns rich tool metadata for discovery and LLM guidance
+func (t *CancelJobTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Schema: &logits.JSONSchema{
+			Type: "object",
+			Properties: map[string]*logits.JSONSchema{
+				"job_id": {
+					Type:        "string",
+					Description: "The ID of the job to cancel",
+				},
+			},
+			Required: []string{"job_id"},
+		},
+		Category:    CategoryUtility,
+		Optionality: ToolOptional,
+		UsageHint:   "Use to cancel a running job.",
+		Examples: []ToolExample{
+			{
+				Description: "Cancel a job",
+				Input:       map[string]interface{}{"job_id": "job-123456"},
+			},
+		},
+		Consumes: []string{"job_id"},
+	}
 }

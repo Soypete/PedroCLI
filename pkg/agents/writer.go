@@ -37,7 +37,7 @@ type WriterAgent struct {
 }
 
 // NewWriterAgent creates a new writer agent
-func NewWriterAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager) *WriterAgent {
+func NewWriterAgent(cfg *config.Config, backend llm.Backend, jobMgr jobs.JobManager) *WriterAgent {
 	base := NewBaseAgent(
 		"writer",
 		"Transform raw dictation into polished, narrative-driven blog posts with title suggestions, tags, and social media posts",
@@ -70,13 +70,13 @@ func (w *WriterAgent) Execute(ctx context.Context, input map[string]interface{})
 	}
 
 	// Create job
-	job, err := w.jobManager.Create("blog_writer", "Write blog post: "+postTitle, input)
+	job, err := w.jobManager.Create(ctx, "blog_writer", "Write blog post: "+postTitle, input)
 	if err != nil {
 		return nil, err
 	}
 
 	// Update status to running
-	w.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
+	w.jobManager.Update(ctx, job.ID, jobs.StatusRunning, nil, nil)
 
 	// Run the writing process in background
 	go func() {
@@ -85,7 +85,7 @@ func (w *WriterAgent) Execute(ctx context.Context, input map[string]interface{})
 		// Create context manager
 		contextMgr, err := llmcontext.NewManager(job.ID, w.config.Debug.Enabled)
 		if err != nil {
-			w.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			w.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
@@ -95,20 +95,20 @@ func (w *WriterAgent) Execute(ctx context.Context, input map[string]interface{})
 
 		// Write to context
 		if err := contextMgr.SavePrompt(userPrompt); err != nil {
-			w.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			w.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 
 		// Execute inference
 		result, err := w.executeWriting(bgCtx, contextMgr, userPrompt)
 		if err != nil {
-			w.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			w.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 
 		// Write response
 		if err := contextMgr.SaveResponse(result.Text); err != nil {
-			w.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			w.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 
@@ -142,7 +142,7 @@ func (w *WriterAgent) Execute(ctx context.Context, input map[string]interface{})
 			output["meta_description"] = parsedOutput.MetaDescription
 		}
 
-		w.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
+		w.jobManager.Update(bgCtx, job.ID, jobs.StatusCompleted, output, nil)
 	}()
 
 	return job, nil

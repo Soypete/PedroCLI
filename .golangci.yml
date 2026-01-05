@@ -31,6 +31,10 @@ issues:
   exclude-dirs:
     - vendor
   exclude-rules:
+    # Exclude SA1019 deprecation warnings for jobs.Manager migration (in progress)
+    - linters:
+        - staticcheck
+      text: "SA1019.*jobs\\.Manager|SA1019.*jobs\\.NewManager|SA1019.*pkg/jobs"
     # Exclude all errcheck in test files
     - path: _test\.go
       linters:

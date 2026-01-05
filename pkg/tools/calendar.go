@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/soypete/pedrocli/pkg/config"
+	"github.com/soypete/pedrocli/pkg/logits"
 )
 
 // CalendarTool provides access to Google Calendar via MCP server
@@ -490,4 +491,81 @@ func (t *CalendarTool) checkAvailability(ctx context.Context, args map[string]in
 	}
 
 	return t.callTool(ctx, "calendar_check_availability", toolArgs)
+}
+
+// Metadata returns rich tool metadata for discovery and LLM guidance
+func (t *CalendarTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Schema: &logits.JSONSchema{
+			Type: "object",
+			Properties: map[string]*logits.JSONSchema{
+				"action": {
+					Type:        "string",
+					Enum:        []interface{}{"list_events", "create_event", "update_event", "delete_event", "get_event", "check_availability"},
+					Description: "The calendar operation to perform",
+				},
+				"calendar_id": {
+					Type:        "string",
+					Description: "Calendar ID (optional, uses default)",
+				},
+				"event_id": {
+					Type:        "string",
+					Description: "Event ID for get/update/delete operations",
+				},
+				"summary": {
+					Type:        "string",
+					Description: "Event title/summary",
+				},
+				"start_time": {
+					Type:        "string",
+					Description: "Event start time (ISO8601 format)",
+				},
+				"end_time": {
+					Type:        "string",
+					Description: "Event end time (ISO8601 format)",
+				},
+				"description": {
+					Type:        "string",
+					Description: "Event description",
+				},
+				"location": {
+					Type:        "string",
+					Description: "Event location",
+				},
+				"time_min": {
+					Type:        "string",
+					Description: "Start of time range (ISO8601)",
+				},
+				"time_max": {
+					Type:        "string",
+					Description: "End of time range (ISO8601)",
+				},
+				"max_results": {
+					Type:        "integer",
+					Description: "Maximum events to return",
+				},
+			},
+			Required: []string{"action"},
+		},
+		Category:             CategoryResearch,
+		Optionality:          ToolOptional,
+		UsageHint:            "Use for upcoming events, conference mentions, or \"What's happening\" sections.",
+		RequiresCapabilities: []string{"google_calendar"},
+		Examples: []ToolExample{
+			{
+				Description: "List upcoming events",
+				Input:       map[string]interface{}{"action": "list_events", "max_results": 5},
+			},
+			{
+				Description: "Create a recording event",
+				Input: map[string]interface{}{
+					"action":     "create_event",
+					"summary":    "[Recording] Episode 42",
+					"start_time": "2024-01-15T14:00:00Z",
+					"end_time":   "2024-01-15T15:30:00Z",
+				},
+			},
+		},
+		Produces: []string{"events"},
+	}
 }

@@ -18,7 +18,7 @@ type PodcastBaseAgent struct {
 }
 
 // NewPodcastBaseAgent creates a new podcast base agent
-func NewPodcastBaseAgent(name, description string, cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager) *PodcastBaseAgent {
+func NewPodcastBaseAgent(name, description string, cfg *config.Config, backend llm.Backend, jobMgr jobs.JobManager) *PodcastBaseAgent {
 	base := NewBaseAgent(name, description, cfg, backend, jobMgr)
 	return &PodcastBaseAgent{
 		BaseAgent: base,
@@ -47,7 +47,7 @@ type ScriptCreatorAgent struct {
 }
 
 // NewScriptCreatorAgent creates a new script creator agent
-func NewScriptCreatorAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager) *ScriptCreatorAgent {
+func NewScriptCreatorAgent(cfg *config.Config, backend llm.Backend, jobMgr jobs.JobManager) *ScriptCreatorAgent {
 	base := NewPodcastBaseAgent(
 		"create_podcast_script",
 		"Create podcast episode scripts from topics and notes",
@@ -68,18 +68,18 @@ func (a *ScriptCreatorAgent) Execute(ctx context.Context, input map[string]inter
 	}
 
 	description := fmt.Sprintf("Create script for: %s", topic)
-	job, err := a.jobManager.Create("create_podcast_script", description, input)
+	job, err := a.jobManager.Create(ctx, "create_podcast_script", description, input)
 	if err != nil {
 		return nil, err
 	}
 
-	a.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
+	a.jobManager.Update(ctx, job.ID, jobs.StatusRunning, nil, nil)
 
 	go func() {
 		bgCtx := context.Background()
 		contextMgr, err := llmcontext.NewManager(job.ID, a.config.Debug.Enabled)
 		if err != nil {
-			a.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			a.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
@@ -90,7 +90,7 @@ func (a *ScriptCreatorAgent) Execute(ctx context.Context, input map[string]inter
 
 		err = executor.Execute(bgCtx, userPrompt)
 		if err != nil {
-			a.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			a.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 
@@ -98,7 +98,7 @@ func (a *ScriptCreatorAgent) Execute(ctx context.Context, input map[string]inter
 			"status":  "completed",
 			"job_dir": contextMgr.GetJobDir(),
 		}
-		a.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
+		a.jobManager.Update(bgCtx, job.ID, jobs.StatusCompleted, output, nil)
 	}()
 
 	return job, nil
@@ -133,7 +133,7 @@ type NewsReviewerAgent struct {
 }
 
 // NewNewsReviewerAgent creates a new news reviewer agent
-func NewNewsReviewerAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager) *NewsReviewerAgent {
+func NewNewsReviewerAgent(cfg *config.Config, backend llm.Backend, jobMgr jobs.JobManager) *NewsReviewerAgent {
 	base := NewPodcastBaseAgent(
 		"review_news_summary",
 		"Summarize news items for podcast episode preparation",
@@ -153,18 +153,18 @@ func (a *NewsReviewerAgent) Execute(ctx context.Context, input map[string]interf
 		description = fmt.Sprintf("Review news about: %s", topic)
 	}
 
-	job, err := a.jobManager.Create("review_news_summary", description, input)
+	job, err := a.jobManager.Create(ctx, "review_news_summary", description, input)
 	if err != nil {
 		return nil, err
 	}
 
-	a.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
+	a.jobManager.Update(ctx, job.ID, jobs.StatusRunning, nil, nil)
 
 	go func() {
 		bgCtx := context.Background()
 		contextMgr, err := llmcontext.NewManager(job.ID, a.config.Debug.Enabled)
 		if err != nil {
-			a.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			a.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
@@ -175,7 +175,7 @@ func (a *NewsReviewerAgent) Execute(ctx context.Context, input map[string]interf
 
 		err = executor.Execute(bgCtx, userPrompt)
 		if err != nil {
-			a.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			a.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 
@@ -183,7 +183,7 @@ func (a *NewsReviewerAgent) Execute(ctx context.Context, input map[string]interf
 			"status":  "completed",
 			"job_dir": contextMgr.GetJobDir(),
 		}
-		a.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
+		a.jobManager.Update(bgCtx, job.ID, jobs.StatusCompleted, output, nil)
 	}()
 
 	return job, nil
@@ -208,7 +208,7 @@ type LinkAdderAgent struct {
 }
 
 // NewLinkAdderAgent creates a new link adder agent
-func NewLinkAdderAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager) *LinkAdderAgent {
+func NewLinkAdderAgent(cfg *config.Config, backend llm.Backend, jobMgr jobs.JobManager) *LinkAdderAgent {
 	base := NewPodcastBaseAgent(
 		"add_notion_link",
 		"Add article or news links to Notion databases for review",
@@ -229,18 +229,18 @@ func (a *LinkAdderAgent) Execute(ctx context.Context, input map[string]interface
 	}
 
 	description := fmt.Sprintf("Add link: %s", url)
-	job, err := a.jobManager.Create("add_notion_link", description, input)
+	job, err := a.jobManager.Create(ctx, "add_notion_link", description, input)
 	if err != nil {
 		return nil, err
 	}
 
-	a.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
+	a.jobManager.Update(ctx, job.ID, jobs.StatusRunning, nil, nil)
 
 	go func() {
 		bgCtx := context.Background()
 		contextMgr, err := llmcontext.NewManager(job.ID, a.config.Debug.Enabled)
 		if err != nil {
-			a.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			a.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
@@ -251,7 +251,7 @@ func (a *LinkAdderAgent) Execute(ctx context.Context, input map[string]interface
 
 		err = executor.Execute(bgCtx, userPrompt)
 		if err != nil {
-			a.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			a.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 
@@ -259,7 +259,7 @@ func (a *LinkAdderAgent) Execute(ctx context.Context, input map[string]interface
 			"status":  "completed",
 			"job_dir": contextMgr.GetJobDir(),
 		}
-		a.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
+		a.jobManager.Update(bgCtx, job.ID, jobs.StatusCompleted, output, nil)
 	}()
 
 	return job, nil
@@ -289,7 +289,7 @@ type GuestAdderAgent struct {
 }
 
 // NewGuestAdderAgent creates a new guest adder agent
-func NewGuestAdderAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager) *GuestAdderAgent {
+func NewGuestAdderAgent(cfg *config.Config, backend llm.Backend, jobMgr jobs.JobManager) *GuestAdderAgent {
 	base := NewPodcastBaseAgent(
 		"add_guest",
 		"Add guest information to the podcast guests database",
@@ -310,18 +310,18 @@ func (a *GuestAdderAgent) Execute(ctx context.Context, input map[string]interfac
 	}
 
 	description := fmt.Sprintf("Add guest: %s", name)
-	job, err := a.jobManager.Create("add_guest", description, input)
+	job, err := a.jobManager.Create(ctx, "add_guest", description, input)
 	if err != nil {
 		return nil, err
 	}
 
-	a.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
+	a.jobManager.Update(ctx, job.ID, jobs.StatusRunning, nil, nil)
 
 	go func() {
 		bgCtx := context.Background()
 		contextMgr, err := llmcontext.NewManager(job.ID, a.config.Debug.Enabled)
 		if err != nil {
-			a.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			a.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
@@ -332,7 +332,7 @@ func (a *GuestAdderAgent) Execute(ctx context.Context, input map[string]interfac
 
 		err = executor.Execute(bgCtx, userPrompt)
 		if err != nil {
-			a.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			a.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 
@@ -340,7 +340,7 @@ func (a *GuestAdderAgent) Execute(ctx context.Context, input map[string]interfac
 			"status":  "completed",
 			"job_dir": contextMgr.GetJobDir(),
 		}
-		a.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
+		a.jobManager.Update(bgCtx, job.ID, jobs.StatusCompleted, output, nil)
 	}()
 
 	return job, nil
@@ -381,7 +381,7 @@ type EpisodeOutlinerAgent struct {
 }
 
 // NewEpisodeOutlinerAgent creates a new episode outliner agent
-func NewEpisodeOutlinerAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager) *EpisodeOutlinerAgent {
+func NewEpisodeOutlinerAgent(cfg *config.Config, backend llm.Backend, jobMgr jobs.JobManager) *EpisodeOutlinerAgent {
 	base := NewPodcastBaseAgent(
 		"create_episode_outline",
 		"Create episode outlines and structure from topics",
@@ -402,18 +402,18 @@ func (a *EpisodeOutlinerAgent) Execute(ctx context.Context, input map[string]int
 	}
 
 	description := fmt.Sprintf("Create outline for: %s", topic)
-	job, err := a.jobManager.Create("create_episode_outline", description, input)
+	job, err := a.jobManager.Create(ctx, "create_episode_outline", description, input)
 	if err != nil {
 		return nil, err
 	}
 
-	a.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
+	a.jobManager.Update(ctx, job.ID, jobs.StatusRunning, nil, nil)
 
 	go func() {
 		bgCtx := context.Background()
 		contextMgr, err := llmcontext.NewManager(job.ID, a.config.Debug.Enabled)
 		if err != nil {
-			a.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			a.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
@@ -424,7 +424,7 @@ func (a *EpisodeOutlinerAgent) Execute(ctx context.Context, input map[string]int
 
 		err = executor.Execute(bgCtx, userPrompt)
 		if err != nil {
-			a.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			a.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 
@@ -432,7 +432,7 @@ func (a *EpisodeOutlinerAgent) Execute(ctx context.Context, input map[string]int
 			"status":  "completed",
 			"job_dir": contextMgr.GetJobDir(),
 		}
-		a.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
+		a.jobManager.Update(bgCtx, job.ID, jobs.StatusCompleted, output, nil)
 	}()
 
 	return job, nil

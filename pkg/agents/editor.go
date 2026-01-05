@@ -21,7 +21,7 @@ type EditorAgent struct {
 }
 
 // NewEditorAgent creates a new editor agent
-func NewEditorAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager, autoRevise bool) *EditorAgent {
+func NewEditorAgent(cfg *config.Config, backend llm.Backend, jobMgr jobs.JobManager, autoRevise bool) *EditorAgent {
 	base := NewBaseAgent(
 		"editor",
 		"Review and refine blog posts for quality and coherence",
@@ -59,13 +59,13 @@ func (e *EditorAgent) Execute(ctx context.Context, input map[string]interface{})
 		jobType = "blog_editor_revise"
 	}
 
-	job, err := e.jobManager.Create(jobType, "Edit blog post: "+postTitle, input)
+	job, err := e.jobManager.Create(ctx, jobType, "Edit blog post: "+postTitle, input)
 	if err != nil {
 		return nil, err
 	}
 
 	// Update status to running
-	e.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
+	e.jobManager.Update(ctx, job.ID, jobs.StatusRunning, nil, nil)
 
 	// Run the editing process in background
 	go func() {
@@ -74,7 +74,7 @@ func (e *EditorAgent) Execute(ctx context.Context, input map[string]interface{})
 		// Create context manager
 		contextMgr, err := llmcontext.NewManager(job.ID, e.config.Debug.Enabled)
 		if err != nil {
-			e.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			e.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
@@ -84,20 +84,20 @@ func (e *EditorAgent) Execute(ctx context.Context, input map[string]interface{})
 
 		// Write to context
 		if err := contextMgr.SavePrompt(userPrompt); err != nil {
-			e.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			e.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 
 		// Execute inference
 		result, err := e.executeEditing(bgCtx, contextMgr, userPrompt)
 		if err != nil {
-			e.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			e.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 
 		// Write response
 		if err := contextMgr.SaveResponse(result.Text); err != nil {
-			e.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			e.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 
@@ -109,7 +109,7 @@ func (e *EditorAgent) Execute(ctx context.Context, input map[string]interface{})
 			"job_dir":     contextMgr.GetJobDir(),
 		}
 
-		e.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
+		e.jobManager.Update(bgCtx, job.ID, jobs.StatusCompleted, output, nil)
 	}()
 
 	return job, nil

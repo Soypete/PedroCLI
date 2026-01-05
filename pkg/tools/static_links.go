@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/soypete/pedrocli/pkg/config"
+	"github.com/soypete/pedrocli/pkg/logits"
 )
 
 // StaticLinksOutput represents the structured output for static links
@@ -236,6 +237,37 @@ func (t *StaticLinksTool) formatResult(output StaticLinksOutput) (*Result, error
 			"total_count": len(output.All),
 		},
 	}, nil
+}
+
+// Metadata returns rich tool metadata for discovery and LLM guidance
+func (t *StaticLinksTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Schema: &logits.JSONSchema{
+			Type: "object",
+			Properties: map[string]*logits.JSONSchema{
+				"action": {
+					Type:        "string",
+					Enum:        []interface{}{"get_all", "get_social", "get_custom", "get_youtube_placeholder"},
+					Description: "The action to perform",
+				},
+			},
+			Required: []string{"action"},
+		},
+		Category:    CategoryResearch,
+		Optionality: ToolOptional,
+		UsageHint:   "Use to get social media links for newsletter sections or community references.",
+		Examples: []ToolExample{
+			{
+				Description: "Get all configured links",
+				Input:       map[string]interface{}{"action": "get_all"},
+			},
+			{
+				Description: "Get only social media links",
+				Input:       map[string]interface{}{"action": "get_social"},
+			},
+		},
+		Produces: []string{"static_links"},
+	}
 }
 
 // FormatAsMarkdown returns the static links formatted as markdown for newsletter

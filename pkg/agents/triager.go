@@ -8,6 +8,7 @@ import (
 	"github.com/soypete/pedrocli/pkg/jobs"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/llmcontext"
+	"github.com/soypete/pedrocli/pkg/tools"
 )
 
 // TriagerAgent diagnoses issues without fixing them
@@ -40,7 +41,7 @@ const (
 )
 
 // NewTriagerAgent creates a new triager agent
-func NewTriagerAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager) *TriagerAgent {
+func NewTriagerAgent(cfg *config.Config, backend llm.Backend, jobMgr jobs.JobManager) *TriagerAgent {
 	base := NewCodingBaseAgent(
 		"triager",
 		"Diagnose issues and provide triage reports (no fixes)",
@@ -62,14 +63,21 @@ func (t *TriagerAgent) Execute(ctx context.Context, input map[string]interface{}
 		return nil, fmt.Errorf("missing 'description' in input")
 	}
 
+	// Register research_links tool if provided
+	if researchLinks, ok := input["research_links"].([]tools.ResearchLink); ok && len(researchLinks) > 0 {
+		plainNotes, _ := input["plain_notes"].(string)
+		researchLinksTool := tools.NewResearchLinksToolFromLinks(researchLinks, plainNotes)
+		t.RegisterTool(researchLinksTool)
+	}
+
 	// Create job
-	job, err := t.jobManager.Create("triage", description, input)
+	job, err := t.jobManager.Create(ctx, "triage", description, input)
 	if err != nil {
 		return nil, err
 	}
 
 	// Update status to running
-	t.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
+	t.jobManager.Update(ctx, job.ID, jobs.StatusRunning, nil, nil)
 
 	// Run the inference loop in background with its own context
 	go func() {
@@ -79,10 +87,29 @@ func (t *TriagerAgent) Execute(ctx context.Context, input map[string]interface{}
 		// Create context manager
 		contextMgr, err := llmcontext.NewManager(job.ID, t.config.Debug.Enabled)
 		if err != nil {
-			t.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			t.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
+
+		// Set context_dir for the job (LLM conversation storage)
+		if err := t.jobManager.SetContextDir(bgCtx, job.ID, contextMgr.GetJobDir()); err != nil {
+			t.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, fmt.Errorf("failed to set context_dir: %w", err))
+			return
+		}
+
+		// Setup repository if repo info provided, otherwise use current directory
+		workDir, err := t.setupWorkDirectory(bgCtx, job.ID, input)
+		if err != nil {
+			t.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
+			return
+		}
+
+		// Set work_dir for the job
+		if err := t.jobManager.SetWorkDir(bgCtx, job.ID, workDir); err != nil {
+			t.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, fmt.Errorf("failed to set work_dir: %w", err))
+			return
+		}
 
 		// Build triage prompt
 		userPrompt := t.buildTriagePrompt(input)
@@ -94,17 +121,18 @@ func (t *TriagerAgent) Execute(ctx context.Context, input map[string]interface{}
 		// Execute the inference loop
 		err = executor.Execute(bgCtx, userPrompt)
 		if err != nil {
-			t.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			t.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 
 		// Update job with results
 		output := map[string]interface{}{
-			"job_dir": contextMgr.GetJobDir(),
-			"status":  "completed",
+			"status":   "completed",
+			"job_dir":  contextMgr.GetJobDir(),
+			"work_dir": workDir,
 		}
 
-		t.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
+		t.jobManager.Update(bgCtx, job.ID, jobs.StatusCompleted, output, nil)
 	}()
 
 	// Return immediately with the running job

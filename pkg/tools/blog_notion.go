@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/soypete/pedrocli/pkg/config"
+	"github.com/soypete/pedrocli/pkg/logits"
 )
 
 // BlogNotionTool publishes blog posts to Notion with AI-expanded content
@@ -414,6 +415,83 @@ func (t *BlogNotionTool) createRichText(text string) []map[string]interface{} {
 	}
 
 	return segments
+}
+
+// Metadata returns rich tool metadata for discovery and LLM guidance
+func (t *BlogNotionTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Schema: &logits.JSONSchema{
+			Type: "object",
+			Properties: map[string]*logits.JSONSchema{
+				"title": {
+					Type:        "string",
+					Description: "Blog post title",
+				},
+				"expanded_draft": {
+					Type:        "string",
+					Description: "The full expanded blog post content in markdown",
+				},
+				"original_dictation": {
+					Type:        "string",
+					Description: "Original voice dictation (optional, stored as reference)",
+				},
+				"suggested_titles": {
+					Type:        "array",
+					Items:       &logits.JSONSchema{Type: "string"},
+					Description: "Alternative title suggestions",
+				},
+				"substack_tags": {
+					Type:        "array",
+					Items:       &logits.JSONSchema{Type: "string"},
+					Description: "Tags for Substack categorization",
+				},
+				"twitter_post": {
+					Type:        "string",
+					Description: "Twitter/X post to promote the blog",
+				},
+				"linkedin_post": {
+					Type:        "string",
+					Description: "LinkedIn post to promote the blog",
+				},
+				"bluesky_post": {
+					Type:        "string",
+					Description: "Bluesky post to promote the blog",
+				},
+				"key_takeaways": {
+					Type:        "array",
+					Items:       &logits.JSONSchema{Type: "string"},
+					Description: "Key points readers should remember",
+				},
+				"target_audience": {
+					Type:        "string",
+					Description: "Description of the target audience",
+				},
+				"read_time": {
+					Type:        "string",
+					Description: "Estimated reading time (e.g., '5 min read')",
+				},
+			},
+			Required: []string{"title", "expanded_draft"},
+		},
+		Category:             CategoryPublish,
+		Optionality:          ToolOptional,
+		UsageHint:            "Use after writing/editing blog content to publish the draft to Notion with all metadata.",
+		RequiresCapabilities: []string{"notion_api"},
+		Examples: []ToolExample{
+			{
+				Description: "Publish a blog draft",
+				Input: map[string]interface{}{
+					"title":          "Building Better CLI Tools",
+					"expanded_draft": "# Introduction\n\nCLI tools are powerful...",
+					"substack_tags":  []string{"golang", "cli", "tools"},
+					"twitter_post":   "New post: Building Better CLI Tools in Go! Check it out...",
+					"read_time":      "5 min read",
+				},
+			},
+		},
+		Consumes: []string{"blog_draft", "social_posts"},
+		Produces: []string{"notion_page"},
+	}
 }
 
 // markdownToBlocks converts markdown to Notion blocks

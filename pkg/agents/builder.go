@@ -8,6 +8,7 @@ import (
 	"github.com/soypete/pedrocli/pkg/jobs"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/llmcontext"
+	"github.com/soypete/pedrocli/pkg/tools"
 )
 
 // BuilderAgent builds new features autonomously
@@ -16,7 +17,7 @@ type BuilderAgent struct {
 }
 
 // NewBuilderAgent creates a new builder agent
-func NewBuilderAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager) *BuilderAgent {
+func NewBuilderAgent(cfg *config.Config, backend llm.Backend, jobMgr jobs.JobManager) *BuilderAgent {
 	base := NewCodingBaseAgent(
 		"builder",
 		"Build new features autonomously and create draft PRs",
@@ -38,14 +39,21 @@ func (b *BuilderAgent) Execute(ctx context.Context, input map[string]interface{}
 		return nil, fmt.Errorf("missing 'description' in input")
 	}
 
+	// Register research_links tool if provided
+	if researchLinks, ok := input["research_links"].([]tools.ResearchLink); ok && len(researchLinks) > 0 {
+		plainNotes, _ := input["plain_notes"].(string)
+		researchLinksTool := tools.NewResearchLinksToolFromLinks(researchLinks, plainNotes)
+		b.RegisterTool(researchLinksTool)
+	}
+
 	// Create job
-	job, err := b.jobManager.Create("build", description, input)
+	job, err := b.jobManager.Create(ctx, "build", description, input)
 	if err != nil {
 		return nil, err
 	}
 
 	// Update status to running
-	b.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
+	b.jobManager.Update(ctx, job.ID, jobs.StatusRunning, nil, nil)
 
 	// Run the inference loop in background with its own context
 	go func() {
@@ -55,10 +63,29 @@ func (b *BuilderAgent) Execute(ctx context.Context, input map[string]interface{}
 		// Create context manager
 		contextMgr, err := llmcontext.NewManager(job.ID, b.config.Debug.Enabled)
 		if err != nil {
-			b.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			b.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
+
+		// Set context_dir for the job (LLM conversation storage)
+		if err := b.jobManager.SetContextDir(bgCtx, job.ID, contextMgr.GetJobDir()); err != nil {
+			b.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, fmt.Errorf("failed to set context_dir: %w", err))
+			return
+		}
+
+		// Setup repository if repo info provided, otherwise use current directory
+		workDir, err := b.setupWorkDirectory(bgCtx, job.ID, input)
+		if err != nil {
+			b.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
+			return
+		}
+
+		// Set work_dir for the job
+		if err := b.jobManager.SetWorkDir(bgCtx, job.ID, workDir); err != nil {
+			b.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, fmt.Errorf("failed to set work_dir: %w", err))
+			return
+		}
 
 		// Build initial prompt
 		userPrompt := b.buildInitialPrompt(input)
@@ -70,17 +97,18 @@ func (b *BuilderAgent) Execute(ctx context.Context, input map[string]interface{}
 		// Execute the inference loop
 		err = executor.Execute(bgCtx, userPrompt)
 		if err != nil {
-			b.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			b.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 
 		// Update job with results
 		output := map[string]interface{}{
-			"status":  "completed",
-			"job_dir": contextMgr.GetJobDir(),
+			"status":   "completed",
+			"job_dir":  contextMgr.GetJobDir(),
+			"work_dir": workDir,
 		}
 
-		b.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
+		b.jobManager.Update(bgCtx, job.ID, jobs.StatusCompleted, output, nil)
 	}()
 
 	// Return immediately with the running job

@@ -6,18 +6,15 @@ import (
 	"net/http"
 	_ "net/http/pprof" // Import pprof for debugging
 	"os"
-	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 
 	"github.com/soypete/pedrocli/pkg/config"
 	"github.com/soypete/pedrocli/pkg/httpbridge"
 	depcheck "github.com/soypete/pedrocli/pkg/init"
-	"github.com/soypete/pedrocli/pkg/mcp"
 )
 
-const version = "0.2.0-dev"
+const version = "0.3.0-dev"
 
 func main() {
 	// Load configuration
@@ -38,20 +35,20 @@ func main() {
 		}
 
 		if cfg.Init.Verbose {
-			fmt.Println("✓ All dependencies OK")
+			fmt.Println("All dependencies OK")
 		}
 	}
 
-	// Start MCP client (SAME AS CLI)
-	mcpClient, ctx, cancel, err := startMCPClient(cfg)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to start MCP client: %v\n", err)
-		os.Exit(1)
-	}
+	// Create context for graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Start HTTP server (NEW)
-	server := httpbridge.NewServer(cfg, mcpClient, ctx)
+	// Create HTTP server with embedded LLM backend and job manager
+	server, err := httpbridge.NewServer(cfg, ctx)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create server: %v\n", err)
+		os.Exit(1)
+	}
 
 	port := 8080
 	if cfg.Web.Port > 0 {
@@ -64,15 +61,14 @@ func main() {
 	}
 
 	addr := fmt.Sprintf("%s:%d", host, port)
-	fmt.Printf("🚀 PedroCLI HTTP Server v%s\n", version)
-	fmt.Printf("📡 Listening on http://%s\n", addr)
-	fmt.Printf("🔧 MCP Server: Running\n")
-	fmt.Printf("📊 pprof available at http://%s/debug/pprof/\n", addr)
+	fmt.Printf("PedroCLI HTTP Server v%s\n", version)
+	fmt.Printf("Listening on http://%s\n", addr)
+	fmt.Printf("pprof available at http://%s/debug/pprof/\n", addr)
 
 	// Start pprof server on a separate port for debugging
 	go func() {
 		pprofAddr := fmt.Sprintf("%s:6060", host)
-		fmt.Printf("📊 pprof debug server on http://%s/debug/pprof/\n", pprofAddr)
+		fmt.Printf("pprof debug server on http://%s/debug/pprof/\n", pprofAddr)
 		if err := http.ListenAndServe(pprofAddr, nil); err != nil {
 			fmt.Fprintf(os.Stderr, "pprof server error: %v\n", err)
 		}
@@ -84,7 +80,11 @@ func main() {
 
 	go func() {
 		<-sigChan
-		fmt.Println("\n🛑 Shutting down...")
+		fmt.Println("\nShutting down...")
+		// Close server (including database connections)
+		if err := server.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error closing server: %v\n", err)
+		}
 		cancel()
 		os.Exit(0)
 	}()
@@ -93,55 +93,4 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Server error: %v\n", err)
 		os.Exit(1)
 	}
-}
-
-// startMCPClient starts the MCP server and returns a client (SAME AS CLI)
-func startMCPClient(cfg *config.Config) (*mcp.Client, context.Context, context.CancelFunc, error) {
-	// Find the MCP server binary
-	serverPath, err := findMCPServer()
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	// Create client
-	client := mcp.NewClient(serverPath, []string{})
-
-	// Create context WITHOUT timeout - the HTTP server should run indefinitely
-	// Individual requests can have their own timeouts
-	ctx, cancel := context.WithCancel(context.Background())
-
-	// Start server
-	if err := client.Start(ctx); err != nil {
-		cancel()
-		return nil, nil, nil, fmt.Errorf("failed to start MCP server: %w", err)
-	}
-
-	return client, ctx, cancel, nil
-}
-
-// findMCPServer finds the MCP server binary (SAME AS CLI)
-func findMCPServer() (string, error) {
-	// Try current directory first
-	localPath := "./pedrocli-server"
-	if _, err := os.Stat(localPath); err == nil {
-		abs, _ := filepath.Abs(localPath)
-		return abs, nil
-	}
-
-	// Try in same directory as the HTTP server binary
-	exePath, err := os.Executable()
-	if err == nil {
-		serverPath := filepath.Join(filepath.Dir(exePath), "pedrocli-server")
-		if _, err := os.Stat(serverPath); err == nil {
-			return serverPath, nil
-		}
-	}
-
-	// Try $PATH
-	serverPath, err := exec.LookPath("pedrocli-server")
-	if err == nil {
-		return serverPath, nil
-	}
-
-	return "", fmt.Errorf("pedrocli-server not found. Please build it with 'make build-server'")
 }

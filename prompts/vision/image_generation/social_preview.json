@@ -1,0 +1,22 @@
+{
+  "name": "social_preview",
+  "category": "social_preview",
+  "description": "Open Graph images for social media sharing - bold, eye-catching",
+  "base_prompt": "social media preview image, bold colors, high contrast, eye-catching design, centered subject, clean background",
+  "style_modifiers": [
+    "vibrant colors",
+    "modern design",
+    "flat illustration style",
+    "gradient background"
+  ],
+  "negative_prompt": "text, watermark, low quality, blurry, cluttered, too detailed, busy background",
+  "recommended_model": "flux_schnell",
+  "aspect_ratio": "1.91:1",
+  "width": 1200,
+  "height": 630,
+  "steps": 4,
+  "cfg_scale": 1.0,
+  "sampler": "euler",
+  "scheduler": "simple",
+  "alt_text_instructions": "Briefly describe the main visual element and its connection to the content being shared. Keep it under 100 characters for social platforms."
+}

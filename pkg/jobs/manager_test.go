@@ -1,6 +1,7 @@
 package jobs
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -91,7 +92,7 @@ func TestCreate(t *testing.T) {
 		"branch":      "feature/test",
 	}
 
-	job, err := mgr.Create("build", "Build new feature", input)
+	job, err := mgr.Create(context.Background(), "build", "Build new feature", input)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -136,10 +137,10 @@ func TestGet(t *testing.T) {
 	}
 
 	// Create a job
-	createdJob, _ := mgr.Create("review", "Review PR", map[string]interface{}{})
+	createdJob, _ := mgr.Create(context.Background(), "review", "Review PR", map[string]interface{}{})
 
 	// Get the job
-	job, err := mgr.Get(createdJob.ID)
+	job, err := mgr.Get(context.Background(), createdJob.ID)
 	if err != nil {
 		t.Fatalf("Get() error = %v", err)
 	}
@@ -149,7 +150,7 @@ func TestGet(t *testing.T) {
 	}
 
 	// Try to get non-existent job
-	_, err = mgr.Get("nonexistent")
+	_, err = mgr.Get(context.Background(), "nonexistent")
 	if err == nil {
 		t.Error("Get() should error for non-existent job")
 	}
@@ -163,14 +164,14 @@ func TestList(t *testing.T) {
 	}
 
 	// Create multiple jobs with sufficient time between them
-	mgr.Create("build", "Job 1", map[string]interface{}{})
+	mgr.Create(context.Background(), "build", "Job 1", map[string]interface{}{})
 	time.Sleep(1 * time.Second) // Ensure different Unix timestamps
-	mgr.Create("review", "Job 2", map[string]interface{}{})
+	mgr.Create(context.Background(), "review", "Job 2", map[string]interface{}{})
 	time.Sleep(1 * time.Second)
-	mgr.Create("debug", "Job 3", map[string]interface{}{})
+	mgr.Create(context.Background(), "debug", "Job 3", map[string]interface{}{})
 
 	// List all jobs
-	jobs := mgr.List()
+	jobs, _ := mgr.List(context.Background())
 
 	if len(jobs) != 3 {
 		t.Errorf("List() returned %d jobs, want 3", len(jobs))
@@ -194,7 +195,7 @@ func TestListEmpty(t *testing.T) {
 		t.Fatalf("NewManager() error = %v", err)
 	}
 
-	jobs := mgr.List()
+	jobs, _ := mgr.List(context.Background())
 
 	if len(jobs) != 0 {
 		t.Errorf("List() returned %d jobs for empty manager, want 0", len(jobs))
@@ -209,17 +210,17 @@ func TestUpdate(t *testing.T) {
 	}
 
 	// Create a job
-	job, _ := mgr.Create("build", "Test job", map[string]interface{}{})
+	job, _ := mgr.Create(context.Background(), "build", "Test job", map[string]interface{}{})
 
 	// Update to running
 	output := map[string]interface{}{"step": "compiling"}
-	err = mgr.Update(job.ID, StatusRunning, output, nil)
+	err = mgr.Update(context.Background(), job.ID, StatusRunning, output, nil)
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}
 
 	// Verify update
-	updatedJob, _ := mgr.Get(job.ID)
+	updatedJob, _ := mgr.Get(context.Background(), job.ID)
 	if updatedJob.Status != StatusRunning {
 		t.Errorf("Status = %v, want %v", updatedJob.Status, StatusRunning)
 	}
@@ -234,12 +235,12 @@ func TestUpdate(t *testing.T) {
 
 	// Update to completed
 	finalOutput := map[string]interface{}{"result": "success"}
-	err = mgr.Update(job.ID, StatusCompleted, finalOutput, nil)
+	err = mgr.Update(context.Background(), job.ID, StatusCompleted, finalOutput, nil)
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}
 
-	completedJob, _ := mgr.Get(job.ID)
+	completedJob, _ := mgr.Get(context.Background(), job.ID)
 	if completedJob.Status != StatusCompleted {
 		t.Errorf("Status = %v, want %v", completedJob.Status, StatusCompleted)
 	}
@@ -257,17 +258,17 @@ func TestUpdateWithError(t *testing.T) {
 	}
 
 	// Create a job
-	job, _ := mgr.Create("build", "Test job", map[string]interface{}{})
+	job, _ := mgr.Create(context.Background(), "build", "Test job", map[string]interface{}{})
 
 	// Update to failed with error
 	testError := errors.New("build failed: compilation error")
-	err = mgr.Update(job.ID, StatusFailed, nil, testError)
+	err = mgr.Update(context.Background(), job.ID, StatusFailed, nil, testError)
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}
 
 	// Verify error was saved
-	failedJob, _ := mgr.Get(job.ID)
+	failedJob, _ := mgr.Get(context.Background(), job.ID)
 	if failedJob.Status != StatusFailed {
 		t.Errorf("Status = %v, want %v", failedJob.Status, StatusFailed)
 	}
@@ -288,7 +289,7 @@ func TestUpdateNonExistent(t *testing.T) {
 		t.Fatalf("NewManager() error = %v", err)
 	}
 
-	err = mgr.Update("nonexistent", StatusCompleted, nil, nil)
+	err = mgr.Update(context.Background(), "nonexistent", StatusCompleted, nil, nil)
 	if err == nil {
 		t.Error("Update() should error for non-existent job")
 	}
@@ -302,17 +303,17 @@ func TestCancel(t *testing.T) {
 	}
 
 	// Create a running job
-	job, _ := mgr.Create("build", "Test job", map[string]interface{}{})
-	mgr.Update(job.ID, StatusRunning, nil, nil)
+	job, _ := mgr.Create(context.Background(), "build", "Test job", map[string]interface{}{})
+	mgr.Update(context.Background(), job.ID, StatusRunning, nil, nil)
 
 	// Cancel the job
-	err = mgr.Cancel(job.ID)
+	err = mgr.Cancel(context.Background(), job.ID)
 	if err != nil {
 		t.Fatalf("Cancel() error = %v", err)
 	}
 
 	// Verify it was cancelled
-	cancelledJob, _ := mgr.Get(job.ID)
+	cancelledJob, _ := mgr.Get(context.Background(), job.ID)
 	if cancelledJob.Status != StatusCancelled {
 		t.Errorf("Status = %v, want %v", cancelledJob.Status, StatusCancelled)
 	}
@@ -330,10 +331,10 @@ func TestCleanupOldJobs(t *testing.T) {
 	}
 
 	// Create old completed job
-	oldJob, _ := mgr.Create("build", "Old job", map[string]interface{}{})
+	oldJob, _ := mgr.Create(context.Background(), "build", "Old job", map[string]interface{}{})
 	time.Sleep(1 * time.Second) // Ensure different timestamp
 	oldTime := time.Now().Add(-2 * time.Hour)
-	mgr.Update(oldJob.ID, StatusCompleted, nil, nil)
+	mgr.Update(context.Background(), oldJob.ID, StatusCompleted, nil, nil)
 	// Manually set old completion time and save
 	mgr.mu.Lock()
 	mgr.jobs[oldJob.ID].CompletedAt = &oldTime
@@ -342,15 +343,15 @@ func TestCleanupOldJobs(t *testing.T) {
 
 	// Create recent completed job
 	time.Sleep(1 * time.Second)
-	recentJob, _ := mgr.Create("review", "Recent job", map[string]interface{}{})
-	mgr.Update(recentJob.ID, StatusCompleted, nil, nil)
+	recentJob, _ := mgr.Create(context.Background(), "review", "Recent job", map[string]interface{}{})
+	mgr.Update(context.Background(), recentJob.ID, StatusCompleted, nil, nil)
 
 	// Create pending job
 	time.Sleep(1 * time.Second)
-	pendingJob, _ := mgr.Create("debug", "Pending job", map[string]interface{}{})
+	pendingJob, _ := mgr.Create(context.Background(), "debug", "Pending job", map[string]interface{}{})
 
 	// Cleanup jobs older than 1 hour
-	err = mgr.CleanupOldJobs(1 * time.Hour)
+	err = mgr.CleanupOldJobs(context.Background(), 1*time.Hour)
 	if err != nil {
 		t.Fatalf("CleanupOldJobs() error = %v", err)
 	}
@@ -387,7 +388,7 @@ func TestConcurrentAccess(t *testing.T) {
 	// Create some jobs first
 	jobIDs := make([]string, 5)
 	for i := 0; i < 5; i++ {
-		job, _ := mgr.Create("build", "Concurrent test job", map[string]interface{}{})
+		job, _ := mgr.Create(context.Background(), "build", "Concurrent test job", map[string]interface{}{})
 		jobIDs[i] = job.ID
 		time.Sleep(1 * time.Second) // Ensure unique timestamps
 	}
@@ -399,11 +400,11 @@ func TestConcurrentAccess(t *testing.T) {
 		go func() {
 			// Concurrent reads
 			jobID := jobIDs[idx%5]
-			mgr.Get(jobID)
-			mgr.List()
+			mgr.Get(context.Background(), jobID)
+			mgr.List(context.Background())
 
 			// Concurrent updates
-			mgr.Update(jobID, StatusRunning, map[string]interface{}{"iteration": idx}, nil)
+			mgr.Update(context.Background(), jobID, StatusRunning, map[string]interface{}{"iteration": idx}, nil)
 			done <- true
 		}()
 	}
@@ -414,7 +415,7 @@ func TestConcurrentAccess(t *testing.T) {
 	}
 
 	// Verify jobs are still accessible
-	jobs := mgr.List()
+	jobs, _ := mgr.List(context.Background())
 	if len(jobs) != 5 {
 		t.Errorf("Expected 5 jobs, got %d", len(jobs))
 	}
@@ -425,15 +426,15 @@ func TestJobPersistence(t *testing.T) {
 
 	// Create manager and add job
 	mgr1, _ := NewManager(tmpDir)
-	job, _ := mgr1.Create("build", "Persistent job", map[string]interface{}{
+	job, _ := mgr1.Create(context.Background(), "build", "Persistent job", map[string]interface{}{
 		"test": "value",
 	})
-	mgr1.Update(job.ID, StatusRunning, map[string]interface{}{"progress": 50}, nil)
+	mgr1.Update(context.Background(), job.ID, StatusRunning, map[string]interface{}{"progress": 50}, nil)
 
 	// Create new manager instance - should load persisted job
 	mgr2, _ := NewManager(tmpDir)
 
-	loadedJob, err := mgr2.Get(job.ID)
+	loadedJob, err := mgr2.Get(context.Background(), job.ID)
 	if err != nil {
 		t.Fatalf("Failed to load persisted job: %v", err)
 	}
@@ -468,14 +469,14 @@ func TestJobStatuses(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			job, _ := mgr.Create("test", "Test job", map[string]interface{}{})
+			job, _ := mgr.Create(context.Background(), "test", "Test job", map[string]interface{}{})
 
-			err := mgr.Update(job.ID, tt.status, nil, nil)
+			err := mgr.Update(context.Background(), job.ID, tt.status, nil, nil)
 			if err != nil {
 				t.Errorf("Update() error = %v", err)
 			}
 
-			updatedJob, _ := mgr.Get(job.ID)
+			updatedJob, _ := mgr.Get(context.Background(), job.ID)
 			if updatedJob.Status != tt.status {
 				t.Errorf("Status = %v, want %v", updatedJob.Status, tt.status)
 			}

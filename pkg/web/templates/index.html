@@ -85,6 +85,39 @@
                                    placeholder="feature/my-feature">
                         </div>
 
+                        <!-- Research Links Section -->
+                        <div class="border border-gray-200 rounded-md">
+                            <button type="button" onclick="toggleResearchLinks('coding')"
+                                    class="w-full px-4 py-2 text-left text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-t-md flex items-center justify-between">
+                                <span>Research Links (optional)</span>
+                                <svg id="coding-research-arrow" class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
+                            <div id="coding-research-panel" class="hidden p-4 space-y-3">
+                                <p class="text-xs text-gray-500">Add URLs and notes as research context. The LLM can fetch and cite these.</p>
+
+                                <div id="coding-research-links" class="space-y-2">
+                                    <!-- Dynamic link rows added here -->
+                                </div>
+
+                                <button type="button" onclick="addResearchLink('coding')"
+                                        class="text-sm text-blue-600 hover:text-blue-700 flex items-center">
+                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                    </svg>
+                                    Add Link
+                                </button>
+
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">General Notes</label>
+                                    <textarea name="plain_notes" rows="2"
+                                              class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                              placeholder="Additional context without URLs..."></textarea>
+                                </div>
+                            </div>
+                        </div>
+
                         <button type="submit"
                                 class="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
                             Create Job
@@ -207,6 +240,39 @@
                                       placeholder="Describe your blog post... AI will research, outline, expand, and publish to Notion"></textarea>
                         </div>
 
+                        <!-- Research Links Section -->
+                        <div class="border border-gray-200 rounded-md">
+                            <button type="button" onclick="toggleResearchLinks('blog')"
+                                    class="w-full px-4 py-2 text-left text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-t-md flex items-center justify-between">
+                                <span>Research Links (optional)</span>
+                                <svg id="blog-research-arrow" class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
+                            <div id="blog-research-panel" class="hidden p-4 space-y-3">
+                                <p class="text-xs text-gray-500">Add URLs as references. The LLM can fetch, summarize, and cite these in your post.</p>
+
+                                <div id="blog-research-links" class="space-y-2">
+                                    <!-- Dynamic link rows added here -->
+                                </div>
+
+                                <button type="button" onclick="addResearchLink('blog')"
+                                        class="text-sm text-blue-600 hover:text-blue-700 flex items-center">
+                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                    </svg>
+                                    Add Link
+                                </button>
+
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">General Notes</label>
+                                    <textarea id="blog-plain-notes" rows="2"
+                                              class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                              placeholder="Additional context without URLs..."></textarea>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="space-y-2">
                             <div class="flex items-center">
                                 <input type="checkbox" id="publish-notion" name="publish" checked
@@ -317,6 +383,96 @@ function updateFormFields(type) {
     }
 }
 
+// Research Links Management
+let researchLinkCounters = { coding: 0, blog: 0, podcast: 0 };
+
+function toggleResearchLinks(formId) {
+    const panel = document.getElementById(formId + '-research-panel');
+    const arrow = document.getElementById(formId + '-research-arrow');
+
+    if (panel.classList.contains('hidden')) {
+        panel.classList.remove('hidden');
+        arrow.classList.add('rotate-180');
+    } else {
+        panel.classList.add('hidden');
+        arrow.classList.remove('rotate-180');
+    }
+}
+
+function addResearchLink(formId) {
+    const container = document.getElementById(formId + '-research-links');
+    const index = researchLinkCounters[formId]++;
+
+    const row = document.createElement('div');
+    row.className = 'research-link-row p-3 bg-gray-50 rounded-md space-y-2';
+    row.id = formId + '-link-' + index;
+
+    row.innerHTML = `
+        <div class="flex gap-2">
+            <input type="url" name="link_url[]" placeholder="https://..."
+                   class="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+            <button type="button" onclick="removeResearchLink('${formId}', ${index})"
+                    class="text-red-500 hover:text-red-700 px-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        <div class="flex gap-2">
+            <input type="text" name="link_title[]" placeholder="Title (optional)"
+                   class="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+            <select name="link_category[]"
+                    class="px-2 py-1 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                <option value="">Category...</option>
+                <option value="reference">Reference</option>
+                <option value="citation">Citation</option>
+                <option value="example">Example</option>
+                <option value="research">Research</option>
+                <option value="inspiration">Inspiration</option>
+            </select>
+        </div>
+        <input type="text" name="link_notes[]" placeholder="Notes about this link..."
+               class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+        <input type="text" name="link_labels[]" placeholder="Labels (comma-separated)"
+               class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+    `;
+
+    container.appendChild(row);
+}
+
+function removeResearchLink(formId, index) {
+    const row = document.getElementById(formId + '-link-' + index);
+    if (row) {
+        row.remove();
+    }
+}
+
+function collectResearchLinks(formId) {
+    const container = document.getElementById(formId + '-research-links');
+    const rows = container.querySelectorAll('.research-link-row');
+    const links = [];
+
+    rows.forEach(row => {
+        const url = row.querySelector('input[name="link_url[]"]').value.trim();
+        if (url) {
+            const title = row.querySelector('input[name="link_title[]"]').value.trim();
+            const category = row.querySelector('select[name="link_category[]"]').value;
+            const notes = row.querySelector('input[name="link_notes[]"]').value.trim();
+            const labelsStr = row.querySelector('input[name="link_labels[]"]').value.trim();
+            const labels = labelsStr ? labelsStr.split(',').map(l => l.trim()).filter(l => l) : [];
+
+            links.push({
+                url: url,
+                title: title || undefined,
+                category: category || undefined,
+                notes: notes || undefined,
+                labels: labels.length > 0 ? labels : undefined
+            });
+        }
+    });
+
+    return links;
+}
 
 // Voice input using local Whisper server
 let mediaRecorder = null;
@@ -443,18 +599,32 @@ async function submitBlogPost(event) {
         aiStatusText.textContent = 'AI is researching and writing your blog post...';
     }
 
+    // Collect research links
+    const researchLinks = collectResearchLinks('blog');
+    const plainNotes = document.getElementById('blog-plain-notes')?.value.trim() || '';
+
     try {
+        const requestBody = {
+            title: title,
+            dictation: dictation,
+            skip_ai: skipAI,
+            publish: publish
+        };
+
+        // Only include research links if there are any
+        if (researchLinks.length > 0) {
+            requestBody.research_links = researchLinks;
+        }
+        if (plainNotes) {
+            requestBody.plain_notes = plainNotes;
+        }
+
         const response = await fetch('/api/blog', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                title: title,
-                dictation: dictation,
-                skip_ai: skipAI,
-                publish: publish
-            }),
+            body: JSON.stringify(requestBody),
         });
 
         const data = await response.json();
@@ -464,6 +634,10 @@ async function submitBlogPost(event) {
             document.getElementById('blog-title').value = '';
             document.getElementById('blog-content').value = '';
             document.getElementById('skip-ai').checked = false;
+            // Clear research links
+            document.getElementById('blog-research-links').innerHTML = '';
+            document.getElementById('blog-plain-notes').value = '';
+            researchLinkCounters.blog = 0;
 
             // Add to recent posts list
             const postList = document.getElementById('blog-post-list');

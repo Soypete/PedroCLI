@@ -31,4 +31,8 @@ coverage.out
 
 # Config files (don't commit actual configs, only examples)
 .pedrocli.json
+.pedrocli-llamacpp-*.json
+!.pedrocli-llamacpp.example.json
 .env
+*.db
+postgres-data/

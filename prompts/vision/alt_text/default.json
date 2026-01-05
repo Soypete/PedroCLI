@@ -1,0 +1,22 @@
+{
+  "name": "default_alt_text",
+  "description": "Default alt text generation prompt for accessibility",
+  "system_prompt": "You are an accessibility expert who writes alt text for images. Your alt text should be concise, descriptive, and meaningful.",
+  "prompt_template": "Generate a concise, accessible alt text for this image.\n\nRequirements:\n- Maximum {{max_length}} characters\n- Do NOT start with 'image of', 'picture of', 'photo of', or similar phrases\n- Focus on the purpose and meaning, not just visual description\n- Be specific and informative\n- Write in present tense\n- Consider the context: {{context}}\n- Image purpose: {{purpose}}\n\nRespond with ONLY the alt text, nothing else. No quotes, no explanations.",
+  "guidelines": [
+    "Focus on purpose over appearance",
+    "Avoid redundant phrases like 'image of'",
+    "Be concise but informative",
+    "Consider context when available",
+    "Describe what's meaningful, not decorative",
+    "Include relevant text visible in the image",
+    "For complex images, summarize the key takeaway"
+  ],
+  "max_length": 125,
+  "validation_rules": [
+    "Must not start with: image of, picture of, photo of, graphic of",
+    "Must not contain: click here, link to",
+    "Must not be a filename",
+    "Should not exceed max_length characters"
+  ]
+}

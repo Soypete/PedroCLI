@@ -1,0 +1,24 @@
+{
+  "_comment": "TODO: Replace with actual ComfyUI workflow JSON",
+  "_description": "Optimized workflow for blog hero images (16:9 aspect ratio)",
+  "version": "1.0.0",
+  "name": "blog_hero",
+  "extends": "sdxl_base",
+  "defaults": {
+    "width": 1536,
+    "height": 864,
+    "steps": 35,
+    "cfg_scale": 8.0,
+    "sampler": "dpmpp_2m",
+    "scheduler": "karras",
+    "style_prefix": "professional blog header image, clean modern design, ",
+    "style_suffix": ", high quality, sharp focus, professional photography",
+    "negative_prompt": "low quality, blurry, distorted, text, watermark, logo, amateur, busy background"
+  },
+  "aspect_ratios": {
+    "16:9": {"width": 1536, "height": 864},
+    "21:9": {"width": 1792, "height": 768},
+    "4:3": {"width": 1280, "height": 960},
+    "1:1": {"width": 1024, "height": 1024}
+  }
+}

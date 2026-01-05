@@ -11,10 +11,10 @@ CREATE TABLE IF NOT EXISTS managed_repos (
     default_branch TEXT DEFAULT 'main',
     project_type TEXT DEFAULT 'unknown',
     hooks_config TEXT, -- JSON blob
-    last_fetched DATETIME,
+    last_fetched TIMESTAMP,
     last_operation TEXT,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(provider, owner, repo_name)
 );
 
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS repo_operations (
     ref_before TEXT,
     ref_after TEXT,
     details TEXT, -- JSON blob
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_repo_operations_repo_id
@@ -55,9 +55,9 @@ CREATE TABLE IF NOT EXISTS tracked_prs (
     local_commit_hash TEXT,
     remote_commit_hash TEXT,
     html_url TEXT,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    merged_at DATETIME,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    merged_at TIMESTAMP,
     UNIQUE(repo_id, pr_number)
 );
 
@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS hook_runs (
     results TEXT, -- JSON blob
     agent_feedback TEXT,
     duration_ms INTEGER,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_hook_runs_repo_id
@@ -97,8 +97,8 @@ CREATE TABLE IF NOT EXISTS repo_jobs (
     output_payload TEXT, -- JSON blob
     validation_attempts INTEGER DEFAULT 0,
     last_validation_result TEXT, -- JSON blob
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    completed_at DATETIME
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_repo_jobs_repo_id
@@ -115,8 +115,8 @@ CREATE TABLE IF NOT EXISTS git_credentials (
     ssh_key_path TEXT,
     username TEXT,
     token_hash TEXT, -- For validation, not the actual token
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- +goose Down

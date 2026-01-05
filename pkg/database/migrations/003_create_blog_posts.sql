@@ -12,9 +12,9 @@ CREATE TABLE IF NOT EXISTS blog_posts (
     newsletter_addendum TEXT, -- JSON blob
     notion_page_id TEXT,
     substack_url TEXT,
-    paywall_until DATETIME,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    paywall_until TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Index for querying by status

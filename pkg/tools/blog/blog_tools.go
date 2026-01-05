@@ -50,7 +50,7 @@ func NewBlogToolsManager(cfg *config.Config, jobMgr *jobs.Manager, backend llm.B
 	}
 
 	// Run migrations
-	if err := db.Migrate(); err != nil {
+	if err := db.Migrate(context.Background()); err != nil {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/soypete/pedrocli/pkg/fileio"
+	"github.com/soypete/pedrocli/pkg/logits"
 )
 
 // CodeEditTool provides precise line-based code editing
@@ -212,6 +213,62 @@ func (c *CodeEditTool) deleteLines(args map[string]interface{}) (*Result, error)
 		Output:        fmt.Sprintf("Deleted lines %d-%d in %s", start, end, path),
 		ModifiedFiles: []string{absPath},
 	}, nil
+}
+
+// Metadata returns rich tool metadata for discovery and LLM guidance
+func (c *CodeEditTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Schema: &logits.JSONSchema{
+			Type: "object",
+			Properties: map[string]*logits.JSONSchema{
+				"action": {
+					Type:        "string",
+					Enum:        []interface{}{"get_lines", "edit_lines", "insert_at_line", "delete_lines"},
+					Description: "The code edit operation to perform",
+				},
+				"path": {
+					Type:        "string",
+					Description: "File path to edit",
+				},
+				"start_line": {
+					Type:        "integer",
+					Description: "Starting line number (1-indexed)",
+				},
+				"end_line": {
+					Type:        "integer",
+					Description: "Ending line number (1-indexed)",
+				},
+				"line_number": {
+					Type:        "integer",
+					Description: "Line number for insert_at_line (1-indexed)",
+				},
+				"new_content": {
+					Type:        "string",
+					Description: "New content for edit_lines",
+				},
+				"content": {
+					Type:        "string",
+					Description: "Content to insert for insert_at_line",
+				},
+			},
+			Required: []string{"action", "path"},
+		},
+		Category:    CategoryCode,
+		Optionality: ToolRequired,
+		UsageHint:   "Use get_lines first to see current content before editing. Preserve exact indentation.",
+		Examples: []ToolExample{
+			{
+				Description: "Read lines 10-20 from a file",
+				Input:       map[string]interface{}{"action": "get_lines", "path": "main.go", "start_line": 10, "end_line": 20},
+			},
+			{
+				Description: "Replace lines 10-15 with new content",
+				Input:       map[string]interface{}{"action": "edit_lines", "path": "main.go", "start_line": 10, "end_line": 15, "new_content": "// new code"},
+			},
+		},
+		Consumes: []string{"file_content"},
+		Produces: []string{"file_content"},
+	}
 }
 
 // GetFileSystem returns the underlying FileSystem for advanced operations

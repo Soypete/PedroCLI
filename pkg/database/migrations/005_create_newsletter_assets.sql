@@ -5,11 +5,11 @@ CREATE TABLE IF NOT EXISTS newsletter_assets (
     asset_type TEXT NOT NULL, -- video, event, meetup, link, reading
     title TEXT NOT NULL,
     url TEXT,
-    event_date DATETIME,
+    event_date TIMESTAMP,
     description TEXT,
     embed_code TEXT, -- for YouTube/Twitch embeds
     used_in_post TEXT REFERENCES blog_posts(id) ON DELETE SET NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Index for querying by asset type

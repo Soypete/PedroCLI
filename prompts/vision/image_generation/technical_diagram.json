@@ -1,0 +1,22 @@
+{
+  "name": "technical_diagram",
+  "category": "technical_diagram",
+  "description": "Technical and architecture diagrams with clean lines",
+  "base_prompt": "clean technical diagram, professional illustration, clear layout, minimal design, vector style, labeled components",
+  "style_modifiers": [
+    "blueprint style",
+    "isometric view",
+    "flowchart elements",
+    "connected nodes"
+  ],
+  "negative_prompt": "photo, realistic, cluttered, handwritten, messy, low resolution, blurry text",
+  "recommended_model": "sdxl_base",
+  "aspect_ratio": "16:9",
+  "width": 1536,
+  "height": 864,
+  "steps": 30,
+  "cfg_scale": 7.5,
+  "sampler": "euler_ancestral",
+  "scheduler": "normal",
+  "alt_text_instructions": "Describe what the diagram illustrates - the system, process, or concept shown. Include key components if visible. Be technical but accessible."
+}

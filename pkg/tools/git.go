@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/soypete/pedrocli/pkg/logits"
 )
 
 // GitTool provides git operations
@@ -259,6 +261,63 @@ func (g *GitTool) createBranch(ctx context.Context, args map[string]interface{})
 		Success: true,
 		Output:  fmt.Sprintf("Created and checked out branch: %s", branch),
 	}, nil
+}
+
+// Metadata returns rich tool metadata for discovery and LLM guidance
+func (g *GitTool) Metadata() *ToolMetadata {
+	return &ToolMetadata{
+		Schema: &logits.JSONSchema{
+			Type: "object",
+			Properties: map[string]*logits.JSONSchema{
+				"action": {
+					Type:        "string",
+					Enum:        []interface{}{"status", "diff", "add", "commit", "push", "checkout", "create_branch"},
+					Description: "The git operation to perform",
+				},
+				"base": {
+					Type:        "string",
+					Description: "Base branch for diff comparison",
+				},
+				"branch": {
+					Type:        "string",
+					Description: "Branch name for checkout/push/create_branch",
+				},
+				"files": {
+					Type:        "array",
+					Items:       &logits.JSONSchema{Type: "string"},
+					Description: "List of file paths for add operation",
+				},
+				"message": {
+					Type:        "string",
+					Description: "Commit message",
+				},
+				"remote": {
+					Type:        "string",
+					Description: "Remote name (default: origin)",
+				},
+			},
+			Required: []string{"action"},
+		},
+		Category:             CategoryVCS,
+		Optionality:          ToolRequired,
+		UsageHint:            "Always check status before committing. Create feature branches for new work.",
+		RequiresCapabilities: []string{"git"},
+		Examples: []ToolExample{
+			{
+				Description: "Check repository status",
+				Input:       map[string]interface{}{"action": "status"},
+			},
+			{
+				Description: "Show diff against main branch",
+				Input:       map[string]interface{}{"action": "diff", "base": "main"},
+			},
+			{
+				Description: "Stage files and commit",
+				Input:       map[string]interface{}{"action": "add", "files": []string{"pkg/new.go"}},
+			},
+		},
+		Produces: []string{"git_status", "git_diff"},
+	}
 }
 
 // CreatePR creates a pull request using GitHub CLI

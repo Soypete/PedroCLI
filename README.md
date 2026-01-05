@@ -46,25 +46,28 @@ The agent will autonomously:
 6. Keep iterating until everything works
 7. Create a git branch and commit the changes
 
-## Project Status - ✅ FULLY FUNCTIONAL
+## Project Status - ✅ FULLY FUNCTIONAL (v0.3.0)
 
 ### ✅ Completed - Core System
 
-**Phase 1**: Foundation & MCP Server
-- [x] MCP server architecture with JSON-RPC 2.0
+**Phase 1**: Foundation & Agent Architecture
+- [x] Direct agent execution (no subprocess overhead)
 - [x] File-based context management
 - [x] 7 comprehensive tools (file, code_edit, search, navigate, git, bash, test)
-- [x] 4 agent types (Builder, Debugger, Reviewer, Triager)
+- [x] 4 code agent types (Builder, Debugger, Reviewer, Triager)
+- [x] Dynamic blog agent with LLM-driven tool selection
 
-**Phase 2**: CLI Client
+**Phase 2**: CLI & Web Interface
 - [x] Command-line interface with 7 commands
-- [x] MCP client library
-- [x] Full CLI-to-server communication
+- [x] Web UI with HTMX + Tailwind CSS
+- [x] Real-time job updates via SSE
+- [x] Voice dictation support (whisper.cpp)
 
 **Phase 3**: LLM Backends
 - [x] llama.cpp backend (maximum performance)
 - [x] Ollama backend (maximum convenience)
 - [x] Auto-detected context windows for 20+ models
+- [x] Model-specific tool formatters (Qwen, Llama, Mistral)
 
 **Phase 4**: Inference Loop
 - [x] **Complete iterative inference loop**
@@ -73,7 +76,7 @@ The agent will autonomously:
 - [x] **Automatic retry on failures**
 - [x] **Completion detection**
 
-**Phase 5**: Distribution & Release ✨ **NEW**
+**Phase 5**: Distribution & Release
 - [x] **GoReleaser configuration for automated releases**
 - [x] **Homebrew tap support**
 - [x] **One-line install script**
@@ -311,23 +314,20 @@ The agent will:
 
 ```
 ┌─────────────────────────────────────┐
-│         pedrocli (CLI)               │
+│      pedrocli (CLI / HTTP Server)    │
 │   Commands: build, debug, review     │
-└─────────────────────────────────────┘
-              │
-        JSON-RPC (stdio)
-              ▼
-┌─────────────────────────────────────┐
-│      pedrocli-server (MCP)           │
+│   Web UI: http://localhost:8080      │
 ├─────────────────────────────────────┤
-│  Agents:                             │
+│  Agents (embedded, in-process):      │
 │  ├─ Builder   (build features)       │
 │  ├─ Debugger  (fix bugs)             │
 │  ├─ Reviewer  (code review)          │
-│  └─ Triager   (diagnose)             │
+│  ├─ Triager   (diagnose)             │
+│  └─ DynamicBlog (content creation)   │
 ├─────────────────────────────────────┤
 │  Tools: file, code_edit, search,     │
-│         navigate, git, bash, test    │
+│         navigate, git, bash, test,   │
+│         rss_feed, calendar, notion   │
 ├─────────────────────────────────────┤
 │  Backend: llama.cpp OR Ollama        │
 └─────────────────────────────────────┘
@@ -456,7 +456,6 @@ make lint
 ❌ **Will be Rejected:**
 - Changes that remove self-hosting capability
 - Dependencies on external APIs
-- Breaking changes to the MCP protocol
 - Unnecessary complexity
 
 I reserve the right to reject PRs that don't align with the project's goals of being a self-hosted, privacy-focused Cursor alternative.
@@ -493,13 +492,13 @@ I reserve the right to reject PRs that don't align with the project's goals of b
 4. **Offline**: Works without internet
 5. **Customization**: Full control over prompts and behavior
 
-### Why MCP?
+### Direct Agent Execution
 
-The Model Context Protocol (MCP) provides:
-- Clean separation between client and server
+As of v0.3.0, agents execute directly in-process:
+- No subprocess overhead or IPC latency
+- Simpler deployment (single binary)
+- Model-specific tool formatters for Qwen, Llama, Mistral
 - Tool-based architecture (like OpenAI function calling)
-- Extensibility for future integrations
-- Process isolation and security
 
 ### File-Based Context
 
@@ -577,9 +576,11 @@ Mode selection is persisted in localStorage.
 The following features are planned for future releases:
 
 - [ ] **Database for Job Management**: Replace file-based job storage with PostgreSQL for better querying, persistence, and scalability
-- [x] **Podcast Tools Mode**: Add support for podcast content management with Notion and Google Calendar integration
+- [x] **Podcast/Blog Tools Mode**: Content management with Notion and Google Calendar integration
 - [x] **Model Profiles**: Support for multiple model configurations (e.g., coding model vs content model)
 - [x] **Web UI Enhancements**: Mode switching between different tool sets
+- [x] **Dynamic Blog Agent**: LLM-driven tool selection for flexible content creation
+- [x] **Model-specific Tool Formatters**: Native tool call formats for Qwen, Llama, Mistral
 
 ## License
 

@@ -9,6 +9,7 @@ import (
 	"github.com/soypete/pedrocli/pkg/jobs"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/llmcontext"
+	"github.com/soypete/pedrocli/pkg/tools"
 )
 
 // ReviewerAgent performs code review on PRs
@@ -37,7 +38,7 @@ type ReviewIssue struct {
 }
 
 // NewReviewerAgent creates a new reviewer agent
-func NewReviewerAgent(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager) *ReviewerAgent {
+func NewReviewerAgent(cfg *config.Config, backend llm.Backend, jobMgr jobs.JobManager) *ReviewerAgent {
 	base := NewCodingBaseAgent(
 		"reviewer",
 		"Perform code review on PRs (blind review - unaware of AI authorship)",
@@ -59,15 +60,22 @@ func (r *ReviewerAgent) Execute(ctx context.Context, input map[string]interface{
 		return nil, fmt.Errorf("missing 'branch' in input")
 	}
 
+	// Register research_links tool if provided
+	if researchLinks, ok := input["research_links"].([]tools.ResearchLink); ok && len(researchLinks) > 0 {
+		plainNotes, _ := input["plain_notes"].(string)
+		researchLinksTool := tools.NewResearchLinksToolFromLinks(researchLinks, plainNotes)
+		r.RegisterTool(researchLinksTool)
+	}
+
 	// Create job
 	description := fmt.Sprintf("Review code on branch: %s", branch)
-	job, err := r.jobManager.Create("review", description, input)
+	job, err := r.jobManager.Create(ctx, "review", description, input)
 	if err != nil {
 		return nil, err
 	}
 
 	// Update status to running
-	r.jobManager.Update(job.ID, jobs.StatusRunning, nil, nil)
+	r.jobManager.Update(ctx, job.ID, jobs.StatusRunning, nil, nil)
 
 	// Run the inference loop in background with its own context
 	go func() {
@@ -77,15 +85,34 @@ func (r *ReviewerAgent) Execute(ctx context.Context, input map[string]interface{
 		// Create context manager
 		contextMgr, err := llmcontext.NewManager(job.ID, r.config.Debug.Enabled)
 		if err != nil {
-			r.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			r.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
 
+		// Set context_dir for the job (LLM conversation storage)
+		if err := r.jobManager.SetContextDir(bgCtx, job.ID, contextMgr.GetJobDir()); err != nil {
+			r.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, fmt.Errorf("failed to set context_dir: %w", err))
+			return
+		}
+
+		// Setup repository if repo info provided, otherwise use current directory
+		workDir, err := r.setupWorkDirectory(bgCtx, job.ID, input)
+		if err != nil {
+			r.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
+			return
+		}
+
+		// Set work_dir for the job
+		if err := r.jobManager.SetWorkDir(bgCtx, job.ID, workDir); err != nil {
+			r.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, fmt.Errorf("failed to set work_dir: %w", err))
+			return
+		}
+
 		// Get git diff for the branch
 		diff, err := r.getGitDiff(bgCtx, branch)
 		if err != nil {
-			r.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			r.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 
@@ -99,18 +126,19 @@ func (r *ReviewerAgent) Execute(ctx context.Context, input map[string]interface{
 		// Execute the inference loop
 		err = executor.Execute(bgCtx, userPrompt)
 		if err != nil {
-			r.jobManager.Update(job.ID, jobs.StatusFailed, nil, err)
+			r.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 
 		// Update job with results
 		output := map[string]interface{}{
-			"job_dir": contextMgr.GetJobDir(),
-			"branch":  branch,
-			"status":  "completed",
+			"status":   "completed",
+			"job_dir":  contextMgr.GetJobDir(),
+			"work_dir": workDir,
+			"branch":   branch,
 		}
 
-		r.jobManager.Update(job.ID, jobs.StatusCompleted, output, nil)
+		r.jobManager.Update(bgCtx, job.ID, jobs.StatusCompleted, output, nil)
 	}()
 
 	// Return immediately with the running job
