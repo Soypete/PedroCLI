@@ -46,7 +46,7 @@ func NewInferenceExecutorWithModel(agent *BaseAgent, contextMgr *llmcontext.Mana
 		maxRounds:    agent.config.Limits.MaxInferenceRuns,
 		currentRound: 0,
 		systemPrompt: "",
-		formatter:    toolformat.GetFormatter(modelName),
+		formatter:    toolformat.GetFormatterForModel(modelName),
 	}
 }
 
@@ -393,8 +393,15 @@ func (e *InferenceExecutor) buildFeedbackPrompt(calls []llm.ToolCall, results []
 			Args: call.Args,
 		}
 
+		// Convert tools.Result to toolformat.ToolResult
+		formatterResult := &toolformat.ToolResult{
+			Success: result.Success,
+			Output:  result.Output,
+			Error:   result.Error,
+		}
+
 		// Use formatter to format the result
-		prompt.WriteString(e.formatter.FormatToolResult(formatterCall, result))
+		prompt.WriteString(e.formatter.FormatToolResult(formatterCall, formatterResult))
 		prompt.WriteString("\n")
 	}
 
