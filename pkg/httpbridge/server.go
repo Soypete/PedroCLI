@@ -8,42 +8,61 @@ import (
 	"time"
 
 	"github.com/soypete/pedrocli/pkg/config"
+	"github.com/soypete/pedrocli/pkg/mcp"
+	"github.com/soypete/pedrocli/pkg/toolformat"
 )
 
 // Server represents the HTTP server
 type Server struct {
 	config       *config.Config
-	appCtx       *AppContext
+	bridge       toolformat.ToolBridge
+	mcpClient    *mcp.Client // Keep for backwards compatibility during migration
 	ctx          context.Context
 	mux          *http.ServeMux
 	templates    *template.Template
 	sseBroadcast *SSEBroadcaster
 }
 
-// NewServer creates a new HTTP server
-func NewServer(cfg *config.Config, ctx context.Context) (*Server, error) {
-	// Initialize app context (creates LLM backend, job manager, tools)
-	appCtx, err := NewAppContext(cfg)
-	if err != nil {
-		return nil, err
+// NewServer creates a new HTTP server (legacy - uses MCP client)
+func NewServer(cfg *config.Config, mcpClient *mcp.Client, ctx context.Context) *Server {
+	// Create MCP adapter bridge for backwards compatibility
+	bridge := &toolformat.MCPClientAdapter{
+		MCPCaller: func(ctx context.Context, name string, args map[string]interface{}) (string, bool, error) {
+			result, err := mcpClient.CallTool(ctx, name, args)
+			if err != nil {
+				return "", true, err
+			}
+			if len(result.Content) == 0 {
+				return "", result.IsError, nil
+			}
+			return result.Content[0].Text, result.IsError, nil
+		},
+		MCPHealthy: func() bool {
+			return mcpClient.IsRunning()
+		},
 	}
 
+	return NewServerWithBridge(cfg, bridge, mcpClient, ctx)
+}
+
+// NewServerWithBridge creates a new HTTP server with a ToolBridge
+func NewServerWithBridge(cfg *config.Config, bridge toolformat.ToolBridge, mcpClient *mcp.Client, ctx context.Context) *Server {
 	mux := http.NewServeMux()
 
 	// Load HTML templates (must load all files individually, ** glob doesn't work)
 	templates := template.Must(template.ParseFiles(
 		"pkg/web/templates/base.html",
 		"pkg/web/templates/index.html",
-		"pkg/web/templates/vision.html",
 		"pkg/web/templates/components/job_card.html",
 	))
 
-	// Create SSE broadcaster using job manager directly
-	sseBroadcast := NewSSEBroadcaster(appCtx.JobManager, ctx)
+	// Create SSE broadcaster
+	sseBroadcast := NewSSEBroadcasterWithBridge(bridge, ctx)
 
 	server := &Server{
 		config:       cfg,
-		appCtx:       appCtx,
+		bridge:       bridge,
+		mcpClient:    mcpClient,
 		ctx:          ctx,
 		mux:          mux,
 		templates:    templates,
@@ -56,7 +75,7 @@ func NewServer(cfg *config.Config, ctx context.Context) (*Server, error) {
 	// Start background polling for real-time updates (every 2 seconds)
 	go sseBroadcast.StartPolling(2 * time.Second)
 
-	return server, nil
+	return server
 }
 
 // setupRoutes configures all HTTP routes
@@ -79,28 +98,12 @@ func (s *Server) setupRoutes() {
 	// Voice transcription routes
 	s.mux.HandleFunc("/api/voice/transcribe", s.handleVoiceTranscribe)
 	s.mux.HandleFunc("/api/voice/status", s.handleVoiceStatus)
-
-	// Vision routes
-	s.mux.HandleFunc("/vision", s.handleVisionPage)
-	s.mux.HandleFunc("/api/vision", s.handleVision)
-	s.mux.HandleFunc("/api/vision/analyze", s.handleVisionAnalyze)
-
-	// Serve generated images
-	s.mux.Handle("/images/", http.StripPrefix("/images/", http.FileServer(http.Dir(s.config.Vision.StoragePath))))
 }
 
 // Run starts the HTTP server
 func (s *Server) Run(addr string) error {
 	log.Printf("Starting HTTP server on %s", addr)
 	return http.ListenAndServe(addr, s.mux)
-}
-
-// Close closes the server and releases resources (including database connections)
-func (s *Server) Close() error {
-	if s.appCtx != nil {
-		return s.appCtx.Close()
-	}
-	return nil
 }
 
 // handleIndex serves the main page

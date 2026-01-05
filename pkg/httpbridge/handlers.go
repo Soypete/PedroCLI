@@ -1,16 +1,12 @@
 package httpbridge
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
-
-	"github.com/soypete/pedrocli/pkg/agents"
-	"github.com/soypete/pedrocli/pkg/jobs"
-	"github.com/soypete/pedrocli/pkg/tools"
 )
 
 // CreateJobRequest represents the job creation request
@@ -32,10 +28,6 @@ type CreateJobRequest struct {
 	Bio        string `json:"bio"`         // For add_guest
 	Email      string `json:"email"`       // For add_guest
 	FocusTopic string `json:"focus_topic"` // For review_news_summary
-
-	// Research links - user-provided URLs for reference/citation
-	ResearchLinks []tools.ResearchLink `json:"research_links,omitempty"`
-	PlainNotes    string               `json:"plain_notes,omitempty"` // General notes without URLs
 }
 
 // JobResponse represents the job response
@@ -77,7 +69,7 @@ func (s *Server) handleJobsWithID(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleCreateJob creates a new job by executing an agent directly
+// handleCreateJob creates a new job via MCP
 func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 	var req CreateJobRequest
 
@@ -118,10 +110,6 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		req.Bio = r.FormValue("bio")
 		req.Email = r.FormValue("email")
 		req.FocusTopic = r.FormValue("focus_topic")
-
-		// Research links
-		req.ResearchLinks = parseResearchLinksFromForm(r)
-		req.PlainNotes = r.FormValue("plain_notes")
 
 		if req.Type == "" {
 			respondJSON(w, http.StatusBadRequest, JobResponse{
@@ -172,11 +160,8 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Build arguments for the agent
+	// Build arguments for MCP tool call
 	args := make(map[string]interface{})
-
-	// Get the appropriate agent
-	var agent agents.Agent
 
 	switch req.Type {
 	case "builder":
@@ -184,26 +169,42 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		if req.Issue != "" {
 			args["issue"] = req.Issue
 		}
-		agent = s.appCtx.NewBuilderAgent()
-
 	case "debugger":
-		args["description"] = req.Symptoms
+		args["symptoms"] = req.Symptoms
 		if req.Logs != "" {
-			args["error_log"] = req.Logs
+			args["logs"] = req.Logs
 		}
-		agent = s.appCtx.NewDebuggerAgent()
-
 	case "reviewer":
 		args["branch"] = req.Branch
-		agent = s.appCtx.NewReviewerAgent()
-
 	case "triager":
 		args["description"] = req.Description
-		agent = s.appCtx.NewTriagerAgent()
 
-	case "blog_orchestrator":
-		args["prompt"] = req.Description
-		agent = s.appCtx.NewBlogOrchestratorAgent()
+	// Podcast job types
+	case "create_podcast_script":
+		args["topic"] = req.Topic
+		if req.Notes != "" {
+			args["notes"] = req.Notes
+		}
+	case "add_notion_link":
+		args["url"] = req.URL
+		if req.Title != "" {
+			args["title"] = req.Title
+		}
+		if req.Notes != "" {
+			args["notes"] = req.Notes
+		}
+	case "add_guest":
+		args["name"] = req.Name
+		if req.Bio != "" {
+			args["bio"] = req.Bio
+		}
+		if req.Email != "" {
+			args["email"] = req.Email
+		}
+	case "review_news_summary":
+		if req.FocusTopic != "" {
+			args["focus_topic"] = req.FocusTopic
+		}
 
 	default:
 		respondJSON(w, http.StatusBadRequest, JobResponse{
@@ -213,16 +214,8 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Add research links to args if provided
-	if len(req.ResearchLinks) > 0 {
-		args["research_links"] = req.ResearchLinks
-	}
-	if req.PlainNotes != "" {
-		args["plain_notes"] = req.PlainNotes
-	}
-
-	// Execute the agent
-	job, err := agent.Execute(s.ctx, args)
+	// Call tool via bridge
+	result, err := s.bridge.CallTool(s.ctx, req.Type, args)
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, JobResponse{
 			Success: false,
@@ -231,10 +224,28 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !result.Success {
+		respondJSON(w, http.StatusInternalServerError, JobResponse{
+			Success: false,
+			Error:   result.Error,
+		})
+		return
+	}
+
+	// Extract job ID from response
+	jobID, err := extractJobID(result.Output)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, JobResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Failed to extract job ID: %v", err),
+		})
+		return
+	}
+
 	// Return response
 	response := JobResponse{
-		JobID:   job.ID,
-		Message: fmt.Sprintf("Job %s started", job.ID),
+		JobID:   jobID,
+		Message: result.Output,
 		Success: true,
 	}
 
@@ -242,7 +253,7 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("HX-Request") == "true" {
 		// Return HTMX-compatible HTML fragment
 		data := map[string]interface{}{
-			"job_id": job.ID,
+			"job_id": jobID,
 			"type":   req.Type,
 			"status": "running",
 		}
@@ -255,17 +266,33 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleListJobs lists all jobs from the job manager
+// handleListJobs lists all jobs via bridge
 func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
-	jobList, err := s.appCtx.JobManager.List(r.Context())
+	// Call list_jobs tool via bridge
+	result, err := s.bridge.CallTool(s.ctx, "list_jobs", map[string]interface{}{})
 	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": fmt.Sprintf("Failed to list jobs: %v", err),
-		})
+		// Log the error for debugging
+		fmt.Printf("Error listing jobs: %v\n", err)
+
+		if r.Header.Get("HX-Request") == "true" {
+			// Return error as HTML for HTMX
+			html := fmt.Sprintf(`<div class="bg-red-50 p-4 rounded border border-red-200">
+				<p class="text-sm text-red-700">Error loading jobs: %s</p>
+			</div>`, err.Error())
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusOK) // Return 200 so HTMX doesn't show error popup
+			w.Write([]byte(html))
+		} else {
+			respondJSON(w, http.StatusInternalServerError, map[string]string{
+				"error": fmt.Sprintf("Failed to list jobs: %v", err),
+			})
+		}
 		return
 	}
 
-	if len(jobList) == 0 {
+	// Check if we have content
+	if result.Output == "" {
+		fmt.Println("Warning: list_jobs returned no content")
 		if r.Header.Get("HX-Request") == "true" {
 			// No jobs - don't auto-refresh
 			html := `<div class="text-center py-12 text-gray-500">
@@ -276,92 +303,66 @@ func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(html))
 		} else {
-			respondJSON(w, http.StatusOK, map[string]interface{}{"jobs": []interface{}{}})
+			respondJSON(w, http.StatusOK, map[string]string{"jobs": "No jobs found"})
 		}
 		return
 	}
 
-	// Build job list text
-	var jobsText strings.Builder
-	for _, job := range jobList {
-		statusEmoji := "⏳"
-		switch job.Status {
-		case jobs.StatusCompleted:
-			statusEmoji = "✅"
-		case jobs.StatusFailed:
-			statusEmoji = "❌"
-		case jobs.StatusRunning:
-			statusEmoji = "🔄"
-		}
-		jobsText.WriteString(fmt.Sprintf("%s %s [%s] %s\n", job.ID, statusEmoji, job.Status, truncateString(job.Description, 50)))
-	}
-
+	// For now, return the raw text response wrapped in simple HTML
 	if r.Header.Get("HX-Request") == "true" {
 		// Jobs exist - enable auto-refresh by adding hx-trigger to parent
 		html := fmt.Sprintf(`<div hx-get="/api/jobs" hx-trigger="every 5s" hx-swap="innerHTML" hx-target="#job-list">
 			<div class="bg-gray-50 p-4 rounded border border-gray-200">
 				<pre class="text-sm text-gray-700 whitespace-pre-wrap">%s</pre>
 			</div>
-		</div>`, jobsText.String())
+		</div>`, result.Output)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(html))
 	} else {
-		respondJSON(w, http.StatusOK, map[string]interface{}{
-			"jobs": jobsText.String(),
+		respondJSON(w, http.StatusOK, map[string]string{
+			"jobs": result.Output,
 		})
 	}
 }
 
-// handleGetJob gets a single job status from the job manager
+// handleGetJob gets a single job status via bridge
 func (s *Server) handleGetJob(w http.ResponseWriter, r *http.Request, jobID string) {
-	job, err := s.appCtx.JobManager.Get(r.Context(), jobID)
+	// Call get_job_status tool via bridge
+	result, err := s.bridge.CallTool(s.ctx, "get_job_status", map[string]interface{}{
+		"job_id": jobID,
+	})
 	if err != nil {
-		respondJSON(w, http.StatusNotFound, map[string]string{
-			"error": fmt.Sprintf("Job not found: %v", err),
+		respondJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": fmt.Sprintf("Failed to get job: %v", err),
 		})
 		return
 	}
 
-	// Build status text
-	statusText := fmt.Sprintf("Job: %s\nType: %s\nStatus: %s\nCreated: %s",
-		job.ID, job.Type, job.Status, job.CreatedAt.Format(time.RFC3339))
-	if job.StartedAt != nil {
-		statusText += fmt.Sprintf("\nStarted: %s", job.StartedAt.Format(time.RFC3339))
-	}
-	if job.CompletedAt != nil {
-		statusText += fmt.Sprintf("\nCompleted: %s", job.CompletedAt.Format(time.RFC3339))
-	}
-	if job.Error != "" {
-		statusText += fmt.Sprintf("\nError: %s", job.Error)
-	}
-
+	// Return response
 	if r.Header.Get("HX-Request") == "true" {
 		// Return HTMX-compatible HTML
 		data := map[string]interface{}{
-			"status_text": statusText,
+			"status_text": result.Output,
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := s.templates.ExecuteTemplate(w, "job_card.html", data); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	} else {
-		respondJSON(w, http.StatusOK, map[string]interface{}{
-			"job_id":       job.ID,
-			"type":         job.Type,
-			"status":       job.Status,
-			"description":  job.Description,
-			"created_at":   job.CreatedAt,
-			"started_at":   job.StartedAt,
-			"completed_at": job.CompletedAt,
-			"error":        job.Error,
+		respondJSON(w, http.StatusOK, map[string]string{
+			"status": result.Output,
 		})
 	}
 }
 
-// handleCancelJob cancels a job using the job manager
+// handleCancelJob cancels a job via bridge
 func (s *Server) handleCancelJob(w http.ResponseWriter, r *http.Request, jobID string) {
-	if err := s.appCtx.JobManager.Cancel(r.Context(), jobID); err != nil {
+	// Call cancel_job tool via bridge
+	result, err := s.bridge.CallTool(s.ctx, "cancel_job", map[string]interface{}{
+		"job_id": jobID,
+	})
+	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": fmt.Sprintf("Failed to cancel job: %v", err),
 		})
@@ -369,9 +370,20 @@ func (s *Server) handleCancelJob(w http.ResponseWriter, r *http.Request, jobID s
 	}
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
-		"message": fmt.Sprintf("Job %s cancelled", jobID),
-		"success": true,
+		"message": result.Output,
+		"success": result.Success,
 	})
+}
+
+// extractJobID extracts job ID from agent response text (SAME AS CLI)
+func extractJobID(text string) (string, error) {
+	// Look for "Job job-XXXXX started"
+	re := regexp.MustCompile(`Job (job-\d+)`)
+	matches := re.FindStringSubmatch(text)
+	if len(matches) < 2 {
+		return "", fmt.Errorf("could not extract job ID from response: %s", text)
+	}
+	return matches[1], nil
 }
 
 // respondJSON is a helper to write JSON responses
@@ -381,56 +393,6 @@ func respondJSON(w http.ResponseWriter, status int, data interface{}) {
 	json.NewEncoder(w).Encode(data)
 }
 
-// truncateString truncates a string to maxLen characters
-func truncateString(s string, maxLen int) string {
-	s = strings.ReplaceAll(s, "\n", " ")
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen-3] + "..."
-}
-
-// parseResearchLinksFromForm extracts research links from form data
-// Expects arrays: link_url[], link_title[], link_category[], link_labels[]
-func parseResearchLinksFromForm(r *http.Request) []tools.ResearchLink {
-	urls := r.Form["link_url[]"]
-	titles := r.Form["link_title[]"]
-	categories := r.Form["link_category[]"]
-	labels := r.Form["link_labels[]"]
-
-	links := make([]tools.ResearchLink, 0)
-	for i, url := range urls {
-		url = strings.TrimSpace(url)
-		if url == "" {
-			continue
-		}
-
-		link := tools.ResearchLink{URL: url}
-
-		if i < len(titles) && titles[i] != "" {
-			link.Title = strings.TrimSpace(titles[i])
-		}
-		if i < len(categories) && categories[i] != "" {
-			link.Category = strings.TrimSpace(categories[i])
-		}
-		if i < len(labels) && labels[i] != "" {
-			// Parse comma-separated labels
-			labelParts := strings.Split(labels[i], ",")
-			link.Labels = make([]string, 0, len(labelParts))
-			for _, l := range labelParts {
-				l = strings.TrimSpace(l)
-				if l != "" {
-					link.Labels = append(link.Labels, l)
-				}
-			}
-		}
-
-		links = append(links, link)
-	}
-
-	return links
-}
-
 // BlogRequest represents a blog post creation request
 type BlogRequest struct {
 	Title     string `json:"title"`
@@ -438,10 +400,6 @@ type BlogRequest struct {
 	Content   string `json:"content"`   // Legacy field for direct content
 	SkipAI    bool   `json:"skip_ai"`   // Skip AI expansion, post directly
 	Publish   bool   `json:"publish"`   // Publish to Notion (default true)
-
-	// Research links - user-provided URLs for reference/citation
-	ResearchLinks []tools.ResearchLink `json:"research_links,omitempty"`
-	PlainNotes    string               `json:"plain_notes,omitempty"` // General notes without URLs
 }
 
 // BlogResponse represents the blog post creation response
@@ -489,10 +447,6 @@ func (s *Server) handleBlog(w http.ResponseWriter, r *http.Request) {
 		req.Content = r.FormValue("content")
 		req.SkipAI = r.FormValue("skip_ai") == "true"
 		req.Publish = r.FormValue("publish") != "false" // Default to true
-
-		// Research links
-		req.ResearchLinks = parseResearchLinksFromForm(r)
-		req.PlainNotes = r.FormValue("plain_notes")
 	}
 
 	// Support legacy "content" field as dictation
@@ -516,6 +470,7 @@ func (s *Server) handleBlog(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build arguments for the blog_orchestrator agent
+	// Use dictation as the prompt for the orchestrator
 	args := map[string]interface{}{
 		"prompt":  req.Dictation,
 		"publish": req.Publish,
@@ -523,17 +478,9 @@ func (s *Server) handleBlog(w http.ResponseWriter, r *http.Request) {
 	if req.Title != "" {
 		args["title"] = req.Title
 	}
-	// Add research links to args if provided
-	if len(req.ResearchLinks) > 0 {
-		args["research_links"] = req.ResearchLinks
-	}
-	if req.PlainNotes != "" {
-		args["plain_notes"] = req.PlainNotes
-	}
 
-	// Create and execute the blog orchestrator agent
-	agent := s.appCtx.NewBlogOrchestratorAgent()
-	job, err := agent.Execute(s.ctx, args)
+	// Call the blog_orchestrator agent via bridge
+	result, err := s.bridge.CallTool(s.ctx, "blog_orchestrator", args)
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, BlogResponse{
 			Success: false,
@@ -542,11 +489,29 @@ func (s *Server) handleBlog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !result.Success {
+		respondJSON(w, http.StatusInternalServerError, BlogResponse{
+			Success: false,
+			Error:   result.Error,
+		})
+		return
+	}
+
+	// Extract job ID from response
+	jobID, err := extractJobID(result.Output)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, BlogResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Failed to extract job ID: %v", err),
+		})
+		return
+	}
+
 	// Return immediately with job ID - client can poll for status
 	respondJSON(w, http.StatusAccepted, BlogResponse{
 		Success: true,
-		Message: fmt.Sprintf("Blog orchestration started. Poll /api/jobs/%s for status.", job.ID),
-		JobID:   job.ID,
+		Message: fmt.Sprintf("Blog orchestration started. Poll /api/jobs/%s for status.", jobID),
+		JobID:   jobID,
 	})
 }
 
@@ -557,12 +522,10 @@ func (s *Server) handleBlogDirect(w http.ResponseWriter, req BlogRequest) {
 		title = "Untitled Draft"
 	}
 
-	// Call blog_notion tool directly with the raw dictation as content
-	ctx := context.Background()
-	result, err := s.appCtx.BlogNotionTool.Execute(ctx, map[string]interface{}{
-		"action":  "create",
-		"title":   title,
-		"content": req.Dictation,
+	// Call blog_publish tool directly with the raw dictation as content
+	result, err := s.bridge.CallTool(s.ctx, "blog_publish", map[string]interface{}{
+		"title":          title,
+		"expanded_draft": req.Dictation,
 	})
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, BlogResponse{
@@ -587,14 +550,11 @@ func (s *Server) handleBlogDirect(w http.ResponseWriter, req BlogRequest) {
 }
 
 // OrchestratedBlogRequest represents the orchestrated blog creation request
+// This is for complex, multi-step blog prompts (e.g., "2025 year recap")
 type OrchestratedBlogRequest struct {
 	Title   string `json:"title"`   // Optional initial title
 	Prompt  string `json:"prompt"`  // Complex prompt describing the blog post
 	Publish bool   `json:"publish"` // Whether to auto-publish to Notion after generation
-
-	// Research links - user-provided URLs for reference/citation
-	ResearchLinks []tools.ResearchLink `json:"research_links,omitempty"`
-	PlainNotes    string               `json:"plain_notes,omitempty"` // General notes without URLs
 }
 
 // OrchestratedBlogResponse represents the orchestrated blog response
@@ -609,6 +569,13 @@ type OrchestratedBlogResponse struct {
 }
 
 // handleBlogOrchestrate handles POST /api/blog/orchestrate for complex blog prompts
+// This uses the multi-phase BlogOrchestratorAgent to:
+// 1. Analyze the complex prompt
+// 2. Research (calendar events, RSS posts, static links)
+// 3. Generate outline
+// 4. Expand sections
+// 5. Assemble final post with newsletter
+// 6. Optionally publish to Notion
 func (s *Server) handleBlogOrchestrate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -639,10 +606,6 @@ func (s *Server) handleBlogOrchestrate(w http.ResponseWriter, r *http.Request) {
 		req.Title = r.FormValue("title")
 		req.Prompt = r.FormValue("prompt")
 		req.Publish = r.FormValue("publish") == "true"
-
-		// Research links
-		req.ResearchLinks = parseResearchLinksFromForm(r)
-		req.PlainNotes = r.FormValue("plain_notes")
 	}
 
 	// Validate
@@ -662,17 +625,9 @@ func (s *Server) handleBlogOrchestrate(w http.ResponseWriter, r *http.Request) {
 	if req.Title != "" {
 		args["title"] = req.Title
 	}
-	// Add research links to args if provided
-	if len(req.ResearchLinks) > 0 {
-		args["research_links"] = req.ResearchLinks
-	}
-	if req.PlainNotes != "" {
-		args["plain_notes"] = req.PlainNotes
-	}
 
-	// Create and execute the blog orchestrator agent
-	agent := s.appCtx.NewBlogOrchestratorAgent()
-	job, err := agent.Execute(s.ctx, args)
+	// Call the blog_orchestrator agent via bridge
+	result, err := s.bridge.CallTool(s.ctx, "blog_orchestrator", args)
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, OrchestratedBlogResponse{
 			Success: false,
@@ -681,19 +636,38 @@ func (s *Server) handleBlogOrchestrate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return immediately with job ID - client can poll for status
+	if !result.Success {
+		respondJSON(w, http.StatusInternalServerError, OrchestratedBlogResponse{
+			Success: false,
+			Error:   result.Error,
+		})
+		return
+	}
+
+	// Extract job ID from response
+	jobID, err := extractJobID(result.Output)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, OrchestratedBlogResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Failed to extract job ID: %v", err),
+		})
+		return
+	}
+
+	// For async operation, return immediately with job ID
+	// Client can poll /api/jobs/:id for status
 	respondJSON(w, http.StatusAccepted, OrchestratedBlogResponse{
 		Success: true,
-		Message: fmt.Sprintf("Blog orchestration job started. Poll /api/jobs/%s for status.", job.ID),
-		JobID:   job.ID,
+		Message: fmt.Sprintf("Blog orchestration job started. Poll /api/jobs/%s for status.", jobID),
+		JobID:   jobID,
 	})
 }
 
 // HealthResponse represents the health check response
 type HealthResponse struct {
-	Status    string `json:"status"`
-	Ready     bool   `json:"ready"`
-	Timestamp string `json:"timestamp"`
+	Status     string `json:"status"`
+	MCPRunning bool   `json:"mcp_running"`
+	Timestamp  string `json:"timestamp"`
 }
 
 // handleHealth handles GET /api/health for health check
@@ -703,17 +677,17 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if app context is initialized
-	ready := s.appCtx != nil && s.appCtx.JobManager != nil && s.appCtx.Backend != nil
+	// Check if bridge is healthy
+	bridgeHealthy := s.bridge.IsHealthy()
 
 	status := "healthy"
-	if !ready {
+	if !bridgeHealthy {
 		status = "degraded"
 	}
 
 	respondJSON(w, http.StatusOK, HealthResponse{
-		Status:    status,
-		Ready:     ready,
-		Timestamp: time.Now().Format(time.RFC3339),
+		Status:     status,
+		MCPRunning: bridgeHealthy, // Keep field name for API compatibility
+		Timestamp:  time.Now().Format(time.RFC3339),
 	})
 }
