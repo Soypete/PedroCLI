@@ -61,13 +61,13 @@ type ToolFormatter interface {
 type ModelFamily string
 
 const (
-	ModelFamilyLlama3   ModelFamily = "llama3"   // Llama 3.x models
-	ModelFamilyQwen     ModelFamily = "qwen"     // Qwen 2.5 models
-	ModelFamilyMistral  ModelFamily = "mistral"  // Mistral/Mixtral models
-	ModelFamilyHermes   ModelFamily = "hermes"   // Hermes/Nous models
-	ModelFamilyClaude   ModelFamily = "claude"   // Claude API
-	ModelFamilyOpenAI   ModelFamily = "openai"   // OpenAI-compatible APIs
-	ModelFamilyGeneric  ModelFamily = "generic"  // Generic JSON fallback
+	ModelFamilyLlama3  ModelFamily = "llama3"  // Llama 3.x models
+	ModelFamilyQwen    ModelFamily = "qwen"    // Qwen 2.5 models
+	ModelFamilyMistral ModelFamily = "mistral" // Mistral/Mixtral models
+	ModelFamilyHermes  ModelFamily = "hermes"  // Hermes/Nous models
+	ModelFamilyClaude  ModelFamily = "claude"  // Claude API
+	ModelFamilyOpenAI  ModelFamily = "openai"  // OpenAI-compatible APIs
+	ModelFamilyGeneric ModelFamily = "generic" // Generic JSON fallback
 )
 
 // GetFormatterForModel returns the appropriate formatter for a model name
