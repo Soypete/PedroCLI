@@ -209,7 +209,6 @@ func (e *InferenceExecutor) logConversationWithSuccess(ctx context.Context, jobI
 	}
 }
 
-
 // buildFeedbackPrompt builds a prompt with tool results for the next round
 func (e *InferenceExecutor) buildFeedbackPrompt(calls []llm.ToolCall, results []*tools.Result) string {
 	var prompt strings.Builder
