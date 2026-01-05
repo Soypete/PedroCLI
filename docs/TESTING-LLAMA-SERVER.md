@@ -6,24 +6,6 @@ This document describes how to test the llama-server HTTP API integration.
 
 PedroCLI now uses llama-server (HTTP API) instead of llama-cli (one-shot subprocess) for better performance, native tool calling, and unified backend architecture.
 
-## Test Results (2026-01-04)
-
-**Unit Tests:** ✅ All 5 tests passing
-```
-TestServerClient_Infer_BasicResponse      PASS
-TestServerClient_Infer_WithToolCalls      PASS
-TestServerClient_ContextWindow            PASS
-TestServerClient_Timeout                  PASS
-TestServerClient_ErrorResponse            PASS
-```
-
-**Integration Tests:** ✅ Verified
-- llama-server starts successfully on port 8082
-- Health endpoint returns `{"status":"ok"}`
-- Chat completions endpoint works with Qwen 2.5 Coder 32B
-- Response format is OpenAI-compatible
-- Includes usage stats and timing information
-
 ## Test Coverage
 
 ### 1. Unit Tests

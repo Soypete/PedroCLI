@@ -3,8 +3,8 @@
 # llama-server configuration
 LLAMA_PORT ?= 8082
 LLAMA_MODEL ?= $(shell find ~/.cache/huggingface/hub/models--bartowski--Qwen2.5-Coder-32B-Instruct-GGUF -name "*.gguf" -type f | head -1)
-LLAMA_CTX_SIZE ?= 16384
-LLAMA_N_GPU_LAYERS ?= -1
+LLAMA_CTX_SIZE ?= 32768
+LLAMA_N_GPU_LAYERS ?= 35
 LLAMA_THREADS ?= 8
 LLAMA_GRAMMAR ?=
 LLAMA_GRAMMAR_FILE ?=
