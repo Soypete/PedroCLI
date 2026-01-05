@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/soypete/pedrocli/pkg/agents"
 	"github.com/soypete/pedrocli/pkg/config"
 	"github.com/soypete/pedrocli/pkg/jobs"
+	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/toolformat"
 	"github.com/soypete/pedrocli/pkg/tools"
 )
@@ -64,6 +66,42 @@ func NewCLIBridge(cfg CLIBridgeConfig) (*CLIBridge, error) {
 					}, nil
 				}
 			}(tool),
+		}
+		registry.Register(def)
+	}
+
+	// Create LLM backend for agents
+	backend, err := llm.NewBackend(cfg.Config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create LLM backend: %w", err)
+	}
+
+	// Register coding agents
+	codingAgents := []agents.Agent{
+		agents.NewBuilderAgent(cfg.Config, backend, jobManager),
+		agents.NewDebuggerAgent(cfg.Config, backend, jobManager),
+		agents.NewReviewerAgent(cfg.Config, backend, jobManager),
+		agents.NewTriagerAgent(cfg.Config, backend, jobManager),
+	}
+
+	for _, agent := range codingAgents {
+		agentCopy := agent // Capture for closure
+		def := &toolformat.ToolDefinition{
+			Name:        agentCopy.Name(),
+			Description: agentCopy.Description(),
+			Category:    toolformat.CategoryAgent,
+			Parameters:  toolformat.GetSchemaForTool(agentCopy.Name()),
+			Handler: func(args map[string]interface{}) (*toolformat.ToolResult, error) {
+				// Agents return a job, not immediate results
+				job, err := agentCopy.Execute(context.Background(), args)
+				if err != nil {
+					return &toolformat.ToolResult{Success: false, Error: err.Error()}, nil
+				}
+				return &toolformat.ToolResult{
+					Success: true,
+					Output:  fmt.Sprintf("Job %s started", job.ID),
+				}, nil
+			},
 		}
 		registry.Register(def)
 	}

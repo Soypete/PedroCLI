@@ -2,14 +2,17 @@ package agents
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/llmcontext"
 	"github.com/soypete/pedrocli/pkg/storage"
+	"github.com/soypete/pedrocli/pkg/toolformat"
 	"github.com/soypete/pedrocli/pkg/tools"
 )
 
@@ -19,23 +22,50 @@ type InferenceExecutor struct {
 	contextMgr   *llmcontext.Manager
 	maxRounds    int
 	currentRound int
-	systemPrompt string // Custom system prompt (if set)
+	systemPrompt string                   // Custom system prompt (if set)
+	formatter    toolformat.ToolFormatter // Model-specific tool formatter
 }
 
-// NewInferenceExecutor creates a new inference executor
+// NewInferenceExecutor creates a new inference executor with default GenericFormatter
 func NewInferenceExecutor(agent *BaseAgent, contextMgr *llmcontext.Manager) *InferenceExecutor {
 	return &InferenceExecutor{
 		agent:        agent,
 		contextMgr:   contextMgr,
 		maxRounds:    agent.config.Limits.MaxInferenceRuns,
 		currentRound: 0,
-		systemPrompt: "", // Will use agent's default if empty
+		systemPrompt: "",                             // Will use agent's default if empty
+		formatter:    &toolformat.GenericFormatter{}, // Default formatter
 	}
+}
+
+// NewInferenceExecutorWithModel creates a new inference executor with model-specific formatter
+func NewInferenceExecutorWithModel(agent *BaseAgent, contextMgr *llmcontext.Manager, modelName string) *InferenceExecutor {
+	return &InferenceExecutor{
+		agent:        agent,
+		contextMgr:   contextMgr,
+		maxRounds:    agent.config.Limits.MaxInferenceRuns,
+		currentRound: 0,
+		systemPrompt: "",
+		formatter:    toolformat.GetFormatterForModel(modelName),
+	}
+}
+
+// SetFormatter sets a custom tool formatter
+func (e *InferenceExecutor) SetFormatter(formatter toolformat.ToolFormatter) {
+	e.formatter = formatter
 }
 
 // SetSystemPrompt sets a custom system prompt for this executor
 func (e *InferenceExecutor) SetSystemPrompt(prompt string) {
 	e.systemPrompt = prompt
+}
+
+// getSystemPrompt returns the system prompt to use
+func (e *InferenceExecutor) getSystemPrompt() string {
+	if e.systemPrompt != "" {
+		return e.systemPrompt
+	}
+	return e.agent.buildSystemPrompt()
 }
 
 // Execute runs the inference loop until completion or max rounds
@@ -60,11 +90,8 @@ func (e *InferenceExecutor) Execute(ctx context.Context, initialPrompt string) e
 		// Log assistant response to conversation history
 		e.logConversation(ctx, jobID, "assistant", response.Text, "", nil, nil)
 
-		// Get tool calls from response (native API tool calling)
-		toolCalls := response.ToolCalls
-		if toolCalls == nil {
-			toolCalls = []llm.ToolCall{}
-		}
+		// Parse tool calls from response
+		toolCalls := e.parseToolCalls(response.Text)
 
 		// Check if we're done (no more tool calls)
 		if len(toolCalls) == 0 {
@@ -209,6 +236,148 @@ func (e *InferenceExecutor) logConversationWithSuccess(ctx context.Context, jobI
 	}
 }
 
+// parseToolCalls parses tool calls from the LLM response using the model-specific formatter
+func (e *InferenceExecutor) parseToolCalls(text string) []llm.ToolCall {
+	if e.agent.config.Debug.Enabled {
+		fmt.Fprintf(os.Stderr, "  🔍 Parsing tool calls from %d bytes of text using %s formatter\n", len(text), e.formatter.Name())
+	}
+
+	// Use formatter to parse tool calls
+	formatterCalls, err := e.formatter.ParseToolCalls(text)
+	if err != nil {
+		if e.agent.config.Debug.Enabled {
+			fmt.Fprintf(os.Stderr, "  ⚠️ Formatter parse error: %v, falling back to legacy parsing\n", err)
+		}
+		return e.parseToolCallsLegacy(text)
+	}
+
+	// Convert toolformat.ToolCall to llm.ToolCall
+	calls := make([]llm.ToolCall, len(formatterCalls))
+	for i, fc := range formatterCalls {
+		calls[i] = llm.ToolCall{
+			Name: fc.Name,
+			Args: fc.Args,
+		}
+	}
+
+	if e.agent.config.Debug.Enabled {
+		fmt.Fprintf(os.Stderr, "  📋 Parsed %d tool call(s)\n", len(calls))
+		for i, call := range calls {
+			fmt.Fprintf(os.Stderr, "    %d. %s\n", i+1, call.Name)
+		}
+	}
+
+	return calls
+}
+
+// parseToolCallsLegacy is the legacy parsing logic for fallback
+// Supports both "tool" and "name" field names for backwards compatibility
+func (e *InferenceExecutor) parseToolCallsLegacy(text string) []llm.ToolCall {
+	var calls []llm.ToolCall
+
+	// Strategy 1: Try parsing entire response as JSON array
+	var arrayOfCalls []llm.ToolCall
+	if err := json.Unmarshal([]byte(text), &arrayOfCalls); err == nil && len(arrayOfCalls) > 0 {
+		calls = e.filterValidCalls(arrayOfCalls)
+		if e.agent.config.Debug.Enabled {
+			fmt.Fprintf(os.Stderr, "  📋 Legacy: Parsed %d tool call(s) from JSON array\n", len(calls))
+		}
+		return calls
+	}
+
+	// Strategy 2: Try parsing as single JSON object
+	var singleCall llm.ToolCall
+	if err := json.Unmarshal([]byte(text), &singleCall); err == nil && singleCall.Name != "" {
+		if e.agent.config.Debug.Enabled {
+			fmt.Fprintf(os.Stderr, "  📋 Legacy: Parsed 1 tool call from JSON object: %s\n", singleCall.Name)
+		}
+		return []llm.ToolCall{singleCall}
+	}
+
+	// Strategy 3: Extract from markdown code blocks
+	calls = e.extractFromCodeBlocks(text)
+	if len(calls) > 0 {
+		if e.agent.config.Debug.Enabled {
+			fmt.Fprintf(os.Stderr, "  📋 Legacy: Parsed %d tool call(s) from code blocks\n", len(calls))
+		}
+		return calls
+	}
+
+	// Strategy 4: Line-by-line JSON parsing
+	calls = e.extractFromLines(text)
+	if e.agent.config.Debug.Enabled {
+		fmt.Fprintf(os.Stderr, "  📋 Legacy: Parsed %d tool call(s) from lines\n", len(calls))
+		for i, call := range calls {
+			fmt.Fprintf(os.Stderr, "    %d. %s\n", i+1, call.Name)
+		}
+	}
+
+	return calls
+}
+
+// extractFromCodeBlocks extracts tool calls from markdown code blocks
+func (e *InferenceExecutor) extractFromCodeBlocks(text string) []llm.ToolCall {
+	var calls []llm.ToolCall
+
+	// Match ```json...``` or ```...``` blocks
+	re := regexp.MustCompile("(?s)```(?:json)?\\s*\\n(.*?)\\n```")
+	matches := re.FindAllStringSubmatch(text, -1)
+
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+
+		// Try as array first
+		var arrayCalls []llm.ToolCall
+		if err := json.Unmarshal([]byte(match[1]), &arrayCalls); err == nil {
+			calls = append(calls, e.filterValidCalls(arrayCalls)...)
+			continue
+		}
+
+		// Try as single object
+		var call llm.ToolCall
+		if err := json.Unmarshal([]byte(match[1]), &call); err == nil && call.Name != "" {
+			calls = append(calls, call)
+		}
+	}
+
+	return calls
+}
+
+// extractFromLines extracts tool calls from individual lines
+func (e *InferenceExecutor) extractFromLines(text string) []llm.ToolCall {
+	var calls []llm.ToolCall
+	lines := strings.Split(text, "\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// Must start with { to be JSON
+		if !strings.HasPrefix(line, "{") {
+			continue
+		}
+
+		var call llm.ToolCall
+		if err := json.Unmarshal([]byte(line), &call); err == nil && call.Name != "" {
+			calls = append(calls, call)
+		}
+	}
+
+	return calls
+}
+
+// filterValidCalls filters out invalid tool calls (empty names)
+func (e *InferenceExecutor) filterValidCalls(calls []llm.ToolCall) []llm.ToolCall {
+	var valid []llm.ToolCall
+	for _, call := range calls {
+		if call.Name != "" {
+			valid = append(valid, call)
+		}
+	}
+	return valid
+}
+
 // buildFeedbackPrompt builds a prompt with tool results for the next round
 func (e *InferenceExecutor) buildFeedbackPrompt(calls []llm.ToolCall, results []*tools.Result) string {
 	var prompt strings.Builder
@@ -218,15 +387,25 @@ func (e *InferenceExecutor) buildFeedbackPrompt(calls []llm.ToolCall, results []
 	for i, call := range calls {
 		result := results[i]
 
-		// Format tool result
-		if result.Success {
-			prompt.WriteString(fmt.Sprintf("✅ %s: %s\n", call.Name, result.Output))
-		} else {
-			prompt.WriteString(fmt.Sprintf("❌ %s failed: %s\n", call.Name, result.Error))
+		// Convert llm.ToolCall to toolformat.ToolCall for formatter
+		formatterCall := toolformat.ToolCall{
+			Name: call.Name,
+			Args: call.Args,
 		}
+
+		// Convert tools.Result to toolformat.ToolResult
+		formatterResult := &toolformat.ToolResult{
+			Success: result.Success,
+			Output:  result.Output,
+			Error:   result.Error,
+		}
+
+		// Use formatter to format the result
+		prompt.WriteString(e.formatter.FormatToolResult(formatterCall, formatterResult))
+		prompt.WriteString("\n")
 	}
 
-	prompt.WriteString("\nBased on these results, what should we do next? If the task is complete, respond with 'TASK_COMPLETE'. Otherwise, continue with the next steps using tool calls.")
+	prompt.WriteString("Based on these results, what should we do next? If the task is complete, respond with 'TASK_COMPLETE'. Otherwise, continue with the next steps using tool calls.")
 
 	return prompt.String()
 }
