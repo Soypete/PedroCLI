@@ -43,18 +43,19 @@ type Config struct {
 
 // ModelConfig contains model configuration
 type ModelConfig struct {
-	Type           string  `json:"type"` // "llamacpp" or "ollama"
-	ModelPath      string  `json:"model_path,omitempty"`
-	LlamaCppPath   string  `json:"llamacpp_path,omitempty"`
-	ModelName      string  `json:"model_name,omitempty"` // for Ollama
-	OllamaURL      string  `json:"ollama_url,omitempty"` // Ollama API URL
-	ContextSize    int     `json:"context_size"`
-	UsableContext  int     `json:"usable_context,omitempty"`
-	NGpuLayers     int     `json:"n_gpu_layers,omitempty"`
-	Temperature    float64 `json:"temperature"`
-	Threads        int     `json:"threads,omitempty"`
-	EnableGrammar  bool    `json:"enable_grammar,omitempty"`   // Enable GBNF grammar for tool calling (llama.cpp only)
-	GrammarLogging bool    `json:"grammar_logging,omitempty"`  // Enable debug logging for grammar generation
+	// Generic settings (all backends)
+	Type          string  `json:"type"`           // "ollama" | "llamacpp" | "vllm" | "lmstudio"
+	ModelName     string  `json:"model_name"`     // Model identifier
+	ContextSize   int     `json:"context_size"`
+	UsableContext int     `json:"usable_context,omitempty"` // Auto-calculated if not provided
+	Temperature   float64 `json:"temperature"`
+	MaxTokens     int     `json:"max_tokens,omitempty"`
+
+	// HTTP-based backends (llamacpp-server, ollama, vllm, lmstudio)
+	ServerURL string `json:"server_url,omitempty"` // e.g., "http://localhost:8081"
+
+	// Tool calling
+	EnableTools bool `json:"enable_tools,omitempty"` // Enable native tool calling via chat template
 }
 
 // ExecutionConfig contains execution settings
@@ -504,9 +505,6 @@ func (c *Config) setDefaults() {
 	if c.Model.UsableContext == 0 && c.Model.ContextSize > 0 {
 		c.Model.UsableContext = c.Model.ContextSize * 3 / 4
 	}
-	if c.Model.Threads == 0 {
-		c.Model.Threads = 8
-	}
 
 	// Git defaults
 	if c.Git.Remote == "" {
@@ -614,9 +612,6 @@ func (c *Config) setDefaults() {
 		if profile.UsableContext == 0 && profile.ContextSize > 0 {
 			profile.UsableContext = profile.ContextSize * 3 / 4
 		}
-		if profile.Threads == 0 {
-			profile.Threads = 8
-		}
 		c.ModelProfiles[name] = profile
 	}
 
@@ -717,31 +712,34 @@ func (c *Config) setDefaults() {
 // Validate validates the configuration
 func (c *Config) Validate() error {
 	// Validate model type
-	if c.Model.Type != "llamacpp" && c.Model.Type != "ollama" {
-		return fmt.Errorf("invalid model type: %s (must be 'llamacpp' or 'ollama')", c.Model.Type)
-	}
-
-	// Validate llama.cpp config
-	if c.Model.Type == "llamacpp" {
-		if c.Model.ModelPath == "" {
-			return fmt.Errorf("model_path is required for llamacpp backend")
-		}
-		if c.Model.LlamaCppPath == "" {
-			return fmt.Errorf("llamacpp_path is required for llamacpp backend")
-		}
-		if c.Model.ContextSize < 2048 {
-			return fmt.Errorf("context_size too small: %d (minimum 2048)", c.Model.ContextSize)
-		}
-		if c.Model.ContextSize > 200000 {
-			return fmt.Errorf("context_size suspiciously large: %d", c.Model.ContextSize)
+	validTypes := []string{"llamacpp", "ollama", "vllm", "lmstudio"}
+	isValidType := false
+	for _, validType := range validTypes {
+		if c.Model.Type == validType {
+			isValidType = true
+			break
 		}
 	}
+	if !isValidType {
+		return fmt.Errorf("invalid model type: %s (must be one of: llamacpp, ollama, vllm, lmstudio)", c.Model.Type)
+	}
 
-	// Validate Ollama config
-	if c.Model.Type == "ollama" {
-		if c.Model.ModelName == "" {
-			return fmt.Errorf("model_name is required for ollama backend")
-		}
+	// Validate model name
+	if c.Model.ModelName == "" {
+		return fmt.Errorf("model_name is required")
+	}
+
+	// Validate context size
+	if c.Model.ContextSize < 2048 {
+		return fmt.Errorf("context_size too small: %d (minimum 2048)", c.Model.ContextSize)
+	}
+	if c.Model.ContextSize > 200000 {
+		return fmt.Errorf("context_size suspiciously large: %d", c.Model.ContextSize)
+	}
+
+	// Validate ServerURL for HTTP-based backends
+	if c.Model.ServerURL == "" {
+		return fmt.Errorf("server_url is required (e.g., http://localhost:8081 for llamacpp, http://localhost:11434 for ollama)")
 	}
 
 	// Validate LSP config
