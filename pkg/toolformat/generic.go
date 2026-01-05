@@ -4,75 +4,102 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"sort"
 	"strings"
-
-	"github.com/soypete/pedrocli/pkg/tools"
 )
 
-// GenericFormatter is the default formatter that uses simple JSON format.
-// This works with most models that understand JSON tool calls.
+// GenericFormatter is a fallback formatter that uses simple JSON format
 type GenericFormatter struct{}
+
+// NewGenericFormatter creates a new generic formatter
+func NewGenericFormatter() *GenericFormatter {
+	return &GenericFormatter{}
+}
 
 // Name returns the formatter name
 func (f *GenericFormatter) Name() string {
 	return "generic"
 }
 
-// FormatToolsForPrompt generates tool descriptions using a simple format
-func (f *GenericFormatter) FormatToolsForPrompt(registry *tools.ToolRegistry) string {
-	toolList := registry.List()
-	if len(toolList) == 0 {
-		return "No tools available."
-	}
-
-	// Sort by name for consistent output
-	sort.Slice(toolList, func(i, j int) bool {
-		return toolList[i].Name() < toolList[j].Name()
-	})
-
+// FormatToolsPrompt generates the tool definitions portion of the system prompt
+func (f *GenericFormatter) FormatToolsPrompt(tools []ToolDefinition) string {
 	var sb strings.Builder
-	for _, tool := range toolList {
-		sb.WriteString(fmt.Sprintf("- %s: %s\n", tool.Name(), tool.Description()))
+
+	sb.WriteString("# Available Tools\n\n")
+	sb.WriteString("You have access to the following tools. Use them by outputting a JSON object with \"tool\" and \"args\" fields.\n\n")
+
+	for _, tool := range tools {
+		sb.WriteString(fmt.Sprintf("## %s\n", tool.Name))
+		sb.WriteString(fmt.Sprintf("%s\n\n", tool.Description))
+
+		if len(tool.Parameters.Properties) > 0 {
+			sb.WriteString("Parameters:\n")
+			for name, prop := range tool.Parameters.Properties {
+				required := ""
+				for _, req := range tool.Parameters.Required {
+					if req == name {
+						required = " (required)"
+						break
+					}
+				}
+				sb.WriteString(fmt.Sprintf("- %s (%s)%s: %s\n", name, prop.Type, required, prop.Description))
+				if len(prop.Enum) > 0 {
+					sb.WriteString(fmt.Sprintf("  Allowed values: %s\n", strings.Join(prop.Enum, ", ")))
+				}
+			}
+			sb.WriteString("\n")
+		}
 	}
 
-	sb.WriteString(`
-Call tools using JSON format:
-{"tool": "tool_name", "args": {"param": "value"}}
-`)
+	sb.WriteString("# Tool Call Format\n\n")
+	sb.WriteString("To call a tool, output a JSON object:\n")
+	sb.WriteString("```json\n")
+	sb.WriteString("{\"tool\": \"tool_name\", \"args\": {\"param1\": \"value1\"}}\n")
+	sb.WriteString("```\n\n")
+	sb.WriteString("You can call multiple tools by outputting multiple JSON objects on separate lines.\n")
+
 	return sb.String()
 }
 
-// ParseToolCalls parses tool calls from the LLM response.
-// Supports multiple JSON formats: arrays, single objects, code blocks, and inline JSON.
-func (f *GenericFormatter) ParseToolCalls(text string) ([]ToolCall, error) {
+// FormatToolsAPI returns nil as generic format doesn't support native API tool use
+func (f *GenericFormatter) FormatToolsAPI(tools []ToolDefinition) interface{} {
+	return nil
+}
+
+// ParseToolCalls extracts tool calls from an LLM response
+func (f *GenericFormatter) ParseToolCalls(response string) ([]ToolCall, error) {
 	var calls []ToolCall
 
 	// Strategy 1: Try parsing entire response as JSON array
-	calls = f.tryParseArray(text)
-	if len(calls) > 0 {
-		return calls, nil
+	var arrayOfCalls []ToolCall
+	if err := json.Unmarshal([]byte(response), &arrayOfCalls); err == nil && len(arrayOfCalls) > 0 {
+		return filterValidCalls(arrayOfCalls), nil
 	}
 
 	// Strategy 2: Try parsing as single JSON object
-	calls = f.tryParseSingle(text)
-	if len(calls) > 0 {
-		return calls, nil
+	var singleCall ToolCall
+	if err := json.Unmarshal([]byte(response), &singleCall); err == nil && singleCall.Name != "" {
+		return []ToolCall{singleCall}, nil
 	}
 
 	// Strategy 3: Extract from markdown code blocks
-	calls = f.extractFromCodeBlocks(text)
+	calls = extractFromCodeBlocks(response)
 	if len(calls) > 0 {
 		return calls, nil
 	}
 
 	// Strategy 4: Line-by-line JSON parsing
-	calls = f.extractFromLines(text)
+	calls = extractFromLines(response)
+	if len(calls) > 0 {
+		return calls, nil
+	}
+
+	// Strategy 5: Find JSON objects in text
+	calls = extractJSONObjects(response)
 	return calls, nil
 }
 
-// FormatToolResult formats a tool result for the feedback prompt
-func (f *GenericFormatter) FormatToolResult(call ToolCall, result *tools.Result) string {
+// FormatToolResult formats a tool result for feeding back to the LLM
+func (f *GenericFormatter) FormatToolResult(call ToolCall, result *ToolResult) string {
 	var sb strings.Builder
 
 	sb.WriteString(fmt.Sprintf("Tool: %s\n", call.Name))
@@ -81,8 +108,8 @@ func (f *GenericFormatter) FormatToolResult(call ToolCall, result *tools.Result)
 		sb.WriteString("Status: Success\n")
 		if result.Output != "" {
 			output := result.Output
-			if len(output) > 1000 {
-				output = output[:1000] + "\n... (truncated)"
+			if len(output) > 2000 {
+				output = output[:2000] + "\n... (truncated)"
 			}
 			sb.WriteString(fmt.Sprintf("Output:\n%s\n", output))
 		}
@@ -97,63 +124,19 @@ func (f *GenericFormatter) FormatToolResult(call ToolCall, result *tools.Result)
 	return sb.String()
 }
 
-// SupportsNativeToolUse returns false - generic format uses prompt-based tools
-func (f *GenericFormatter) SupportsNativeToolUse() bool {
-	return false
-}
+// Helper functions for parsing
 
-// tryParseArray attempts to parse the response as a JSON array of tool calls
-func (f *GenericFormatter) tryParseArray(text string) []ToolCall {
-	var rawCalls []json.RawMessage
-	if err := json.Unmarshal([]byte(text), &rawCalls); err != nil {
-		return nil
-	}
-
-	var calls []ToolCall
-	for _, raw := range rawCalls {
-		call := f.parseRawToolCall(raw)
-		if call != nil {
-			calls = append(calls, *call)
+func filterValidCalls(calls []ToolCall) []ToolCall {
+	var valid []ToolCall
+	for _, call := range calls {
+		if call.Name != "" {
+			valid = append(valid, call)
 		}
 	}
-	return calls
+	return valid
 }
 
-// tryParseSingle attempts to parse the response as a single tool call
-func (f *GenericFormatter) tryParseSingle(text string) []ToolCall {
-	call := f.parseRawToolCall([]byte(text))
-	if call != nil {
-		return []ToolCall{*call}
-	}
-	return nil
-}
-
-// parseRawToolCall parses a raw JSON into a ToolCall
-// Supports both "tool"/"args" and "name"/"arguments" formats
-func (f *GenericFormatter) parseRawToolCall(raw []byte) *ToolCall {
-	// Try standard format: {"tool": "name", "args": {...}}
-	var standard struct {
-		Tool string                 `json:"tool"`
-		Args map[string]interface{} `json:"args"`
-	}
-	if err := json.Unmarshal(raw, &standard); err == nil && standard.Tool != "" {
-		return &ToolCall{Name: standard.Tool, Args: standard.Args}
-	}
-
-	// Try alternative format: {"name": "name", "arguments": {...}}
-	var alt struct {
-		Name      string                 `json:"name"`
-		Arguments map[string]interface{} `json:"arguments"`
-	}
-	if err := json.Unmarshal(raw, &alt); err == nil && alt.Name != "" {
-		return &ToolCall{Name: alt.Name, Args: alt.Arguments}
-	}
-
-	return nil
-}
-
-// extractFromCodeBlocks extracts tool calls from markdown code blocks
-func (f *GenericFormatter) extractFromCodeBlocks(text string) []ToolCall {
+func extractFromCodeBlocks(text string) []ToolCall {
 	var calls []ToolCall
 
 	// Match ```json...``` or ```...``` blocks
@@ -165,25 +148,24 @@ func (f *GenericFormatter) extractFromCodeBlocks(text string) []ToolCall {
 			continue
 		}
 
-		content := strings.TrimSpace(match[1])
-
 		// Try as array first
-		arrayCalls := f.tryParseArray(content)
-		if len(arrayCalls) > 0 {
-			calls = append(calls, arrayCalls...)
+		var arrayCalls []ToolCall
+		if err := json.Unmarshal([]byte(match[1]), &arrayCalls); err == nil {
+			calls = append(calls, filterValidCalls(arrayCalls)...)
 			continue
 		}
 
 		// Try as single object
-		singleCalls := f.tryParseSingle(content)
-		calls = append(calls, singleCalls...)
+		var call ToolCall
+		if err := json.Unmarshal([]byte(match[1]), &call); err == nil && call.Name != "" {
+			calls = append(calls, call)
+		}
 	}
 
 	return calls
 }
 
-// extractFromLines extracts tool calls from individual JSON lines
-func (f *GenericFormatter) extractFromLines(text string) []ToolCall {
+func extractFromLines(text string) []ToolCall {
 	var calls []ToolCall
 	lines := strings.Split(text, "\n")
 
@@ -195,9 +177,39 @@ func (f *GenericFormatter) extractFromLines(text string) []ToolCall {
 			continue
 		}
 
-		call := f.parseRawToolCall([]byte(line))
-		if call != nil {
-			calls = append(calls, *call)
+		var call ToolCall
+		if err := json.Unmarshal([]byte(line), &call); err == nil && call.Name != "" {
+			calls = append(calls, call)
+		}
+	}
+
+	return calls
+}
+
+func extractJSONObjects(text string) []ToolCall {
+	var calls []ToolCall
+
+	// Find all potential JSON objects
+	depth := 0
+	start := -1
+
+	for i := 0; i < len(text); i++ {
+		switch text[i] {
+		case '{':
+			if depth == 0 {
+				start = i
+			}
+			depth++
+		case '}':
+			depth--
+			if depth == 0 && start >= 0 {
+				jsonStr := text[start : i+1]
+				var call ToolCall
+				if err := json.Unmarshal([]byte(jsonStr), &call); err == nil && call.Name != "" {
+					calls = append(calls, call)
+				}
+				start = -1
+			}
 		}
 	}
 

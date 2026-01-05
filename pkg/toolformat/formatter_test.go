@@ -1,343 +1,314 @@
 package toolformat
 
 import (
-	"context"
-	"strings"
 	"testing"
-
-	"github.com/soypete/pedrocli/pkg/logits"
-	"github.com/soypete/pedrocli/pkg/tools"
 )
 
-// mockExtendedTool implements ExtendedTool for testing
-type mockExtendedTool struct {
-	name        string
-	description string
-	metadata    *tools.ToolMetadata
+func TestDetectModelFamily(t *testing.T) {
+	tests := []struct {
+		name     string
+		model    string
+		expected ModelFamily
+	}{
+		{"Llama 3 lowercase", "llama3:70b", ModelFamilyLlama3},
+		{"Llama 3.1", "llama-3.1-8b", ModelFamilyLlama3},
+		{"Qwen 2.5", "qwen2.5-coder:32b", ModelFamilyQwen},
+		{"Qwen lowercase", "qwen:7b", ModelFamilyQwen},
+		{"Mistral", "mistral:7b", ModelFamilyMistral},
+		{"Mixtral", "mixtral:8x7b", ModelFamilyMistral},
+		{"Claude", "claude-3-opus", ModelFamilyClaude},
+		{"OpenAI", "gpt-4-turbo", ModelFamilyOpenAI},
+		{"Hermes", "hermes-2-yi-34b", ModelFamilyHermes},
+		{"Nous", "nous-hermes-2", ModelFamilyHermes},
+		{"Unknown", "unknown-model", ModelFamilyGeneric},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := DetectModelFamily(tc.model)
+			if result != tc.expected {
+				t.Errorf("DetectModelFamily(%s) = %s, want %s", tc.model, result, tc.expected)
+			}
+		})
+	}
 }
 
-func (m *mockExtendedTool) Name() string        { return m.name }
-func (m *mockExtendedTool) Description() string { return m.description }
-func (m *mockExtendedTool) Execute(ctx context.Context, args map[string]interface{}) (*tools.Result, error) {
-	return &tools.Result{Success: true}, nil
-}
-func (m *mockExtendedTool) Metadata() *tools.ToolMetadata { return m.metadata }
-
-func createTestRegistry() *tools.ToolRegistry {
-	registry := tools.NewToolRegistry()
-
-	_ = registry.RegisterExtended(&mockExtendedTool{
-		name:        "file",
-		description: "Read, write, and modify files",
-		metadata: &tools.ToolMetadata{
-			Schema: &logits.JSONSchema{
-				Type: "object",
-				Properties: map[string]*logits.JSONSchema{
-					"action": {
-						Type:        "string",
-						Description: "The operation to perform",
-						Enum:        []interface{}{"read", "write"},
-					},
-					"path": {
-						Type:        "string",
-						Description: "File path",
-					},
-				},
-				Required: []string{"action", "path"},
-			},
-		},
-	})
-
-	_ = registry.RegisterExtended(&mockExtendedTool{
-		name:        "search",
-		description: "Search code with patterns",
-		metadata:    &tools.ToolMetadata{},
-	})
-
-	return registry
-}
-
-func TestGenericFormatter_ParseToolCalls(t *testing.T) {
-	f := &GenericFormatter{}
+func TestGenericFormatterParseToolCalls(t *testing.T) {
+	formatter := NewGenericFormatter()
 
 	tests := []struct {
 		name     string
-		input    string
-		expected int
+		response string
+		expected int // number of tool calls
+		toolName string
 	}{
 		{
-			name:     "single tool call",
-			input:    `{"tool": "file", "args": {"action": "read", "path": "main.go"}}`,
+			name:     "Single JSON object with tool field",
+			response: `{"tool": "file", "args": {"action": "read", "path": "main.go"}}`,
 			expected: 1,
+			toolName: "file",
 		},
 		{
-			name:     "alternative format",
-			input:    `{"name": "file", "arguments": {"action": "read", "path": "main.go"}}`,
+			name:     "Single JSON object with name field",
+			response: `{"name": "search", "args": {"action": "grep", "pattern": "func"}}`,
 			expected: 1,
+			toolName: "search",
 		},
 		{
-			name:     "array of calls",
-			input:    `[{"tool": "file", "args": {"action": "read"}}, {"tool": "search", "args": {"pattern": "test"}}]`,
+			name:     "JSON array of tool calls",
+			response: `[{"tool": "file", "args": {"action": "read"}}, {"tool": "search", "args": {"action": "grep"}}]`,
 			expected: 2,
+			toolName: "file",
 		},
 		{
-			name:     "code block",
-			input:    "Let me read the file:\n```json\n{\"tool\": \"file\", \"args\": {\"action\": \"read\"}}\n```",
+			name: "Tool call in code block",
+			response: "```json\n{\"tool\": \"git\", \"args\": {\"action\": \"status\"}}\n```",
 			expected: 1,
+			toolName: "git",
 		},
 		{
-			name:     "inline JSON in text",
-			input:    "I will use the file tool:\n{\"tool\": \"file\", \"args\": {\"action\": \"read\"}}\nThat should work.",
+			name:     "Tool call on a line",
+			response: "Here's what I'll do:\n{\"tool\": \"bash\", \"args\": {\"command\": \"ls\"}}\nDone.",
 			expected: 1,
+			toolName: "bash",
 		},
 		{
-			name:     "no tool calls",
-			input:    "I will think about this problem.",
+			name:     "No tool calls",
+			response: "I'll help you with that task. TASK_COMPLETE",
 			expected: 0,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			calls, err := f.ParseToolCalls(tt.input)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			calls, err := formatter.ParseToolCalls(tc.response)
 			if err != nil {
-				t.Errorf("Unexpected error: %v", err)
+				t.Fatalf("ParseToolCalls failed: %v", err)
 			}
-			if len(calls) != tt.expected {
-				t.Errorf("Expected %d calls, got %d", tt.expected, len(calls))
+			if len(calls) != tc.expected {
+				t.Errorf("got %d tool calls, want %d", len(calls), tc.expected)
+			}
+			if tc.expected > 0 && len(calls) > 0 && calls[0].Name != tc.toolName {
+				t.Errorf("first tool name = %s, want %s", calls[0].Name, tc.toolName)
 			}
 		})
 	}
 }
 
-func TestQwenFormatter_ParseToolCalls(t *testing.T) {
-	f := &QwenFormatter{Version: "2.5"}
+func TestQwenFormatterParseToolCalls(t *testing.T) {
+	formatter := NewQwenFormatter()
 
 	tests := []struct {
 		name     string
-		input    string
+		response string
 		expected int
 		toolName string
 	}{
 		{
-			name:     "tool_call tag",
-			input:    "Let me read the file.\n<tool_call>\n{\"name\": \"file\", \"arguments\": {\"action\": \"read\"}}\n</tool_call>",
+			name: "Single tool_call tag",
+			response: `I'll read the file.
+<tool_call>
+{"name": "file", "arguments": {"action": "read", "path": "main.go"}}
+</tool_call>`,
 			expected: 1,
 			toolName: "file",
 		},
 		{
-			name:     "multiple tool_call tags",
-			input:    "<tool_call>{\"name\": \"file\", \"arguments\": {}}</tool_call>\n<tool_call>{\"name\": \"search\", \"arguments\": {}}</tool_call>",
+			name: "Multiple tool_call tags",
+			response: `<tool_call>
+{"name": "file", "arguments": {"action": "read", "path": "a.go"}}
+</tool_call>
+<tool_call>
+{"name": "file", "arguments": {"action": "read", "path": "b.go"}}
+</tool_call>`,
 			expected: 2,
-		},
-		{
-			name:     "fallback to generic",
-			input:    `{"tool": "file", "args": {"action": "read"}}`,
-			expected: 1,
-			toolName: "file",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			calls, err := f.ParseToolCalls(tt.input)
-			if err != nil {
-				t.Errorf("Unexpected error: %v", err)
-			}
-			if len(calls) != tt.expected {
-				t.Errorf("Expected %d calls, got %d", tt.expected, len(calls))
-			}
-			if tt.toolName != "" && len(calls) > 0 && calls[0].Name != tt.toolName {
-				t.Errorf("Expected tool name %q, got %q", tt.toolName, calls[0].Name)
-			}
-		})
-	}
-}
-
-func TestLlamaFormatter_ParseToolCalls(t *testing.T) {
-	f := &LlamaFormatter{Version: "3.3"}
-
-	tests := []struct {
-		name     string
-		input    string
-		expected int
-		toolName string
-	}{
-		{
-			name:     "python_tag",
-			input:    "I'll use the file tool:\n<|python_tag|>{\"name\": \"file\", \"arguments\": {\"action\": \"read\"}}",
-			expected: 1,
 			toolName: "file",
 		},
 		{
-			name:     "fallback to generic",
-			input:    `{"tool": "search", "args": {"pattern": "test"}}`,
+			name:     "Fallback to generic parsing",
+			response: `{"tool": "search", "args": {"action": "grep"}}`,
 			expected: 1,
 			toolName: "search",
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			calls, err := f.ParseToolCalls(tt.input)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			calls, err := formatter.ParseToolCalls(tc.response)
 			if err != nil {
-				t.Errorf("Unexpected error: %v", err)
+				t.Fatalf("ParseToolCalls failed: %v", err)
 			}
-			if len(calls) != tt.expected {
-				t.Errorf("Expected %d calls, got %d", tt.expected, len(calls))
+			if len(calls) != tc.expected {
+				t.Errorf("got %d tool calls, want %d", len(calls), tc.expected)
 			}
-			if tt.toolName != "" && len(calls) > 0 && calls[0].Name != tt.toolName {
-				t.Errorf("Expected tool name %q, got %q", tt.toolName, calls[0].Name)
+			if tc.expected > 0 && len(calls) > 0 && calls[0].Name != tc.toolName {
+				t.Errorf("first tool name = %s, want %s", calls[0].Name, tc.toolName)
 			}
 		})
 	}
 }
 
-func TestMistralFormatter_ParseToolCalls(t *testing.T) {
-	f := &MistralFormatter{}
+func TestLlama3FormatterParseToolCalls(t *testing.T) {
+	formatter := NewLlama3Formatter()
 
 	tests := []struct {
 		name     string
-		input    string
+		response string
 		expected int
+		toolName string
 	}{
 		{
-			name:     "TOOL_CALLS block",
-			input:    "[TOOL_CALLS]\n[{\"name\": \"file\", \"arguments\": {\"action\": \"read\"}}]",
+			name:     "Python tag format",
+			response: "<|python_tag|>\n{\"name\": \"file\", \"parameters\": {\"action\": \"read\", \"path\": \"main.go\"}}<|eom_id|>",
 			expected: 1,
+			toolName: "file",
 		},
 		{
-			name:     "multiple tools in block",
-			input:    "[TOOL_CALLS]\n[{\"name\": \"file\", \"arguments\": {}}, {\"name\": \"search\", \"arguments\": {}}]",
+			name: "Multiple calls after python tag",
+			response: `<|python_tag|>
+{"name": "search", "parameters": {"action": "grep", "pattern": "func"}}
+{"name": "file", "parameters": {"action": "read", "path": "main.go"}}
+<|eot_id|>`,
 			expected: 2,
+			toolName: "search",
 		},
 		{
-			name:     "fallback to generic",
-			input:    `{"tool": "file", "args": {"action": "read"}}`,
+			name:     "Fallback to generic",
+			response: `{"tool": "git", "args": {"action": "status"}}`,
 			expected: 1,
+			toolName: "git",
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			calls, err := f.ParseToolCalls(tt.input)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			calls, err := formatter.ParseToolCalls(tc.response)
 			if err != nil {
-				t.Errorf("Unexpected error: %v", err)
+				t.Fatalf("ParseToolCalls failed: %v", err)
 			}
-			if len(calls) != tt.expected {
-				t.Errorf("Expected %d calls, got %d", tt.expected, len(calls))
+			if len(calls) != tc.expected {
+				t.Errorf("got %d tool calls, want %d", len(calls), tc.expected)
+			}
+			if tc.expected > 0 && len(calls) > 0 && calls[0].Name != tc.toolName {
+				t.Errorf("first tool name = %s, want %s", calls[0].Name, tc.toolName)
 			}
 		})
 	}
 }
 
-func TestGetFormatter(t *testing.T) {
+func TestMistralFormatterParseToolCalls(t *testing.T) {
+	formatter := NewMistralFormatter()
+
 	tests := []struct {
-		modelName    string
-		expectedType string
+		name     string
+		response string
+		expected int
+		toolName string
 	}{
-		{"qwen2.5-coder:32b", "qwen"},
-		{"qwen2.5:7b", "qwen"},
-		{"llama-3.3:70b", "llama"},
-		{"llama3.1", "llama"},
-		{"mistral-large", "mistral"},
-		{"mixtral-8x7b", "mistral"},
-		{"unknown-model", "generic"},
-		{"phi-3", "generic"},
+		{
+			name:     "TOOL_CALLS format",
+			response: `[TOOL_CALLS] [{"name": "file", "arguments": {"action": "read", "path": "main.go"}}]`,
+			expected: 1,
+			toolName: "file",
+		},
+		{
+			name:     "Multiple tool calls",
+			response: `[TOOL_CALLS] [{"name": "search", "arguments": {"action": "grep"}}, {"name": "file", "arguments": {"action": "read"}}]`,
+			expected: 2,
+			toolName: "search",
+		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.modelName, func(t *testing.T) {
-			formatter := GetFormatter(tt.modelName)
-			if formatter.Name() != tt.expectedType {
-				t.Errorf("For model %q, expected formatter %q, got %q",
-					tt.modelName, tt.expectedType, formatter.Name())
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			calls, err := formatter.ParseToolCalls(tc.response)
+			if err != nil {
+				t.Fatalf("ParseToolCalls failed: %v", err)
+			}
+			if len(calls) != tc.expected {
+				t.Errorf("got %d tool calls, want %d", len(calls), tc.expected)
+			}
+			if tc.expected > 0 && len(calls) > 0 && calls[0].Name != tc.toolName {
+				t.Errorf("first tool name = %s, want %s", calls[0].Name, tc.toolName)
 			}
 		})
 	}
 }
 
-func TestFormatToolsForPrompt(t *testing.T) {
-	registry := createTestRegistry()
-
-	formatters := []ToolFormatter{
-		&GenericFormatter{},
-		&QwenFormatter{Version: "2.5"},
-		&LlamaFormatter{Version: "3.3"},
-		&MistralFormatter{},
+func TestFormatToolsPrompt(t *testing.T) {
+	tools := []ToolDefinition{
+		{
+			Name:        "file",
+			Description: "Read and write files",
+			Category:    CategoryCode,
+			Parameters:  FileToolSchema(),
+		},
+		{
+			Name:        "search",
+			Description: "Search code",
+			Category:    CategoryCode,
+			Parameters:  SearchToolSchema(),
+		},
 	}
 
-	for _, f := range formatters {
-		t.Run(f.Name(), func(t *testing.T) {
-			output := f.FormatToolsForPrompt(registry)
+	formatters := []ToolFormatter{
+		NewGenericFormatter(),
+		NewQwenFormatter(),
+		NewLlama3Formatter(),
+		NewMistralFormatter(),
+		NewHermesFormatter(),
+		NewClaudeFormatter(),
+		NewOpenAIFormatter(),
+	}
 
-			// All formatters should include tool names
-			if !strings.Contains(output, "file") {
-				t.Error("Expected output to contain 'file' tool")
+	for _, formatter := range formatters {
+		t.Run(formatter.Name(), func(t *testing.T) {
+			prompt := formatter.FormatToolsPrompt(tools)
+			if prompt == "" {
+				t.Error("FormatToolsPrompt returned empty string")
 			}
-			if !strings.Contains(output, "search") {
-				t.Error("Expected output to contain 'search' tool")
+			// Should contain tool names
+			if !containsString(prompt, "file") {
+				t.Error("prompt should contain 'file' tool name")
+			}
+			if !containsString(prompt, "search") {
+				t.Error("prompt should contain 'search' tool name")
 			}
 		})
 	}
 }
 
-func TestFormatToolResult(t *testing.T) {
-	call := ToolCall{Name: "file", Args: map[string]interface{}{"action": "read"}}
-
-	successResult := &tools.Result{
-		Success: true,
-		Output:  "file contents here",
+func TestToolCallUnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		json     string
+		expected string
+	}{
+		{
+			name:     "name field",
+			json:     `{"name": "file", "args": {"action": "read"}}`,
+			expected: "file",
+		},
+		{
+			name:     "tool field",
+			json:     `{"tool": "search", "args": {"action": "grep"}}`,
+			expected: "search",
+		},
+		{
+			name:     "both fields (name takes precedence)",
+			json:     `{"name": "file", "tool": "search", "args": {}}`,
+			expected: "file",
+		},
 	}
 
-	failResult := &tools.Result{
-		Success: false,
-		Error:   "file not found",
-	}
-
-	formatters := []ToolFormatter{
-		&GenericFormatter{},
-		&QwenFormatter{Version: "2.5"},
-		&LlamaFormatter{Version: "3.3"},
-		&MistralFormatter{},
-	}
-
-	for _, f := range formatters {
-		t.Run(f.Name()+"_success", func(t *testing.T) {
-			output := f.FormatToolResult(call, successResult)
-			if !strings.Contains(output, "Success") {
-				t.Error("Expected output to contain 'Success'")
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var call ToolCall
+			if err := call.UnmarshalJSON([]byte(tc.json)); err != nil {
+				t.Fatalf("UnmarshalJSON failed: %v", err)
 			}
-			if !strings.Contains(output, "file contents here") {
-				t.Error("Expected output to contain tool output")
-			}
-		})
-
-		t.Run(f.Name()+"_failure", func(t *testing.T) {
-			output := f.FormatToolResult(call, failResult)
-			if !strings.Contains(output, "Failed") {
-				t.Error("Expected output to contain 'Failed'")
-			}
-			if !strings.Contains(output, "file not found") {
-				t.Error("Expected output to contain error message")
-			}
-		})
-	}
-}
-
-func TestSupportsNativeToolUse(t *testing.T) {
-	formatters := []ToolFormatter{
-		&GenericFormatter{},
-		&QwenFormatter{Version: "2.5"},
-		&LlamaFormatter{Version: "3.3"},
-		&MistralFormatter{},
-	}
-
-	for _, f := range formatters {
-		t.Run(f.Name(), func(t *testing.T) {
-			// All local model formatters should return false
-			if f.SupportsNativeToolUse() {
-				t.Errorf("Expected %s to not support native tool use", f.Name())
+			if call.Name != tc.expected {
+				t.Errorf("Name = %s, want %s", call.Name, tc.expected)
 			}
 		})
 	}
