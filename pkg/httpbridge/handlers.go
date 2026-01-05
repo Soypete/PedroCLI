@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -501,4 +502,24 @@ func renderJobCard(job *jobs.Job) string {
 		</div>
 	</div>
 	`, job.ID, job.Description, statusClass, statusIcon, job.Status, job.CreatedAt.Format("2006-01-02 15:04:05"))
+}
+
+// extractJobID extracts job ID from response text (legacy compatibility)
+func extractJobID(text string) (string, error) {
+	// Try to extract job ID from common patterns
+	patterns := []string{
+		`(?i)job[- ]?id[:\s]+([a-z0-9-]+)`,
+		`(?i)created job ([a-z0-9-]+)`,
+		`(?i)job ([a-z0-9-]+) (created|started)`,
+	}
+
+	for _, pattern := range patterns {
+		re := regexp.MustCompile(pattern)
+		matches := re.FindStringSubmatch(text)
+		if len(matches) > 1 {
+			return matches[1], nil
+		}
+	}
+
+	return "", fmt.Errorf("could not extract job ID from response")
 }
