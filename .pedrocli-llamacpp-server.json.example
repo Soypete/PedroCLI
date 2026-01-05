@@ -1,0 +1,49 @@
+{
+  "model": {
+    "type": "llamacpp",
+    "server_url": "http://localhost:8082",
+    "model_name": "qwen2.5-coder-32b-instruct",
+    "context_size": 32768,
+    "temperature": 0.2,
+    "enable_tools": true
+  },
+  "execution": {
+    "direct_mode": true
+  },
+  "git": {
+    "always_draft_pr": true,
+    "branch_prefix": "pedrocli/",
+    "remote": "origin"
+  },
+  "tools": {
+    "allowed_bash_commands": ["git", "gh", "go", "npm", "cat", "ls", "head", "tail", "wc", "sort", "uniq"],
+    "forbidden_commands": ["sed", "grep", "find", "xargs", "rm", "mv", "dd", "sudo"]
+  },
+  "project": {
+    "name": "PedroCLI",
+    "workdir": ".",
+    "tech_stack": ["Go"]
+  },
+  "limits": {
+    "max_task_duration_minutes": 30,
+    "max_inference_runs": 20
+  },
+  "debug": {
+    "enabled": false,
+    "keep_temp_files": false,
+    "log_level": "info"
+  },
+  "platform": {
+    "os": "auto",
+    "shell": "/bin/sh"
+  },
+  "database": {
+    "driver": "postgres",
+    "host": "localhost",
+    "port": 5432,
+    "user": "pedrocli",
+    "password": "pedrocli",
+    "database": "pedrocli",
+    "ssl_mode": "disable"
+  }
+}

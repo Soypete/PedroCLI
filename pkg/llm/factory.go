@@ -30,7 +30,9 @@ func NewBackendFromModel(cfg *config.Config, modelCfg config.ModelConfig) (Backe
 		return NewLlamaCppClientFromModel(cfg, modelCfg), nil
 	case "ollama":
 		return NewOllamaClientFromModel(cfg, modelCfg), nil
+	case "vllm", "lmstudio":
+		return nil, fmt.Errorf("backend type %s not yet implemented (see GitHub issues)", modelCfg.Type)
 	default:
-		return nil, fmt.Errorf("unknown backend type: %s (supported: llamacpp, ollama)", modelCfg.Type)
+		return nil, fmt.Errorf("unknown backend type: %s (supported: llamacpp, ollama; planned: vllm, lmstudio)", modelCfg.Type)
 	}
 }
