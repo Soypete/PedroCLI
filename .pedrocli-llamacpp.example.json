@@ -1,13 +1,11 @@
 {
   "model": {
     "type": "llamacpp",
-    "model_path": "~/.cache/huggingface/hub/models--bartowski--Qwen2.5-Coder-32B-Instruct-GGUF/snapshots/SNAPSHOT_ID/Qwen2.5-Coder-32B-Instruct-Q4_K_M.gguf",
-    "llamacpp_path": "/usr/local/bin/llama-cli",
+    "server_url": "http://localhost:8082",
+    "model_name": "qwen2.5-coder-32b-instruct",
     "context_size": 32768,
-    "usable_context": 24576,
     "temperature": 0.2,
-    "threads": 8,
-    "n_gpu_layers": 35
+    "enable_tools": true
   },
   "project": {
     "name": "YourProject",
