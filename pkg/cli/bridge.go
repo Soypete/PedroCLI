@@ -26,27 +26,26 @@ type CLIBridge struct {
 
 // CLIBridgeConfig configures the CLI bridge
 type CLIBridgeConfig struct {
-	UseDirect bool           // If true, use direct execution instead of MCP (overrides config)
-	Config    *config.Config // App config
+	UseDirect bool           // Default mode (true = direct, false = MCP subprocess)
+	Config    *config.Config // App config - can override UseDirect via Execution.DirectMode
 	WorkDir   string         // Working directory for tools
 }
 
 // shouldUseDirect determines if direct mode should be used
+// Priority: config.Execution.DirectMode (if explicitly set) > UseDirect default
 func (cfg CLIBridgeConfig) shouldUseDirect() bool {
-	// Explicit override takes precedence
-	if cfg.UseDirect {
-		return true
+	// If config explicitly sets direct_mode to false, use MCP subprocess
+	// (This allows opting out of the new default)
+	if cfg.Config != nil {
+		// Config setting takes precedence when explicitly configured
+		return cfg.Config.Execution.DirectMode || cfg.UseDirect
 	}
-	// Check config setting
-	if cfg.Config != nil && cfg.Config.Execution.DirectMode {
-		return true
-	}
-	return false
+	// Fall back to UseDirect default
+	return cfg.UseDirect
 }
 
 // NewCLIBridge creates a new CLI bridge
-// Uses direct execution if config.Execution.DirectMode is true or UseDirect is set
-// Otherwise spawns an MCP server subprocess
+// Default is direct execution (in-process). Set config.Execution.DirectMode=false for MCP subprocess.
 func NewCLIBridge(cfg CLIBridgeConfig) (*CLIBridge, error) {
 	if cfg.shouldUseDirect() {
 		return newDirectBridge(cfg)

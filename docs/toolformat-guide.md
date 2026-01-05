@@ -562,13 +562,23 @@ registry.Register(&toolformat.ToolDefinition{
 
 PedroCLI supports two execution modes:
 
-### 1. MCP Subprocess Mode (Default)
+### 1. Direct Mode (Default)
 
-The CLI spawns `pedrocli-server` as a subprocess and communicates via JSON-RPC over stdio. This is useful for:
-- Backward compatibility
-- When you need isolated agent execution
-- When connecting to third-party MCP servers
+Tools and agents run directly in the CLI process using goroutines. This provides:
+- Faster startup (no subprocess spawn)
+- Single binary operation
+- Better resource sharing
+- Simpler deployment
 
+This is the default mode. No configuration needed.
+
+### 2. MCP Subprocess Mode (Deprecated)
+
+The CLI spawns `pedrocli-server` as a subprocess and communicates via JSON-RPC over stdio. This mode is deprecated but still available for:
+- Backward compatibility during migration
+- Debugging tool isolation issues
+
+To use MCP subprocess mode (not recommended):
 ```json
 {
   "execution": {
@@ -577,22 +587,7 @@ The CLI spawns `pedrocli-server` as a subprocess and communicates via JSON-RPC o
 }
 ```
 
-### 2. Direct Mode (In-Process)
-
-Tools and agents run directly in the CLI process using goroutines. This provides:
-- Faster startup (no subprocess spawn)
-- Single binary operation
-- Better resource sharing
-- Simpler deployment
-
-Enable in config:
-```json
-{
-  "execution": {
-    "direct_mode": true
-  }
-}
-```
+> **Note**: MCP subprocess mode will be removed in a future release. Please migrate to direct mode.
 
 ### Third-Party MCP Servers
 
