@@ -4,11 +4,24 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/soypete/pedrocli/pkg/toolformat"
 )
+
+// mockBridge is a simple mock for testing SSE broadcaster
+type mockBridge struct{}
+
+func (m *mockBridge) CallTool(ctx context.Context, name string, args map[string]interface{}) (*toolformat.BridgeResult, error) {
+	return &toolformat.BridgeResult{Success: true, Output: "mock result"}, nil
+}
+
+func (m *mockBridge) IsHealthy() bool { return true }
+
+func (m *mockBridge) GetToolNames() []string { return []string{"test_tool"} }
 
 func TestSSEBroadcaster_AddRemoveClient(t *testing.T) {
 	ctx := context.Background()
-	broadcaster := NewSSEBroadcaster(nil, ctx)
+	broadcaster := NewSSEBroadcasterWithBridge(&mockBridge{}, ctx)
 
 	// Add a client
 	client := broadcaster.AddClient("job-123")
@@ -36,7 +49,7 @@ func TestSSEBroadcaster_AddRemoveClient(t *testing.T) {
 
 func TestSSEBroadcaster_Broadcast(t *testing.T) {
 	ctx := context.Background()
-	broadcaster := NewSSEBroadcaster(nil, ctx)
+	broadcaster := NewSSEBroadcasterWithBridge(&mockBridge{}, ctx)
 
 	// Add two clients watching the same job
 	client1 := broadcaster.AddClient("job-123")
@@ -88,7 +101,7 @@ func TestSSEBroadcaster_Broadcast(t *testing.T) {
 
 func TestSSEBroadcaster_BroadcastToAll(t *testing.T) {
 	ctx := context.Background()
-	broadcaster := NewSSEBroadcaster(nil, ctx)
+	broadcaster := NewSSEBroadcasterWithBridge(&mockBridge{}, ctx)
 
 	// Add client watching all jobs (*)
 	clientAll := broadcaster.AddClient("*")

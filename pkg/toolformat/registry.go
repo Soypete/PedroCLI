@@ -189,3 +189,107 @@ func Get(name string) (*ToolDefinition, bool) {
 func Execute(ctx context.Context, name string, args map[string]interface{}) (*ToolResult, error) {
 	return DefaultRegistry.Execute(ctx, name, args)
 }
+
+// AgentInterface is an interface that agents must implement for registration
+// This avoids importing the agents package and creating an import cycle
+type AgentInterface interface {
+	Name() string
+	Description() string
+	Execute(ctx context.Context, args map[string]interface{}) (interface{}, error)
+}
+
+// RegisterAgent registers an agent as a tool in the registry
+// This implements the adapter.AgentRegistry interface
+func (r *Registry) RegisterAgent(agent AgentInterface) error {
+	handler := func(args map[string]interface{}) (*ToolResult, error) {
+		job, err := agent.Execute(context.Background(), args)
+		if err != nil {
+			return &ToolResult{
+				Success: false,
+				Error:   err.Error(),
+			}, nil
+		}
+
+		// Extract job ID if possible
+		jobID := "unknown"
+		if j, ok := job.(interface{ GetID() string }); ok {
+			jobID = j.GetID()
+		} else if j, ok := job.(struct{ ID string }); ok {
+			jobID = j.ID
+		}
+
+		return &ToolResult{
+			Success: true,
+			Output:  fmt.Sprintf("Job %s started", jobID),
+		}, nil
+	}
+
+	schema := getAgentSchema(agent.Name())
+
+	def := &ToolDefinition{
+		Name:        agent.Name(),
+		Description: agent.Description(),
+		Category:    CategoryAgent,
+		Parameters:  schema,
+		Handler:     handler,
+	}
+
+	return r.Register(def)
+}
+
+// getAgentSchema returns the parameter schema for an agent
+func getAgentSchema(name string) ParameterSchema {
+	switch name {
+	case "builder":
+		return ParameterSchema{
+			Type:     "object",
+			Required: []string{"description"},
+			Properties: map[string]PropertySchema{
+				"description": {Type: "string", Description: "Description of the feature to build"},
+				"issue":       {Type: "string", Description: "GitHub issue number (optional)"},
+			},
+		}
+	case "debugger":
+		return ParameterSchema{
+			Type:     "object",
+			Required: []string{"description"},
+			Properties: map[string]PropertySchema{
+				"description": {Type: "string", Description: "Description of the bug symptoms"},
+				"error_log":   {Type: "string", Description: "Path to error log file (optional)"},
+			},
+		}
+	case "reviewer":
+		return ParameterSchema{
+			Type:     "object",
+			Required: []string{"branch"},
+			Properties: map[string]PropertySchema{
+				"branch":    {Type: "string", Description: "Branch name to review"},
+				"pr_number": {Type: "string", Description: "PR number (optional)"},
+			},
+		}
+	case "triager":
+		return ParameterSchema{
+			Type:     "object",
+			Required: []string{"description"},
+			Properties: map[string]PropertySchema{
+				"description": {Type: "string", Description: "Description of the issue to triage"},
+				"error_log":   {Type: "string", Description: "Path to error log file (optional)"},
+			},
+		}
+	case "blog_orchestrator":
+		return ParameterSchema{
+			Type:     "object",
+			Required: []string{"prompt"},
+			Properties: map[string]PropertySchema{
+				"prompt":  {Type: "string", Description: "Blog post prompt or dictation"},
+				"title":   {Type: "string", Description: "Blog post title (optional)"},
+				"publish": {Type: "boolean", Description: "Auto-publish to Notion"},
+			},
+		}
+	default:
+		return ParameterSchema{
+			Type:       "object",
+			Properties: map[string]PropertySchema{},
+		}
+	}
+}
