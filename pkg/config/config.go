@@ -44,8 +44,8 @@ type Config struct {
 // ModelConfig contains model configuration
 type ModelConfig struct {
 	// Generic settings (all backends)
-	Type          string  `json:"type"`           // "ollama" | "llamacpp" | "vllm" | "lmstudio"
-	ModelName     string  `json:"model_name"`     // Model identifier
+	Type          string  `json:"type"`       // "ollama" | "llamacpp" | "vllm" | "lmstudio"
+	ModelName     string  `json:"model_name"` // Model identifier
 	ContextSize   int     `json:"context_size"`
 	UsableContext int     `json:"usable_context,omitempty"` // Auto-calculated if not provided
 	Temperature   float64 `json:"temperature"`
@@ -60,18 +60,18 @@ type ModelConfig struct {
 
 // ExecutionConfig contains execution settings
 type ExecutionConfig struct {
-	RunOnSpark  bool   `json:"run_on_spark"`
-	SparkSSH    string `json:"spark_ssh,omitempty"`
-	DirectMode  bool   `json:"direct_mode,omitempty"` // Run tools/agents in-process instead of MCP subprocess
-	MCPServers  []MCPServerConfig `json:"mcp_servers,omitempty"` // Third-party MCP servers to connect to
+	RunOnSpark bool              `json:"run_on_spark"`
+	SparkSSH   string            `json:"spark_ssh,omitempty"`
+	DirectMode bool              `json:"direct_mode,omitempty"` // Run tools/agents in-process instead of MCP subprocess
+	MCPServers []MCPServerConfig `json:"mcp_servers,omitempty"` // Third-party MCP servers to connect to
 }
 
 // MCPServerConfig configures a third-party MCP server connection
 type MCPServerConfig struct {
-	Name    string   `json:"name"`              // Name for the server
-	Command string   `json:"command"`           // Command to start the server
-	Args    []string `json:"args,omitempty"`    // Arguments for the command
-	Env     []string `json:"env,omitempty"`     // Environment variables
+	Name    string   `json:"name"`           // Name for the server
+	Command string   `json:"command"`        // Command to start the server
+	Args    []string `json:"args,omitempty"` // Arguments for the command
+	Env     []string `json:"env,omitempty"`  // Environment variables
 }
 
 // GitConfig contains git settings
@@ -365,7 +365,7 @@ type CustomLink struct {
 
 // DatabaseConfig contains database configuration
 type DatabaseConfig struct {
-	Driver   string `json:"driver"`   // "postgres" or "sqlite"
+	Driver   string `json:"driver"` // "postgres" or "sqlite"
 	Host     string `json:"host"`
 	Port     int    `json:"port"`
 	User     string `json:"user"`
