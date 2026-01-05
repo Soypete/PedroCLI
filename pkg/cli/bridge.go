@@ -67,7 +67,9 @@ func NewCLIBridge(cfg CLIBridgeConfig) (*CLIBridge, error) {
 				}
 			}(tool),
 		}
-		registry.Register(def)
+		if err := registry.Register(def); err != nil {
+			return nil, fmt.Errorf("failed to register tool %s: %w", tool.Name(), err)
+		}
 	}
 
 	// Create LLM backend for agents
@@ -103,7 +105,9 @@ func NewCLIBridge(cfg CLIBridgeConfig) (*CLIBridge, error) {
 				}, nil
 			},
 		}
-		registry.Register(def)
+		if err := registry.Register(def); err != nil {
+			return nil, fmt.Errorf("failed to register agent %s: %w", agentCopy.Name(), err)
+		}
 	}
 
 	// Get formatter for configured model
