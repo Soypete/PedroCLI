@@ -41,16 +41,18 @@ type Config struct {
 
 // ModelConfig contains model configuration
 type ModelConfig struct {
-	Type          string  `json:"type"` // "llamacpp" or "ollama"
-	ModelPath     string  `json:"model_path,omitempty"`
-	LlamaCppPath  string  `json:"llamacpp_path,omitempty"`
-	ModelName     string  `json:"model_name,omitempty"` // for Ollama
-	OllamaURL     string  `json:"ollama_url,omitempty"` // Ollama API URL
-	ContextSize   int     `json:"context_size"`
-	UsableContext int     `json:"usable_context,omitempty"`
-	NGpuLayers    int     `json:"n_gpu_layers,omitempty"`
-	Temperature   float64 `json:"temperature"`
-	Threads       int     `json:"threads,omitempty"`
+	Type           string  `json:"type"` // "llamacpp" or "ollama"
+	ModelPath      string  `json:"model_path,omitempty"`
+	LlamaCppPath   string  `json:"llamacpp_path,omitempty"`
+	ModelName      string  `json:"model_name,omitempty"` // for Ollama
+	OllamaURL      string  `json:"ollama_url,omitempty"` // Ollama API URL
+	ContextSize    int     `json:"context_size"`
+	UsableContext  int     `json:"usable_context,omitempty"`
+	NGpuLayers     int     `json:"n_gpu_layers,omitempty"`
+	Temperature    float64 `json:"temperature"`
+	Threads        int     `json:"threads,omitempty"`
+	EnableGrammar  bool    `json:"enable_grammar,omitempty"`   // Enable GBNF grammar for tool calling (llama.cpp only)
+	GrammarLogging bool    `json:"grammar_logging,omitempty"`  // Enable debug logging for grammar generation
 }
 
 // ExecutionConfig contains execution settings

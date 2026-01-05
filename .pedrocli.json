@@ -1,26 +1,29 @@
 {
   "model": {
-    "type": "ollama",
-    "model_name": "qwen3-coder:30b",
+    "type": "llamacpp",
+    "model_path": "/Users/miriahpeterson/.cache/huggingface/hub/models--bartowski--Qwen2.5-Coder-32B-Instruct-GGUF/snapshots/40b525506a4f98ed425882fa6dfc90cc8139065e/Qwen2.5-Coder-32B-Instruct-Q4_K_M.gguf",
+    "llamacpp_path": "/opt/homebrew/bin/llama-cli",
     "context_size": 32768,
-    "temperature": 0.2
-  },
-  "model_profiles": {
-    "coder": {
-      "type": "ollama",
-      "model_name": "qwen3-coder:30b",
-      "temperature": 0.2
-    },
-    "content": {
-      "type": "ollama",
-      "model_name": "qwen3:30b",
-      "temperature": 0.7
-    }
+    "usable_context": 24576,
+    "temperature": 0.2,
+    "threads": 8,
+    "n_gpu_layers": 35,
+    "enable_grammar": false,
+    "grammar_logging": true
   },
   "project": {
-    "name": "Taikai",
-    "workdir": "/Users/miriahpeterson/Code/go-projects/taikai",
+    "name": "PedroCLI",
+    "workdir": "/Users/miriahpeterson/Code/go-projects/pedrocli",
     "tech_stack": ["Go"]
+  },
+  "tools": {
+    "allowed_bash_commands": [
+      "go", "git", "cat", "ls", "head", "tail", "wc", "sort", "uniq",
+      "make", "gh", "npm", "curl", "grep"
+    ],
+    "forbidden_commands": [
+      "rm", "mv", "dd", "sudo"
+    ]
   },
   "repo_storage": {
     "database_path": "/Users/miriahpeterson/.pedrocli/pedrocli.db"
@@ -30,67 +33,22 @@
     "branch_prefix": "pedrocli/",
     "remote": "origin"
   },
-  "podcast": {
-    "enabled": true,
-    "model_profile": "content",
-    "notion": {
-      "enabled": true,
-      "command": "npx -y @modelcontextprotocol/server-notion",
-      "databases": {
-        "scripts": "29da4c9f98458041afaec55980124eb7",
-        "potential_articles": "29da4c9f984580cdaad1f2a408d1ec9f",
-        "articles_review": "29da4c9f9845805f9cfded33ef29e98a",
-        "news_review": "29da4c9f9845805f9cfded33ef29e98a",
-        "guests": "29da4c9f984580cdb64ecbe316bd2028"
-      }
-    },
-    "calendar": {
-      "enabled": false,
-      "command": "npx -y @anthropic/google-calendar-mcp",
-      "calendar_id": "",
-      "credentials_path": ""
-    },
-    "metadata": {
-      "name": "Domesticating AI",
-      "description": "Making AI accessible for everyone"
-    }
-  },
   "limits": {
-    "max_task_duration_minutes": 30,
-    "max_inference_runs": 20
+    "max_task_duration_minutes": 60,
+    "max_inference_runs": 25
   },
   "debug": {
     "enabled": true,
     "keep_temp_files": true,
     "log_level": "info"
   },
-  "blog": {
-    "enabled": true,
-    "notion_drafts_db": "18aa4c9f-9845-81d5-aad1-e53b75ab3a2b",
-    "notion_ideas_db": "191a4c9f-9845-803b-b008-d16d6a025ba2",
-    "whisper_url": "http://localhost:8081",
-    "whisper_model": "base.en",
-    "rss_feed_url": "https://soypetetech.substack.com/feed",
-    "research": {
-      "enabled": true,
-      "calendar_enabled": false,
-      "rss_enabled": true,
-      "max_rss_posts": 5,
-      "max_calendar_days": 30
-    },
-    "static_links": {
-      "discord": "https://discord.gg/ExTAH54KCE",
-      "linktree": "https://linktr.ee/soypete_tech",
-      "youtube": "https://www.youtube.com/@SoyPete_Tech",
-      "twitter": "https://x.com/captainnobody1",
-      "bluesky": "https://bsky.app/profile/soypetetech.bsky.social",
-      "linkedin": "https://www.linkedin.com/in/miriah-peterson-35649b5b/",
-      "newsletter": "https://soypetetech.substack.com",
-      "youtube_placeholder": "Latest Video: [ADD LINK BEFORE SUBSTACK PUBLISH]",
-      "custom_links": [
-        {"name": "GitHub", "url": "https://www.github.com/Soypete"},
-        {"name": "Twitch", "url": "https://twitch.tv/soypeteTech"}
-      ]
-    }
+  "database": {
+    "driver": "postgres",
+    "host": "localhost",
+    "port": 5432,
+    "user": "pedrocli",
+    "password": "pedrocli",
+    "database": "pedrocli",
+    "ssl_mode": "disable"
   }
 }

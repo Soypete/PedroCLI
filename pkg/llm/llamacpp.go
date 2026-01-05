@@ -22,6 +22,10 @@ type LlamaCppClient struct {
 	temperature  float64
 	threads      int
 
+	// Grammar configuration
+	enableGrammar  bool   // Enable GBNF grammar for tool calling
+	grammarLogging bool   // Enable debug logging for grammar
+
 	// Logit control options (applied via CLI flags)
 	grammar       string  // GBNF grammar string for constrained generation
 	grammarFile   string  // Path to grammar file (alternative to inline)
@@ -40,13 +44,15 @@ func NewLlamaCppClient(cfg *config.Config) *LlamaCppClient {
 // NewLlamaCppClientFromModel creates a new llama.cpp client from a specific model config
 func NewLlamaCppClientFromModel(cfg *config.Config, modelCfg config.ModelConfig) *LlamaCppClient {
 	return &LlamaCppClient{
-		llamacppPath: modelCfg.LlamaCppPath,
-		modelPath:    modelCfg.ModelPath,
-		contextSize:  modelCfg.ContextSize,
-		usableSize:   modelCfg.UsableContext,
-		nGpuLayers:   modelCfg.NGpuLayers,
-		temperature:  modelCfg.Temperature,
-		threads:      modelCfg.Threads,
+		llamacppPath:   modelCfg.LlamaCppPath,
+		modelPath:      modelCfg.ModelPath,
+		contextSize:    modelCfg.ContextSize,
+		usableSize:     modelCfg.UsableContext,
+		nGpuLayers:     modelCfg.NGpuLayers,
+		temperature:    modelCfg.Temperature,
+		threads:        modelCfg.Threads,
+		enableGrammar:  modelCfg.EnableGrammar,
+		grammarLogging: modelCfg.GrammarLogging,
 	}
 }
 
@@ -69,20 +75,38 @@ func (l *LlamaCppClient) Infer(ctx context.Context, req *InferenceRequest) (*Inf
 		"-no-cnv",             // Disable interactive conversation mode (one-shot)
 	}
 
-	// Add grammar constraints if configured
+	// Add grammar constraints if configured and enabled
 	// Grammar is enforced directly by llama.cpp at the logit level
-	grammarFile := l.grammarFile
-	if l.grammar != "" && grammarFile == "" {
-		// Write inline grammar to temp file
-		tmpFile, err := l.writeGrammarToTempFile(l.grammar)
-		if err != nil {
-			return nil, fmt.Errorf("failed to write grammar: %w", err)
+	if l.enableGrammar {
+		if l.grammarLogging {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Grammar check: l.grammar=%d bytes, l.grammarFile=%s\n", len(l.grammar), l.grammarFile)
 		}
-		defer os.Remove(tmpFile)
-		grammarFile = tmpFile
-	}
-	if grammarFile != "" {
-		args = append(args, "--grammar-file", grammarFile)
+		grammarFile := l.grammarFile
+		if l.grammar != "" && grammarFile == "" {
+			if l.grammarLogging {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Writing inline grammar to temp file\n")
+			}
+			// Write inline grammar to temp file
+			tmpFile, err := l.writeGrammarToTempFile(l.grammar)
+			if err != nil {
+				return nil, fmt.Errorf("failed to write grammar: %w", err)
+			}
+			defer os.Remove(tmpFile)
+			grammarFile = tmpFile
+			if l.grammarLogging {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Grammar temp file: %s\n", grammarFile)
+			}
+		}
+		if grammarFile != "" {
+			if l.grammarLogging {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Adding --grammar-file %s to args\n", grammarFile)
+			}
+			args = append(args, "--grammar-file", grammarFile)
+		} else if l.grammarLogging {
+			fmt.Fprintf(os.Stderr, "[DEBUG] NO GRAMMAR FILE - skipping grammar constraint\n")
+		}
+	} else if l.grammarLogging {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Grammar disabled via config (enable_grammar=false)\n")
 	}
 
 	// Add sampling parameters for logit control
@@ -103,8 +127,18 @@ func (l *LlamaCppClient) Infer(ctx context.Context, req *InferenceRequest) (*Inf
 	}
 
 	// Execute llama.cpp
+	fmt.Fprintf(os.Stderr, "[DEBUG] Executing llama.cpp: %s %s\n", l.llamacppPath, strings.Join(args, " "))
 	cmd := exec.CommandContext(ctx, l.llamacppPath, args...)
 	output, err := cmd.CombinedOutput()
+
+	// Always save llama.cpp output to debug file for troubleshooting
+	debugOutputFile := "/tmp/pedrocli-llamacpp-output.txt"
+	if writeErr := os.WriteFile(debugOutputFile, output, 0644); writeErr != nil {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Failed to write llama.cpp output to %s: %v\n", debugOutputFile, writeErr)
+	} else {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Saved llama.cpp output to: %s (%d bytes)\n", debugOutputFile, len(output))
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("llama.cpp execution failed: %w (output: %s)", err, string(output))
 	}
@@ -124,6 +158,17 @@ func (l *LlamaCppClient) Infer(ctx context.Context, req *InferenceRequest) (*Inf
 func (l *LlamaCppClient) writeGrammarToTempFile(grammar string) (string, error) {
 	tmpDir := os.TempDir()
 	tmpFile := filepath.Join(tmpDir, "pedrocli-grammar.gbnf")
+
+	// Write to debug file if grammar logging is enabled
+	if l.grammarLogging {
+		debugFile := "/tmp/pedrocli-grammar-debug.gbnf"
+		if err := os.WriteFile(debugFile, []byte(grammar), 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Failed to write debug grammar file: %v\n", err)
+		} else {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Grammar written to: %s\n", debugFile)
+		}
+	}
+
 	if err := os.WriteFile(tmpFile, []byte(grammar), 0600); err != nil {
 		return "", err
 	}
