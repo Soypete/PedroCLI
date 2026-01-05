@@ -227,7 +227,7 @@ func (f *Llama3Formatter) extractLlama3FormatCalls(text string) []ToolCall {
 func (f *Llama3Formatter) FormatToolResult(call ToolCall, result *ToolResult) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("<|start_header_id|>ipython<|end_header_id|>\n\n"))
+	sb.WriteString("<|start_header_id|>ipython<|end_header_id|>\n\n")
 	sb.WriteString(fmt.Sprintf("Tool: %s\n", call.Name))
 
 	if result.Success {

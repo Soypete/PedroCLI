@@ -104,6 +104,9 @@ func (g *ToolPromptGenerator) FormatTool(tool tools.ExtendedTool) string {
 }
 
 // formatParameters formats the schema properties as a parameter list
+// TODO: Part of old GBNF manual tool formatting system, superseded by native API
+//
+//nolint:unused // Kept for reference
 func (g *ToolPromptGenerator) formatParameters(schema *logits.JSONSchema) string {
 	if schema == nil || schema.Properties == nil || len(schema.Properties) == 0 {
 		return ""
@@ -133,6 +136,8 @@ func (g *ToolPromptGenerator) formatParameters(schema *logits.JSONSchema) string
 }
 
 // formatParameter formats a single parameter
+//
+//nolint:unused // Part of old GBNF system
 func (g *ToolPromptGenerator) formatParameter(name string, prop *logits.JSONSchema, required bool) string {
 	var sb strings.Builder
 

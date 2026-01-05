@@ -502,4 +502,3 @@ func renderJobCard(job *jobs.Job) string {
 	</div>
 	`, job.ID, job.Description, statusClass, statusIcon, job.Status, job.CreatedAt.Format("2006-01-02 15:04:05"))
 }
-

@@ -355,6 +355,8 @@ func (c *Checker) formatErrors(failures []CheckResult) error {
 }
 
 // isExecutable checks if a file is executable
+//
+//nolint:unused // Utility function kept for potential future use
 func isExecutable(path string) bool {
 	info, err := os.Stat(path)
 	if err != nil {
