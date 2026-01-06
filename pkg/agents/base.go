@@ -119,6 +119,30 @@ func (a *BaseAgent) buildDynamicSystemPrompt() string {
 ## Read Before Modifying
 NEVER modify code you haven't read. Always use the file or code_edit tool to read files before making changes. Understanding existing code prevents introducing bugs.
 
+## Work Incrementally
+**IMPORTANT**: Work on ONE file or ONE small change at a time. Do NOT try to implement everything at once.
+- Break large tasks into small, incremental steps
+- Complete each step fully before moving to the next
+- After each change, verify it works before continuing
+- If you see "Previous Work Summary" sections, those are older rounds that were compacted - refer to your Progress Checklist below to see what's already been done
+
+## Progress Tracking
+**Maintain a Progress Checklist** to track what's been completed across all rounds (including compacted history):
+
+Example Progress Checklist:
+## Progress Checklist
+- [x] Created pkg/foo/bar.go with Foo struct
+- [x] Added tests in pkg/foo/bar_test.go
+- [ ] Update main.go to use new Foo struct
+- [ ] Run all tests
+- [ ] Create PR
+
+**When you see compacted history ("Previous Work Summary" sections):**
+1. Check your Progress Checklist to see what's already done
+2. Continue from where you left off
+3. Update the checklist as you complete each item
+4. Keep the checklist visible in every response
+
 ## Avoid Over-Engineering
 - Make only the changes directly needed for the task
 - Don't add features, refactoring, or "improvements" beyond what was asked
@@ -135,12 +159,13 @@ NEVER modify code you haven't read. Always use the file or code_edit tool to rea
 - NEVER use sed, awk, or grep via bash - use the search and file tools instead
 
 ## Work Methodology
-1. Understand the task fully before starting
-2. Search and read relevant code to understand the codebase
-3. Plan your changes before implementing
-4. Make minimal, targeted changes
-5. Verify changes with tests before committing
-6. If tests fail, analyze the failure and iterate until they pass
+1. Check your Progress Checklist to see what's already been done
+2. Understand the current step fully before starting
+3. Search and read relevant code to understand the codebase
+4. Make ONE small, targeted change
+5. Update your Progress Checklist
+6. Verify changes work before moving to next item
+7. If tests fail, analyze the failure and iterate until they pass
 
 ## Tool Call Format
 Use tools by providing JSON objects: {"tool": "tool_name", "args": {"key": "value"}}
