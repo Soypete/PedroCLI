@@ -53,6 +53,12 @@ type Job struct {
 	UpdatedAt      time.Time       `json:"updated_at"`
 	// ConversationHistory stores all prompts, responses, and tool calls for debugging
 	ConversationHistory []ConversationEntry `json:"conversation_history,omitempty"`
+	// Phased workflow fields
+	WorkflowType   string          `json:"workflow_type,omitempty"`
+	CurrentPhase   string          `json:"current_phase,omitempty"`
+	PhaseResults   json.RawMessage `json:"phase_results,omitempty"`
+	Plan           json.RawMessage `json:"plan,omitempty"`
+	PhaseStartedAt *time.Time      `json:"phase_started_at,omitempty"`
 }
 
 // ConversationEntry represents a single entry in the job's conversation history.
@@ -494,4 +500,41 @@ func nullJSON(data json.RawMessage) sql.NullString {
 		return sql.NullString{}
 	}
 	return sql.NullString{String: string(data), Valid: true}
+}
+
+// SetWorkflowType sets the workflow type for a job.
+func (s *JobStore) SetWorkflowType(ctx context.Context, id string, workflowType string) error {
+	query := `UPDATE jobs SET workflow_type = $2, updated_at = $3 WHERE id = $1`
+	_, err := s.db.ExecContext(ctx, query, id, nullString(workflowType), time.Now())
+	return err
+}
+
+// SetCurrentPhase sets the current phase for a job.
+func (s *JobStore) SetCurrentPhase(ctx context.Context, id string, phase string) error {
+	now := time.Now()
+	query := `UPDATE jobs SET current_phase = $2, phase_started_at = $3, updated_at = $4 WHERE id = $1`
+	_, err := s.db.ExecContext(ctx, query, id, nullString(phase), now, now)
+	return err
+}
+
+// SetPhaseResults sets the phase results for a job.
+func (s *JobStore) SetPhaseResults(ctx context.Context, id string, results map[string]interface{}) error {
+	resultsJSON, err := json.Marshal(results)
+	if err != nil {
+		return fmt.Errorf("failed to marshal phase results: %w", err)
+	}
+	query := `UPDATE jobs SET phase_results = $2, updated_at = $3 WHERE id = $1`
+	_, err = s.db.ExecContext(ctx, query, id, string(resultsJSON), time.Now())
+	return err
+}
+
+// SetPlan sets the implementation plan for a job.
+func (s *JobStore) SetPlan(ctx context.Context, id string, plan map[string]interface{}) error {
+	planJSON, err := json.Marshal(plan)
+	if err != nil {
+		return fmt.Errorf("failed to marshal plan: %w", err)
+	}
+	query := `UPDATE jobs SET plan = $2, updated_at = $3 WHERE id = $1`
+	_, err = s.db.ExecContext(ctx, query, id, string(planJSON), time.Now())
+	return err
 }
