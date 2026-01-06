@@ -72,12 +72,18 @@ func (e *EditorAgent) Execute(ctx context.Context, input map[string]interface{})
 		bgCtx := context.Background()
 
 		// Create context manager
-		contextMgr, err := llmcontext.NewManager(job.ID, e.config.Debug.Enabled)
+		contextMgr, err := llmcontext.NewManager(job.ID, e.config.Debug.Enabled, e.config.Model.ContextSize)
 		if err != nil {
 			e.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
+
+		// Configure context manager with model and stats tracking
+		contextMgr.SetModelName(e.config.Model.ModelName)
+		if e.compactionStatsStore != nil {
+			contextMgr.SetStatsStore(e.compactionStatsStore)
+		}
 
 		// Build prompt
 		userPrompt := e.buildEditingPrompt(draft, transcription, input)

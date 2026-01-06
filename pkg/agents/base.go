@@ -2,12 +2,15 @@ package agents
 
 import (
 	"context"
+	"fmt"
+	"os"
 
 	"github.com/soypete/pedrocli/pkg/config"
 	"github.com/soypete/pedrocli/pkg/jobs"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/llmcontext"
 	"github.com/soypete/pedrocli/pkg/prompts"
+	"github.com/soypete/pedrocli/pkg/storage"
 	"github.com/soypete/pedrocli/pkg/tools"
 )
 
@@ -25,14 +28,15 @@ type Agent interface {
 
 // BaseAgent provides common functionality for all agents
 type BaseAgent struct {
-	name          string
-	description   string
-	config        *config.Config
-	llm           llm.Backend
-	tools         map[string]tools.Tool
-	jobManager    jobs.JobManager
-	registry      *tools.ToolRegistry
-	toolPromptGen *prompts.ToolPromptGenerator
+	name                 string
+	description          string
+	config               *config.Config
+	llm                  llm.Backend
+	tools                map[string]tools.Tool
+	jobManager           jobs.JobManager
+	registry             *tools.ToolRegistry
+	toolPromptGen        *prompts.ToolPromptGenerator
+	compactionStatsStore storage.CompactionStatsStore // Optional stats tracking
 }
 
 // NewBaseAgent creates a new base agent
@@ -67,6 +71,11 @@ func (a *BaseAgent) SetRegistry(registry *tools.ToolRegistry) {
 // GetRegistry returns the tool registry
 func (a *BaseAgent) GetRegistry() *tools.ToolRegistry {
 	return a.registry
+}
+
+// SetCompactionStatsStore sets the compaction statistics store
+func (a *BaseAgent) SetCompactionStatsStore(store storage.CompactionStatsStore) {
+	a.compactionStatsStore = store
 }
 
 // Name returns the agent name
@@ -213,6 +222,20 @@ func (a *BaseAgent) executeInferenceWithSystemPrompt(ctx context.Context, contex
 	fullPrompt := userPrompt
 	if history != "" {
 		fullPrompt = history + "\n\n" + userPrompt
+	}
+
+	// Calculate total prompt size and record it
+	totalPromptTokens := llm.EstimateTokens(systemPrompt) + llm.EstimateTokens(fullPrompt)
+	contextMgr.RecordPromptTokens(totalPromptTokens)
+
+	// Log if approaching threshold (for debugging)
+	if a.config.Debug.Enabled {
+		threshold := int(float64(a.config.Model.ContextSize) * 0.75)
+		if totalPromptTokens >= threshold {
+			fmt.Fprintf(os.Stderr, "⚠️  Context usage: %d/%d tokens (%.1f%% - threshold exceeded)\n",
+				totalPromptTokens, a.config.Model.ContextSize,
+				float64(totalPromptTokens)/float64(a.config.Model.ContextSize)*100)
+		}
 	}
 
 	// Save prompt

@@ -22,6 +22,9 @@ type AppContext struct {
 	Database   *database.DB
 	WorkDir    string
 
+	// Stores
+	CompactionStatsStore storage.CompactionStatsStore
+
 	// Tools (used by agents)
 	FileTool     tools.Tool
 	GitTool      tools.Tool
@@ -74,6 +77,9 @@ func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, erro
 	jobStore := storage.NewJobStore(db.DB)
 	jobManager := jobs.NewDBManager(jobStore)
 
+	// Create compaction stats store
+	compactionStatsStore := database.NewCompactionStatsStore(db.DB)
+
 	// Migrate existing file-based jobs to database
 	migrated, err := jobManager.MigrateFromFiles(ctx, "/tmp/pedrocli-jobs")
 	if err != nil {
@@ -90,11 +96,12 @@ func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, erro
 
 	// Create tools
 	appCtx := &AppContext{
-		Config:     cfg,
-		Backend:    backend,
-		JobManager: jobManager,
-		Database:   db,
-		WorkDir:    workDir,
+		Config:               cfg,
+		Backend:              backend,
+		JobManager:           jobManager,
+		Database:             db,
+		WorkDir:              workDir,
+		CompactionStatsStore: compactionStatsStore,
 	}
 
 	// Initialize code tools
@@ -173,6 +180,7 @@ func registerSchedulingTools(agent interface{ RegisterTool(tools.Tool) }, ctx *A
 // NewBuilderAgentWithTools creates a fully configured builder agent
 func (ctx *AppContext) NewBuilderAgent() *agents.BuilderAgent {
 	agent := agents.NewBuilderAgent(ctx.Config, ctx.Backend, ctx.JobManager)
+	agent.SetCompactionStatsStore(ctx.CompactionStatsStore)
 	registerCodeTools(agent, ctx)
 	return agent
 }
@@ -180,6 +188,7 @@ func (ctx *AppContext) NewBuilderAgent() *agents.BuilderAgent {
 // NewDebuggerAgentWithTools creates a fully configured debugger agent
 func (ctx *AppContext) NewDebuggerAgent() *agents.DebuggerAgent {
 	agent := agents.NewDebuggerAgent(ctx.Config, ctx.Backend, ctx.JobManager)
+	agent.SetCompactionStatsStore(ctx.CompactionStatsStore)
 	registerCodeTools(agent, ctx)
 	return agent
 }
@@ -187,6 +196,7 @@ func (ctx *AppContext) NewDebuggerAgent() *agents.DebuggerAgent {
 // NewReviewerAgentWithTools creates a fully configured reviewer agent
 func (ctx *AppContext) NewReviewerAgent() *agents.ReviewerAgent {
 	agent := agents.NewReviewerAgent(ctx.Config, ctx.Backend, ctx.JobManager)
+	agent.SetCompactionStatsStore(ctx.CompactionStatsStore)
 	registerCodeTools(agent, ctx)
 	return agent
 }
@@ -194,6 +204,7 @@ func (ctx *AppContext) NewReviewerAgent() *agents.ReviewerAgent {
 // NewTriagerAgentWithTools creates a fully configured triager agent
 func (ctx *AppContext) NewTriagerAgent() *agents.TriagerAgent {
 	agent := agents.NewTriagerAgent(ctx.Config, ctx.Backend, ctx.JobManager)
+	agent.SetCompactionStatsStore(ctx.CompactionStatsStore)
 	registerCodeTools(agent, ctx)
 	return agent
 }
@@ -201,6 +212,7 @@ func (ctx *AppContext) NewTriagerAgent() *agents.TriagerAgent {
 // NewBlogOrchestratorAgent creates a fully configured blog orchestrator
 func (ctx *AppContext) NewBlogOrchestratorAgent() *agents.BlogOrchestratorAgent {
 	agent := agents.NewBlogOrchestratorAgent(ctx.Config, ctx.Backend, ctx.JobManager)
+	agent.SetCompactionStatsStore(ctx.CompactionStatsStore)
 	agent.RegisterResearchTool(ctx.RSSFeedTool)
 	agent.RegisterResearchTool(ctx.StaticLinksTool)
 	agent.RegisterNotionTool(ctx.BlogNotionTool)
@@ -211,6 +223,7 @@ func (ctx *AppContext) NewBlogOrchestratorAgent() *agents.BlogOrchestratorAgent 
 // NewDynamicBlogAgent creates a fully configured dynamic blog agent (ADR-003)
 func (ctx *AppContext) NewDynamicBlogAgent() *agents.DynamicBlogAgent {
 	agent := agents.NewDynamicBlogAgent(ctx.Config, ctx.Backend, ctx.JobManager)
+	agent.SetCompactionStatsStore(ctx.CompactionStatsStore)
 	agent.RegisterResearchTool(ctx.RSSFeedTool)
 	agent.RegisterResearchTool(ctx.StaticLinksTool)
 	agent.RegisterNotionTool(ctx.BlogNotionTool)

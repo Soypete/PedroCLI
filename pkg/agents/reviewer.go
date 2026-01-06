@@ -83,12 +83,18 @@ func (r *ReviewerAgent) Execute(ctx context.Context, input map[string]interface{
 		bgCtx := context.Background()
 
 		// Create context manager
-		contextMgr, err := llmcontext.NewManager(job.ID, r.config.Debug.Enabled)
-		if err != nil {
+		contextMgr, err := llmcontext.NewManager(job.ID, r.config.Debug.Enabled, r.config.Model.ContextSize)
+		if err != nil{
 			r.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
+
+		// Configure context manager with model and stats tracking
+		contextMgr.SetModelName(r.config.Model.ModelName)
+		if r.compactionStatsStore != nil {
+			contextMgr.SetStatsStore(r.compactionStatsStore)
+		}
 
 		// Set context_dir for the job (LLM conversation storage)
 		if err := r.jobManager.SetContextDir(bgCtx, job.ID, contextMgr.GetJobDir()); err != nil {

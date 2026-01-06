@@ -77,12 +77,18 @@ func (a *ScriptCreatorAgent) Execute(ctx context.Context, input map[string]inter
 
 	go func() {
 		bgCtx := context.Background()
-		contextMgr, err := llmcontext.NewManager(job.ID, a.config.Debug.Enabled)
+		contextMgr, err := llmcontext.NewManager(job.ID, a.config.Debug.Enabled, a.config.Model.ContextSize)
 		if err != nil {
 			a.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
+
+		// Configure context manager with model and stats tracking
+		contextMgr.SetModelName(a.config.Model.ModelName)
+		if a.compactionStatsStore != nil {
+			contextMgr.SetStatsStore(a.compactionStatsStore)
+		}
 
 		userPrompt := a.buildPrompt(input)
 		executor := NewInferenceExecutor(a.BaseAgent, contextMgr)
@@ -162,12 +168,18 @@ func (a *NewsReviewerAgent) Execute(ctx context.Context, input map[string]interf
 
 	go func() {
 		bgCtx := context.Background()
-		contextMgr, err := llmcontext.NewManager(job.ID, a.config.Debug.Enabled)
+		contextMgr, err := llmcontext.NewManager(job.ID, a.config.Debug.Enabled, a.config.Model.ContextSize)
 		if err != nil {
 			a.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
+
+		// Configure context manager with model and stats tracking
+		contextMgr.SetModelName(a.config.Model.ModelName)
+		if a.compactionStatsStore != nil {
+			contextMgr.SetStatsStore(a.compactionStatsStore)
+		}
 
 		userPrompt := a.buildPrompt(input)
 		executor := NewInferenceExecutor(a.BaseAgent, contextMgr)
@@ -238,12 +250,18 @@ func (a *LinkAdderAgent) Execute(ctx context.Context, input map[string]interface
 
 	go func() {
 		bgCtx := context.Background()
-		contextMgr, err := llmcontext.NewManager(job.ID, a.config.Debug.Enabled)
+		contextMgr, err := llmcontext.NewManager(job.ID, a.config.Debug.Enabled, a.config.Model.ContextSize)
 		if err != nil {
 			a.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
+
+		// Configure context manager with model and stats tracking
+		contextMgr.SetModelName(a.config.Model.ModelName)
+		if a.compactionStatsStore != nil {
+			contextMgr.SetStatsStore(a.compactionStatsStore)
+		}
 
 		userPrompt := a.buildPrompt(input)
 		executor := NewInferenceExecutor(a.BaseAgent, contextMgr)
@@ -319,12 +337,18 @@ func (a *GuestAdderAgent) Execute(ctx context.Context, input map[string]interfac
 
 	go func() {
 		bgCtx := context.Background()
-		contextMgr, err := llmcontext.NewManager(job.ID, a.config.Debug.Enabled)
+		contextMgr, err := llmcontext.NewManager(job.ID, a.config.Debug.Enabled, a.config.Model.ContextSize)
 		if err != nil {
 			a.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
+
+		// Configure context manager with model and stats tracking
+		contextMgr.SetModelName(a.config.Model.ModelName)
+		if a.compactionStatsStore != nil {
+			contextMgr.SetStatsStore(a.compactionStatsStore)
+		}
 
 		userPrompt := a.buildPrompt(input)
 		executor := NewInferenceExecutor(a.BaseAgent, contextMgr)
@@ -411,12 +435,18 @@ func (a *EpisodeOutlinerAgent) Execute(ctx context.Context, input map[string]int
 
 	go func() {
 		bgCtx := context.Background()
-		contextMgr, err := llmcontext.NewManager(job.ID, a.config.Debug.Enabled)
+		contextMgr, err := llmcontext.NewManager(job.ID, a.config.Debug.Enabled, a.config.Model.ContextSize)
 		if err != nil {
 			a.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
+
+		// Configure context manager with model and stats tracking
+		contextMgr.SetModelName(a.config.Model.ModelName)
+		if a.compactionStatsStore != nil {
+			contextMgr.SetStatsStore(a.compactionStatsStore)
+		}
 
 		userPrompt := a.buildPrompt(input)
 		executor := NewInferenceExecutor(a.BaseAgent, contextMgr)

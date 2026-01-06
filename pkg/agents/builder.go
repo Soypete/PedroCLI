@@ -61,12 +61,18 @@ func (b *BuilderAgent) Execute(ctx context.Context, input map[string]interface{}
 		bgCtx := context.Background()
 
 		// Create context manager
-		contextMgr, err := llmcontext.NewManager(job.ID, b.config.Debug.Enabled)
+		contextMgr, err := llmcontext.NewManager(job.ID, b.config.Debug.Enabled, b.config.Model.ContextSize)
 		if err != nil {
 			b.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
+
+		// Configure context manager with model and stats tracking
+		contextMgr.SetModelName(b.config.Model.ModelName)
+		if b.compactionStatsStore != nil {
+			contextMgr.SetStatsStore(b.compactionStatsStore)
+		}
 
 		// Set context_dir for the job (LLM conversation storage)
 		if err := b.jobManager.SetContextDir(bgCtx, job.ID, contextMgr.GetJobDir()); err != nil {

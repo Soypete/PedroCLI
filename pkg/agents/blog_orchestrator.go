@@ -123,12 +123,18 @@ func (o *BlogOrchestratorAgent) Execute(ctx context.Context, input map[string]in
 	go func() {
 		bgCtx := context.Background()
 
-		contextMgr, err := llmcontext.NewManager(job.ID, o.config.Debug.Enabled)
+		contextMgr, err := llmcontext.NewManager(job.ID, o.config.Debug.Enabled, o.config.Model.ContextSize)
 		if err != nil {
 			o.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
+
+		// Configure context manager with model and stats tracking
+		contextMgr.SetModelName(o.config.Model.ModelName)
+		if o.compactionStatsStore != nil {
+			contextMgr.SetStatsStore(o.compactionStatsStore)
+		}
 
 		result, err := o.runOrchestration(bgCtx, contextMgr, prompt, input)
 		if err != nil {

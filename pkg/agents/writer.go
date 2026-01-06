@@ -83,12 +83,18 @@ func (w *WriterAgent) Execute(ctx context.Context, input map[string]interface{})
 		bgCtx := context.Background()
 
 		// Create context manager
-		contextMgr, err := llmcontext.NewManager(job.ID, w.config.Debug.Enabled)
+		contextMgr, err := llmcontext.NewManager(job.ID, w.config.Debug.Enabled, w.config.Model.ContextSize)
 		if err != nil {
 			w.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
+
+		// Configure context manager with model and stats tracking
+		contextMgr.SetModelName(w.config.Model.ModelName)
+		if w.compactionStatsStore != nil {
+			contextMgr.SetStatsStore(w.compactionStatsStore)
+		}
 
 		// Build prompt
 		userPrompt := w.buildWritingPrompt(transcription, input)
