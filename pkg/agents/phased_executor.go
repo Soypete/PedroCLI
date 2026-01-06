@@ -316,10 +316,10 @@ func (pie *phaseInferenceExecutor) execute(ctx context.Context, input string) (s
 func (pie *phaseInferenceExecutor) executeInference(ctx context.Context, systemPrompt, userPrompt string) (*llm.InferenceResponse, error) {
 	budget := llm.CalculateBudget(pie.agent.config, systemPrompt, userPrompt, "")
 
-	// Get tool definitions if available
+	// Get tool definitions using the agent's conversion method
 	var toolDefs []llm.ToolDefinition
-	if pie.agent.registry != nil {
-		toolDefs = pie.agent.registry.GetToolDefinitions()
+	if pie.agent.config.Model.EnableTools && pie.agent.registry != nil {
+		toolDefs = pie.agent.convertToolsToDefinitions()
 	}
 
 	req := &llm.InferenceRequest{
