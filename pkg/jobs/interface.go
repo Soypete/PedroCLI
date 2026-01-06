@@ -40,6 +40,12 @@ type JobManager interface {
 	// Conversation history for debugging
 	AppendConversation(ctx context.Context, id string, entry storage.ConversationEntry) error
 	GetConversation(ctx context.Context, id string) ([]storage.ConversationEntry, error)
+
+	// Phase tracking for phased workflows
+	SetWorkflowType(ctx context.Context, id string, workflowType string) error
+	SetCurrentPhase(ctx context.Context, id string, phase string) error
+	SetPhaseResults(ctx context.Context, id string, results map[string]interface{}) error
+	SetPlan(ctx context.Context, id string, plan map[string]interface{}) error
 }
 
 // Verify that Manager implements JobManager (compile-time check).

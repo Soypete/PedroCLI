@@ -203,6 +203,26 @@ func (m *DBManager) GetConversation(ctx context.Context, id string) ([]storage.C
 	return m.store.GetConversation(ctx, id)
 }
 
+// SetWorkflowType sets the workflow type for a job.
+func (m *DBManager) SetWorkflowType(ctx context.Context, id string, workflowType string) error {
+	return m.store.SetWorkflowType(ctx, id, workflowType)
+}
+
+// SetCurrentPhase sets the current phase for a job.
+func (m *DBManager) SetCurrentPhase(ctx context.Context, id string, phase string) error {
+	return m.store.SetCurrentPhase(ctx, id, phase)
+}
+
+// SetPhaseResults sets the phase results for a job.
+func (m *DBManager) SetPhaseResults(ctx context.Context, id string, results map[string]interface{}) error {
+	return m.store.SetPhaseResults(ctx, id, results)
+}
+
+// SetPlan sets the implementation plan for a job.
+func (m *DBManager) SetPlan(ctx context.Context, id string, plan map[string]interface{}) error {
+	return m.store.SetPlan(ctx, id, plan)
+}
+
 // MigrateFromFiles migrates existing JSON files from the file-based manager to the database.
 // Returns the number of jobs migrated and any error encountered.
 func (m *DBManager) MigrateFromFiles(ctx context.Context, stateDir string) (int, error) {
