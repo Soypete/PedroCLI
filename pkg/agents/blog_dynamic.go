@@ -89,12 +89,18 @@ func (a *DynamicBlogAgent) Execute(ctx context.Context, input map[string]interfa
 	go func() {
 		bgCtx := context.Background()
 
-		contextMgr, err := llmcontext.NewManager(job.ID, a.config.Debug.Enabled)
+		contextMgr, err := llmcontext.NewManager(job.ID, a.config.Debug.Enabled, a.config.Model.ContextSize)
 		if err != nil {
 			a.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
+
+		// Configure context manager with model and stats tracking
+		contextMgr.SetModelName(a.config.Model.ModelName)
+		if a.compactionStatsStore != nil {
+			contextMgr.SetStatsStore(a.compactionStatsStore)
+		}
 
 		result, err := a.runDynamic(bgCtx, contextMgr, prompt, title, shouldPublish)
 		if err != nil {

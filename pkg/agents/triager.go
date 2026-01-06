@@ -85,12 +85,18 @@ func (t *TriagerAgent) Execute(ctx context.Context, input map[string]interface{}
 		bgCtx := context.Background()
 
 		// Create context manager
-		contextMgr, err := llmcontext.NewManager(job.ID, t.config.Debug.Enabled)
+		contextMgr, err := llmcontext.NewManager(job.ID, t.config.Debug.Enabled, t.config.Model.ContextSize)
 		if err != nil {
 			t.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
+
+		// Configure context manager with model and stats tracking
+		contextMgr.SetModelName(t.config.Model.ModelName)
+		if t.compactionStatsStore != nil {
+			contextMgr.SetStatsStore(t.compactionStatsStore)
+		}
 
 		// Set context_dir for the job (LLM conversation storage)
 		if err := t.jobManager.SetContextDir(bgCtx, job.ID, contextMgr.GetJobDir()); err != nil {

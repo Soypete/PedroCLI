@@ -61,12 +61,18 @@ func (d *DebuggerAgent) Execute(ctx context.Context, input map[string]interface{
 		bgCtx := context.Background()
 
 		// Create context manager
-		contextMgr, err := llmcontext.NewManager(job.ID, d.config.Debug.Enabled)
+		contextMgr, err := llmcontext.NewManager(job.ID, d.config.Debug.Enabled, d.config.Model.ContextSize)
 		if err != nil {
 			d.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}
 		defer contextMgr.Cleanup()
+
+		// Configure context manager with model and stats tracking
+		contextMgr.SetModelName(d.config.Model.ModelName)
+		if d.compactionStatsStore != nil {
+			contextMgr.SetStatsStore(d.compactionStatsStore)
+		}
 
 		// Set context_dir for the job (LLM conversation storage)
 		if err := d.jobManager.SetContextDir(bgCtx, job.ID, contextMgr.GetJobDir()); err != nil {
