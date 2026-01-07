@@ -15,8 +15,8 @@ ALTER TABLE jobs ADD COLUMN context_dir VARCHAR(512);
 
 -- Store all prompts, responses, tool calls for debugging and replay
 -- Format: [{"role": "user"|"assistant"|"tool_call"|"tool_result", "content": "...", "timestamp": "..."}]
--- PostgreSQL JSONB for efficient querying and storage
-ALTER TABLE jobs ADD COLUMN conversation_history JSONB DEFAULT '[]'::jsonb;
+-- SQLite TEXT with JSON content (JSONB not supported in SQLite)
+ALTER TABLE jobs ADD COLUMN conversation_history TEXT DEFAULT '[]';
 
 -- +goose Down
 -- Note: SQLite doesn't support DROP COLUMN in older versions,

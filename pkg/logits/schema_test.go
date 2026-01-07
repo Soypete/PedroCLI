@@ -209,9 +209,10 @@ func TestToolCallSchema(t *testing.T) {
 		t.Errorf("expected type 'object', got %q", schema.Type)
 	}
 
-	nameProp := schema.Properties["name"]
-	if nameProp == nil || nameProp.Const != "read_file" {
-		t.Error("expected name property with const 'read_file'")
+	// The implementation uses "tool" as the property name (not "name")
+	toolProp := schema.Properties["tool"]
+	if toolProp == nil || toolProp.Const != "read_file" {
+		t.Error("expected tool property with const 'read_file'")
 	}
 
 	argsProp := schema.Properties["args"]

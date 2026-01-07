@@ -10,8 +10,11 @@ import (
 )
 
 // TestLlamaCppInfer tests the llama.cpp inference with a real model
-// Skip this test if LLAMA_CPP_PATH is not set (CI environments)
+// DEPRECATED: This test is for the old CLI-based llama.cpp client.
+// The project has migrated to llama-server HTTP API. Skip this test.
 func TestLlamaCppInfer(t *testing.T) {
+	t.Skip("Skipping deprecated CLI-based llama.cpp test - migrated to llama-server HTTP API")
+
 	llamaPath := os.Getenv("LLAMA_CPP_PATH")
 	modelPath := os.Getenv("LLAMA_MODEL_PATH")
 
@@ -32,14 +35,11 @@ func TestLlamaCppInfer(t *testing.T) {
 	// Create a test config
 	cfg := &config.Config{
 		Model: config.ModelConfig{
-			Type:          "llamacpp",
-			LlamaCppPath:  llamaPath,
-			ModelPath:     modelPath,
-			ContextSize:   4096,
-			UsableContext: 3072,
-			Temperature:   0.2,
-			Threads:       4,
-			NGpuLayers:    0, // CPU only for tests
+			Type:        "llamacpp",
+			ServerURL:   "http://localhost:8082",
+			ModelName:   "test-model",
+			ContextSize: 4096,
+			Temperature: 0.2,
 		},
 	}
 
@@ -84,7 +84,11 @@ func TestLlamaCppInfer(t *testing.T) {
 }
 
 // TestLlamaCppToolCalling tests tool call generation with model-specific formatting
+// DEPRECATED: This test is for the old CLI-based llama.cpp client.
+// The project has migrated to llama-server HTTP API with native tool calling.
 func TestLlamaCppToolCalling(t *testing.T) {
+	t.Skip("Skipping deprecated CLI-based llama.cpp test - migrated to llama-server HTTP API with native tool calling")
+
 	llamaPath := os.Getenv("LLAMA_CPP_PATH")
 	modelPath := os.Getenv("LLAMA_MODEL_PATH")
 
@@ -92,19 +96,15 @@ func TestLlamaCppToolCalling(t *testing.T) {
 		t.Skip("Skipping llama.cpp tool calling test: LLAMA_CPP_PATH or LLAMA_MODEL_PATH not set")
 	}
 
-	// Create a test config with grammar enabled
+	// Create a test config
 	cfg := &config.Config{
 		Model: config.ModelConfig{
-			Type:           "llamacpp",
-			LlamaCppPath:   llamaPath,
-			ModelPath:      modelPath,
-			ContextSize:    4096,
-			UsableContext:  3072,
-			Temperature:    0.0,
-			Threads:        4,
-			NGpuLayers:     0,
-			EnableGrammar:  true,
-			GrammarLogging: true,
+			Type:        "llamacpp",
+			ServerURL:   "http://localhost:8082",
+			ModelName:   "test-model",
+			ContextSize: 4096,
+			Temperature: 0.0,
+			EnableTools: true,
 		},
 	}
 
