@@ -52,6 +52,22 @@ func (m *mockJobManager) GetConversation(ctx context.Context, id string) ([]stor
 	return []storage.ConversationEntry{}, nil
 }
 
+func (m *mockJobManager) SetCurrentPhase(ctx context.Context, id string, phase string) error {
+	return nil
+}
+
+func (m *mockJobManager) SetPhaseResults(ctx context.Context, id string, results map[string]interface{}) error {
+	return nil
+}
+
+func (m *mockJobManager) SetPlan(ctx context.Context, id string, plan map[string]interface{}) error {
+	return nil
+}
+
+func (m *mockJobManager) SetWorkflowType(ctx context.Context, id string, workflowType string) error {
+	return nil
+}
+
 func TestSSEBroadcaster_AddRemoveClient(t *testing.T) {
 	ctx := context.Background()
 	broadcaster := NewSSEBroadcaster(&mockJobManager{}, ctx)
