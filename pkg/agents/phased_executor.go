@@ -41,24 +41,24 @@ type PhaseResult struct {
 
 // PhasedExecutor handles multi-phase workflow execution
 type PhasedExecutor struct {
-	agent           *BaseAgent
-	contextMgr      *llmcontext.Manager
-	phases          []Phase
-	phaseResults    map[string]*PhaseResult
-	currentPhase    int
-	jobID           string
+	agent            *BaseAgent
+	contextMgr       *llmcontext.Manager
+	phases           []Phase
+	phaseResults     map[string]*PhaseResult
+	currentPhase     int
+	jobID            string
 	defaultMaxRounds int
 }
 
 // NewPhasedExecutor creates a new phased executor
 func NewPhasedExecutor(agent *BaseAgent, contextMgr *llmcontext.Manager, phases []Phase) *PhasedExecutor {
 	return &PhasedExecutor{
-		agent:           agent,
-		contextMgr:      contextMgr,
-		phases:          phases,
-		phaseResults:    make(map[string]*PhaseResult),
-		currentPhase:    0,
-		jobID:           contextMgr.GetJobID(),
+		agent:            agent,
+		contextMgr:       contextMgr,
+		phases:           phases,
+		phaseResults:     make(map[string]*PhaseResult),
+		currentPhase:     0,
+		jobID:            contextMgr.GetJobID(),
 		defaultMaxRounds: agent.config.Limits.MaxInferenceRuns,
 	}
 }
@@ -211,7 +211,12 @@ func (pe *PhasedExecutor) updateJobPhase(ctx context.Context, phaseName string) 
 		Content:   fmt.Sprintf("Starting phase: %s", phaseName),
 		Timestamp: time.Now(),
 	}
-	pe.agent.jobManager.AppendConversation(ctx, pe.jobID, entry)
+	if err := pe.agent.jobManager.AppendConversation(ctx, pe.jobID, entry); err != nil {
+		// Log error but don't fail the execution
+		if pe.agent.config.Debug.Enabled {
+			fmt.Fprintf(os.Stderr, "  ⚠️ Failed to log phase start: %v\n", err)
+		}
+	}
 }
 
 // savePhaseResults saves all phase results to the job
@@ -233,7 +238,12 @@ func (pe *PhasedExecutor) savePhaseResults(ctx context.Context) {
 		Content:   fmt.Sprintf("Phase results updated: %s", string(resultsJSON)),
 		Timestamp: time.Now(),
 	}
-	pe.agent.jobManager.AppendConversation(ctx, pe.jobID, entry)
+	if err := pe.agent.jobManager.AppendConversation(ctx, pe.jobID, entry); err != nil {
+		// Log error but don't fail the execution
+		if pe.agent.config.Debug.Enabled {
+			fmt.Fprintf(os.Stderr, "  ⚠️ Failed to log phase results: %v\n", err)
+		}
+	}
 }
 
 // phaseInferenceExecutor handles inference for a single phase

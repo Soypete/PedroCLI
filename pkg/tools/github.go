@@ -84,29 +84,29 @@ func (g *GitHubTool) Execute(ctx context.Context, args map[string]interface{}) (
 
 // PRInfo contains pull request information
 type PRInfo struct {
-	Number      int      `json:"number"`
-	Title       string   `json:"title"`
-	Body        string   `json:"body"`
-	State       string   `json:"state"`
-	HeadBranch  string   `json:"head_branch"`
-	BaseBranch  string   `json:"base_branch"`
-	Author      string   `json:"author"`
-	URL         string   `json:"url"`
-	Files       []string `json:"files"`
-	Additions   int      `json:"additions"`
-	Deletions   int      `json:"deletions"`
-	Diff        string   `json:"diff,omitempty"`
+	Number     int      `json:"number"`
+	Title      string   `json:"title"`
+	Body       string   `json:"body"`
+	State      string   `json:"state"`
+	HeadBranch string   `json:"head_branch"`
+	BaseBranch string   `json:"base_branch"`
+	Author     string   `json:"author"`
+	URL        string   `json:"url"`
+	Files      []string `json:"files"`
+	Additions  int      `json:"additions"`
+	Deletions  int      `json:"deletions"`
+	Diff       string   `json:"diff,omitempty"`
 }
 
 // IssueInfo contains issue information
 type IssueInfo struct {
-	Number   int           `json:"number"`
-	Title    string        `json:"title"`
-	Body     string        `json:"body"`
-	State    string        `json:"state"`
-	Author   string        `json:"author"`
-	Labels   []string      `json:"labels"`
-	URL      string        `json:"url"`
+	Number   int            `json:"number"`
+	Title    string         `json:"title"`
+	Body     string         `json:"body"`
+	State    string         `json:"state"`
+	Author   string         `json:"author"`
+	Labels   []string       `json:"labels"`
+	URL      string         `json:"url"`
 	Comments []IssueComment `json:"comments,omitempty"`
 }
 

@@ -158,7 +158,7 @@ func (c *ContextTool) checkpoint(ctx context.Context, args map[string]interface{
 		Success: true,
 		Output:  fmt.Sprintf("Checkpoint '%s' created: %s", name, description),
 		Data: map[string]interface{}{
-			"checkpoint": name,
+			"checkpoint":  name,
 			"description": description,
 		},
 	}, nil
