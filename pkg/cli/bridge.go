@@ -78,12 +78,44 @@ func NewCLIBridge(cfg CLIBridgeConfig) (*CLIBridge, error) {
 		return nil, fmt.Errorf("failed to create LLM backend: %w", err)
 	}
 
+	// Create code tools for agents
+	fileTool := tools.NewFileTool()
+	gitTool := tools.NewGitTool(cfg.WorkDir)
+	bashTool := tools.NewBashTool(cfg.Config, cfg.WorkDir)
+	testTool := tools.NewTestTool(cfg.WorkDir)
+	codeEditTool := tools.NewCodeEditTool()
+	searchTool := tools.NewSearchTool(cfg.WorkDir)
+	navigateTool := tools.NewNavigateTool(cfg.WorkDir)
+
+	// Helper function to register code tools with an agent
+	registerCodeTools := func(agent interface{ RegisterTool(tools.Tool) }) {
+		agent.RegisterTool(fileTool)
+		agent.RegisterTool(codeEditTool)
+		agent.RegisterTool(searchTool)
+		agent.RegisterTool(navigateTool)
+		agent.RegisterTool(gitTool)
+		agent.RegisterTool(bashTool)
+		agent.RegisterTool(testTool)
+	}
+
 	// Register coding agents
+	builderAgent := agents.NewBuilderAgent(cfg.Config, backend, jobManager)
+	registerCodeTools(builderAgent)
+
+	debuggerAgent := agents.NewDebuggerAgent(cfg.Config, backend, jobManager)
+	registerCodeTools(debuggerAgent)
+
+	reviewerAgent := agents.NewReviewerAgent(cfg.Config, backend, jobManager)
+	registerCodeTools(reviewerAgent)
+
+	triagerAgent := agents.NewTriagerAgent(cfg.Config, backend, jobManager)
+	registerCodeTools(triagerAgent)
+
 	codingAgents := []agents.Agent{
-		agents.NewBuilderAgent(cfg.Config, backend, jobManager),
-		agents.NewDebuggerAgent(cfg.Config, backend, jobManager),
-		agents.NewReviewerAgent(cfg.Config, backend, jobManager),
-		agents.NewTriagerAgent(cfg.Config, backend, jobManager),
+		builderAgent,
+		debuggerAgent,
+		reviewerAgent,
+		triagerAgent,
 	}
 
 	for _, agent := range codingAgents {

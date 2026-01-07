@@ -17,8 +17,26 @@ import (
 const version = "0.3.0-dev"
 
 func main() {
+	// Parse --config flag from command line
+	var configPath string
+	args := os.Args[1:]
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--config" || args[i] == "-config" {
+			if i+1 < len(args) {
+				configPath = args[i+1]
+				break
+			}
+		}
+	}
+
 	// Load configuration
-	cfg, err := config.LoadDefault()
+	var cfg *config.Config
+	var err error
+	if configPath != "" {
+		cfg, err = config.Load(configPath)
+	} else {
+		cfg, err = config.LoadDefault()
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
 		os.Exit(1)
