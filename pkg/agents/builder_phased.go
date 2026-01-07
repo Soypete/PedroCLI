@@ -153,7 +153,7 @@ func (b *BuilderPhasedAgent) Execute(ctx context.Context, input map[string]inter
 		bgCtx := context.Background()
 
 		// Create context manager
-		contextMgr, err := llmcontext.NewManager(job.ID, b.config.Debug.Enabled)
+		contextMgr, err := llmcontext.NewManager(job.ID, b.config.Debug.Enabled, b.config.Model.ContextSize)
 		if err != nil {
 			b.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return

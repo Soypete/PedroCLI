@@ -155,7 +155,7 @@ func (d *DebuggerPhasedAgent) Execute(ctx context.Context, input map[string]inte
 		bgCtx := context.Background()
 
 		// Create context manager
-		contextMgr, err := llmcontext.NewManager(job.ID, d.config.Debug.Enabled)
+		contextMgr, err := llmcontext.NewManager(job.ID, d.config.Debug.Enabled, d.config.Model.ContextSize)
 		if err != nil {
 			d.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
