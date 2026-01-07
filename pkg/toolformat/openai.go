@@ -61,8 +61,8 @@ func (f *OpenAIFormatter) FormatToolsPrompt(tools []ToolDefinition) string {
 
 // OpenAITool represents a tool in OpenAI API format
 type OpenAITool struct {
-	Type     string          `json:"type"`
-	Function OpenAIFunction  `json:"function"`
+	Type     string         `json:"type"`
+	Function OpenAIFunction `json:"function"`
 }
 
 // OpenAIFunction represents a function in OpenAI API format

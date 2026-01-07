@@ -156,6 +156,9 @@ func (d *DB) Migrate(ctx context.Context) error {
 }
 
 // createMigrationsTable creates the migrations tracking table if it doesn't exist.
+// TODO: This is part of the old custom migration system, now using goose
+//
+//nolint:unused // Kept for reference, may be used in future
 func (d *DB) createMigrationsTable(ctx context.Context) error {
 	query := `
 		CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -168,6 +171,8 @@ func (d *DB) createMigrationsTable(ctx context.Context) error {
 }
 
 // getMigrationFiles returns a sorted list of migration file names.
+//
+//nolint:unused // Part of old custom migration system
 func (d *DB) getMigrationFiles() ([]string, error) {
 	var migrations []string
 
@@ -192,6 +197,8 @@ func (d *DB) getMigrationFiles() ([]string, error) {
 }
 
 // getAppliedMigrations returns a map of already applied migration names.
+//
+//nolint:unused // Part of old custom migration system
 func (d *DB) getAppliedMigrations(ctx context.Context) (map[string]bool, error) {
 	applied := make(map[string]bool)
 
@@ -213,6 +220,8 @@ func (d *DB) getAppliedMigrations(ctx context.Context) (map[string]bool, error) 
 }
 
 // applyMigration applies a single migration file.
+//
+//nolint:unused // Part of old custom migration system
 func (d *DB) applyMigration(ctx context.Context, filename string) error {
 	content, err := migrationsFS.ReadFile(filepath.Join("migrations", filename))
 	if err != nil {
@@ -248,6 +257,8 @@ func (d *DB) applyMigration(ctx context.Context, filename string) error {
 }
 
 // extractGooseUpSection extracts only the "Up" section from a goose migration file.
+//
+//nolint:unused // Part of old custom migration system
 func (d *DB) extractGooseUpSection(content string) string {
 	lines := strings.Split(content, "\n")
 	var upLines []string
@@ -277,6 +288,8 @@ func (d *DB) extractGooseUpSection(content string) string {
 }
 
 // adaptSQLForSQLite modifies PostgreSQL SQL to work with SQLite.
+//
+//nolint:unused // Part of old custom migration system
 func (d *DB) adaptSQLForSQLite(sql string) string {
 	// Replace TIMESTAMP with DATETIME
 	sql = strings.ReplaceAll(sql, "TIMESTAMP", "DATETIME")

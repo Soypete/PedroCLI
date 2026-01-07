@@ -280,3 +280,72 @@ func (m *Manager) GetConversation(ctx context.Context, id string) ([]storage.Con
 
 	return m.conversations[id], nil
 }
+
+// SetWorkflowType sets the workflow type for a job.
+// Note: File-based manager stores this in Output map since Job struct is minimal.
+func (m *Manager) SetWorkflowType(ctx context.Context, id string, workflowType string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	job, ok := m.jobs[id]
+	if !ok {
+		return fmt.Errorf("job not found: %s", id)
+	}
+
+	if job.Output == nil {
+		job.Output = make(map[string]interface{})
+	}
+	job.Output["workflow_type"] = workflowType
+	return m.saveJob(job)
+}
+
+// SetCurrentPhase sets the current phase for a job.
+func (m *Manager) SetCurrentPhase(ctx context.Context, id string, phase string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	job, ok := m.jobs[id]
+	if !ok {
+		return fmt.Errorf("job not found: %s", id)
+	}
+
+	if job.Output == nil {
+		job.Output = make(map[string]interface{})
+	}
+	job.Output["current_phase"] = phase
+	return m.saveJob(job)
+}
+
+// SetPhaseResults sets the phase results for a job.
+func (m *Manager) SetPhaseResults(ctx context.Context, id string, results map[string]interface{}) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	job, ok := m.jobs[id]
+	if !ok {
+		return fmt.Errorf("job not found: %s", id)
+	}
+
+	if job.Output == nil {
+		job.Output = make(map[string]interface{})
+	}
+	job.Output["phase_results"] = results
+	return m.saveJob(job)
+}
+
+// SetPlan sets the implementation plan for a job.
+func (m *Manager) SetPlan(ctx context.Context, id string, plan map[string]interface{}) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	job, ok := m.jobs[id]
+	if !ok {
+		return fmt.Errorf("job not found: %s", id)
+	}
+
+	if job.Output == nil {
+		job.Output = make(map[string]interface{})
+	}
+	job.Output["plan"] = plan
+	return m.saveJob(job)
+}

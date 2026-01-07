@@ -30,6 +30,7 @@ type AppContext struct {
 	CodeEditTool tools.Tool
 	SearchTool   tools.Tool
 	NavigateTool tools.Tool
+	LSPTool      *tools.LSPTool
 
 	// Blog tools
 	RSSFeedTool     tools.Tool
@@ -102,6 +103,11 @@ func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, erro
 	appCtx.SearchTool = tools.NewSearchTool(workDir)
 	appCtx.NavigateTool = tools.NewNavigateTool(workDir)
 
+	// Initialize LSP tool if enabled
+	if cfg.LSP.Enabled {
+		appCtx.LSPTool = tools.NewLSPTool(cfg, workDir)
+	}
+
 	// Initialize blog tools
 	appCtx.RSSFeedTool = tools.NewRSSFeedTool(cfg)
 	appCtx.StaticLinksTool = tools.NewStaticLinksTool(cfg)
@@ -110,10 +116,26 @@ func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, erro
 	return appCtx, nil
 }
 
-// Close closes the database connection.
+// Close closes all resources including database and LSP servers.
 func (ctx *AppContext) Close() error {
+	var errs []error
+
+	// Shutdown LSP servers
+	if ctx.LSPTool != nil {
+		if err := ctx.LSPTool.Shutdown(context.Background()); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	// Close database
 	if ctx.Database != nil {
-		return ctx.Database.Close()
+		if err := ctx.Database.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	if len(errs) > 0 {
+		return errs[0]
 	}
 	return nil
 }
@@ -127,6 +149,10 @@ func registerCodeTools(agent interface{ RegisterTool(tools.Tool) }, ctx *AppCont
 	agent.RegisterTool(ctx.GitTool)
 	agent.RegisterTool(ctx.BashTool)
 	agent.RegisterTool(ctx.TestTool)
+	// Register LSP tool if enabled
+	if ctx.LSPTool != nil {
+		agent.RegisterTool(ctx.LSPTool)
+	}
 }
 
 // NewBuilderAgentWithTools creates a fully configured builder agent

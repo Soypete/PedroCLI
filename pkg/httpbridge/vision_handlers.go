@@ -1,3 +1,7 @@
+// Package httpbridge provides HTTP handlers for vision tools.
+// TODO: Vision features are currently disabled - these handlers will be used when vision is re-enabled
+//
+//nolint:unused // Vision handlers are not yet connected to routes
 package httpbridge
 
 import (

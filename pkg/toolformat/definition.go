@@ -5,23 +5,23 @@ package toolformat
 // ToolDefinition represents a tool with its schema for LLM consumption.
 // This is the canonical format that all tools should provide.
 type ToolDefinition struct {
-	Name        string           `json:"name"`
-	Description string           `json:"description"`
-	Category    ToolCategory     `json:"category"`
-	Parameters  ParameterSchema  `json:"parameters"`
-	Handler     ToolHandler      `json:"-"` // Not serialized
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Category    ToolCategory    `json:"category"`
+	Parameters  ParameterSchema `json:"parameters"`
+	Handler     ToolHandler     `json:"-"` // Not serialized
 }
 
 // ToolCategory categorizes tools for filtering and mode selection
 type ToolCategory string
 
 const (
-	CategoryCode     ToolCategory = "code"      // Code manipulation tools
-	CategoryResearch ToolCategory = "research"  // Research/web tools
-	CategoryBlog     ToolCategory = "blog"      // Blog/content tools
-	CategoryJob      ToolCategory = "job"       // Job management tools
-	CategoryAgent    ToolCategory = "agent"     // Agent invocation tools
-	CategoryDB       ToolCategory = "db"        // Database migration tools
+	CategoryCode     ToolCategory = "code"     // Code manipulation tools
+	CategoryResearch ToolCategory = "research" // Research/web tools
+	CategoryBlog     ToolCategory = "blog"     // Blog/content tools
+	CategoryJob      ToolCategory = "job"      // Job management tools
+	CategoryAgent    ToolCategory = "agent"    // Agent invocation tools
+	CategoryDB       ToolCategory = "db"       // Database migration tools
 )
 
 // ToolHandler is the function signature for tool execution
@@ -38,19 +38,19 @@ type ToolResult struct {
 
 // ParameterSchema describes the parameters a tool accepts using JSON Schema
 type ParameterSchema struct {
-	Type       string                      `json:"type"` // Always "object" for tool params
-	Properties map[string]PropertySchema   `json:"properties"`
-	Required   []string                    `json:"required,omitempty"`
+	Type       string                    `json:"type"` // Always "object" for tool params
+	Properties map[string]PropertySchema `json:"properties"`
+	Required   []string                  `json:"required,omitempty"`
 }
 
 // PropertySchema describes a single parameter property
 type PropertySchema struct {
-	Type        string           `json:"type"` // "string", "number", "boolean", "array", "object"
-	Description string           `json:"description"`
-	Enum        []string         `json:"enum,omitempty"`       // For constrained string values
-	Items       *PropertySchema  `json:"items,omitempty"`      // For array types
+	Type        string                    `json:"type"` // "string", "number", "boolean", "array", "object"
+	Description string                    `json:"description"`
+	Enum        []string                  `json:"enum,omitempty"`       // For constrained string values
+	Items       *PropertySchema           `json:"items,omitempty"`      // For array types
 	Properties  map[string]PropertySchema `json:"properties,omitempty"` // For nested objects
-	Default     interface{}      `json:"default,omitempty"`
+	Default     interface{}               `json:"default,omitempty"`
 }
 
 // NewParameterSchema creates a new empty parameter schema

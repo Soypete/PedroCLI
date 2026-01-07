@@ -4,11 +4,57 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/soypete/pedrocli/pkg/jobs"
+	"github.com/soypete/pedrocli/pkg/storage"
 )
+
+// mockJobManager is a simple mock for testing SSE broadcaster
+type mockJobManager struct{}
+
+func (m *mockJobManager) Create(ctx context.Context, jobType, description string, input map[string]interface{}) (*jobs.Job, error) {
+	return &jobs.Job{ID: "test-job", Type: jobType, Status: jobs.StatusRunning}, nil
+}
+
+func (m *mockJobManager) Get(ctx context.Context, id string) (*jobs.Job, error) {
+	return &jobs.Job{ID: id, Status: jobs.StatusRunning}, nil
+}
+
+func (m *mockJobManager) List(ctx context.Context) ([]*jobs.Job, error) {
+	return []*jobs.Job{}, nil
+}
+
+func (m *mockJobManager) Update(ctx context.Context, id string, status jobs.Status, output map[string]interface{}, err error) error {
+	return nil
+}
+
+func (m *mockJobManager) Cancel(ctx context.Context, id string) error {
+	return nil
+}
+
+func (m *mockJobManager) CleanupOldJobs(ctx context.Context, olderThan time.Duration) error {
+	return nil
+}
+
+func (m *mockJobManager) SetWorkDir(ctx context.Context, id string, workDir string) error {
+	return nil
+}
+
+func (m *mockJobManager) SetContextDir(ctx context.Context, id string, contextDir string) error {
+	return nil
+}
+
+func (m *mockJobManager) AppendConversation(ctx context.Context, id string, entry storage.ConversationEntry) error {
+	return nil
+}
+
+func (m *mockJobManager) GetConversation(ctx context.Context, id string) ([]storage.ConversationEntry, error) {
+	return []storage.ConversationEntry{}, nil
+}
 
 func TestSSEBroadcaster_AddRemoveClient(t *testing.T) {
 	ctx := context.Background()
-	broadcaster := NewSSEBroadcaster(nil, ctx)
+	broadcaster := NewSSEBroadcaster(&mockJobManager{}, ctx)
 
 	// Add a client
 	client := broadcaster.AddClient("job-123")
@@ -36,7 +82,7 @@ func TestSSEBroadcaster_AddRemoveClient(t *testing.T) {
 
 func TestSSEBroadcaster_Broadcast(t *testing.T) {
 	ctx := context.Background()
-	broadcaster := NewSSEBroadcaster(nil, ctx)
+	broadcaster := NewSSEBroadcaster(&mockJobManager{}, ctx)
 
 	// Add two clients watching the same job
 	client1 := broadcaster.AddClient("job-123")
@@ -88,7 +134,7 @@ func TestSSEBroadcaster_Broadcast(t *testing.T) {
 
 func TestSSEBroadcaster_BroadcastToAll(t *testing.T) {
 	ctx := context.Background()
-	broadcaster := NewSSEBroadcaster(nil, ctx)
+	broadcaster := NewSSEBroadcaster(&mockJobManager{}, ctx)
 
 	// Add client watching all jobs (*)
 	clientAll := broadcaster.AddClient("*")
