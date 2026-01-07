@@ -2,9 +2,9 @@ package webscrape
 
 import (
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
@@ -30,7 +30,7 @@ type Cache struct {
 // CacheConfig configures the cache behavior
 type CacheConfig struct {
 	Enabled    bool          `json:"enabled"`
-	Type       string        `json:"type"` // "sqlite", "memory"
+	Type       string        `json:"type"` // "memory" only
 	Path       string        `json:"path,omitempty"`
 	DefaultTTL time.Duration `json:"default_ttl"`
 	MaxSizeMB  int64         `json:"max_size_mb"`
@@ -53,19 +53,13 @@ func NewCache(cfg *CacheConfig) (*Cache, error) {
 	}
 
 	var store CacheStore
-	var err error
 
-	switch cfg.Type {
-	case "sqlite":
-		store, err = NewSQLiteCache(cfg.Path)
-	case "memory":
+	// Only memory cache is supported
+	if cfg.Type == "" || cfg.Type == "memory" {
 		store = NewMemoryCache(cfg.MaxSizeMB * 1024 * 1024)
-	default:
-		store = NewMemoryCache(cfg.MaxSizeMB * 1024 * 1024)
-	}
-
-	if err != nil {
-		return nil, err
+	} else {
+		// Return error for unsupported cache types
+		return nil, fmt.Errorf("unsupported cache type: %s (only 'memory' is supported)", cfg.Type)
 	}
 
 	return &Cache{
@@ -258,111 +252,4 @@ func (m *MemoryCache) Close() error {
 	defer m.mu.Unlock()
 	m.data = nil
 	return nil
-}
-
-// SQLiteCache implements a SQLite-based cache
-type SQLiteCache struct {
-	db *sql.DB
-}
-
-// NewSQLiteCache creates a new SQLite cache
-func NewSQLiteCache(path string) (*SQLiteCache, error) {
-	db, err := sql.Open("sqlite3", path)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create table if not exists
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS webscrape_cache (
-			id TEXT PRIMARY KEY,
-			url_hash TEXT UNIQUE,
-			url TEXT,
-			content_type TEXT,
-			raw_content TEXT,
-			clean_text TEXT,
-			code_blocks TEXT,
-			metadata TEXT,
-			fetched_at DATETIME,
-			expires_at DATETIME,
-			created_at DATETIME
-		);
-		CREATE INDEX IF NOT EXISTS idx_cache_url_hash ON webscrape_cache(url_hash);
-		CREATE INDEX IF NOT EXISTS idx_cache_expires ON webscrape_cache(expires_at);
-	`)
-	if err != nil {
-		db.Close()
-		return nil, err
-	}
-
-	return &SQLiteCache{db: db}, nil
-}
-
-func (s *SQLiteCache) Get(urlHash string) (*CacheEntry, error) {
-	row := s.db.QueryRow(`
-		SELECT id, url_hash, url, content_type, raw_content, clean_text,
-		       code_blocks, metadata, fetched_at, expires_at, created_at
-		FROM webscrape_cache
-		WHERE url_hash = ?
-	`, urlHash)
-
-	var entry CacheEntry
-	var codeBlocks, metadata sql.NullString
-	var fetchedAt, expiresAt, createdAt string
-
-	err := row.Scan(
-		&entry.ID, &entry.URLHash, &entry.URL, &entry.ContentType,
-		&entry.RawContent, &entry.CleanText, &codeBlocks, &metadata,
-		&fetchedAt, &expiresAt, &createdAt,
-	)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	entry.FetchedAt, _ = time.Parse(time.RFC3339, fetchedAt)
-	entry.ExpiresAt, _ = time.Parse(time.RFC3339, expiresAt)
-	entry.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
-
-	if codeBlocks.Valid {
-		entry.CodeBlocks = []byte(codeBlocks.String)
-	}
-	if metadata.Valid {
-		entry.Metadata = []byte(metadata.String)
-	}
-
-	return &entry, nil
-}
-
-func (s *SQLiteCache) Set(entry *CacheEntry) error {
-	_, err := s.db.Exec(`
-		INSERT OR REPLACE INTO webscrape_cache
-		(id, url_hash, url, content_type, raw_content, clean_text,
-		 code_blocks, metadata, fetched_at, expires_at, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`,
-		entry.ID, entry.URLHash, entry.URL, entry.ContentType,
-		entry.RawContent, entry.CleanText,
-		string(entry.CodeBlocks), string(entry.Metadata),
-		entry.FetchedAt.Format(time.RFC3339),
-		entry.ExpiresAt.Format(time.RFC3339),
-		entry.CreatedAt.Format(time.RFC3339),
-	)
-	return err
-}
-
-func (s *SQLiteCache) Delete(urlHash string) error {
-	_, err := s.db.Exec("DELETE FROM webscrape_cache WHERE url_hash = ?", urlHash)
-	return err
-}
-
-func (s *SQLiteCache) Cleanup() error {
-	_, err := s.db.Exec("DELETE FROM webscrape_cache WHERE expires_at < ?", time.Now().Format(time.RFC3339))
-	return err
-}
-
-func (s *SQLiteCache) Close() error {
-	return s.db.Close()
 }

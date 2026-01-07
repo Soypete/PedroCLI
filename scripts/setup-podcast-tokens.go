@@ -48,29 +48,41 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Load configuration to get database path
+	// Load configuration to get database settings
 	cfg, err := config.LoadDefault()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
 	}
 
-	if cfg.RepoStorage.DatabasePath == "" {
-		fmt.Fprintln(os.Stderr, "Error: database path not configured in .pedrocli.json")
-		fmt.Fprintln(os.Stderr, "Please set repo_storage.database_path")
-		os.Exit(1)
+	// Create database config from environment or config file
+	dbCfg := database.DefaultConfig()
+	if cfg.Database.Host != "" {
+		dbCfg.Host = cfg.Database.Host
+		dbCfg.Port = cfg.Database.Port
+		dbCfg.Database = cfg.Database.Database
+		dbCfg.User = cfg.Database.User
+		dbCfg.Password = cfg.Database.Password
+		dbCfg.SSLMode = cfg.Database.SSLMode
 	}
 
-	// Open database
-	store, err := database.NewSQLiteStore(cfg.RepoStorage.DatabasePath)
+	// Open PostgreSQL database
+	db, err := database.New(dbCfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error opening database: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error connecting to database: %v\n", err)
 		os.Exit(1)
 	}
-	defer store.Close()
+	defer db.Close()
+
+	// Run migrations
+	ctx := context.Background()
+	if err := db.Migrate(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "Error running migrations: %v\n", err)
+		os.Exit(1)
+	}
 
 	// Create token store
-	tokenStore := tokens.NewSQLiteTokenStore(store.DB())
+	tokenStore := tokens.NewTokenStore(db.DB)
 
 	// Build token object based on provider type
 	var token *tokens.OAuthToken
@@ -106,7 +118,6 @@ func main() {
 	}
 
 	// Save token to database
-	ctx := context.Background()
 	if err := tokenStore.SaveToken(ctx, token); err != nil {
 		fmt.Fprintf(os.Stderr, "Error saving token: %v\n", err)
 		os.Exit(1)

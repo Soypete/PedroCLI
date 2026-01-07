@@ -1,5 +1,5 @@
 // Package database provides database connection and migration management for PedroCLI.
-// It supports both PostgreSQL and SQLite backends.
+// It supports PostgreSQL backend only.
 package database
 
 import (
@@ -16,8 +16,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/lib/pq"           // PostgreSQL driver
-	_ "github.com/mattn/go-sqlite3" // SQLite driver
+	_ "github.com/lib/pq" // PostgreSQL driver
 	"github.com/pressly/goose/v3"
 )
 
@@ -33,25 +32,24 @@ type DB struct {
 	migrated bool
 }
 
-// Config holds database configuration.
+// Config holds database configuration for PostgreSQL.
 type Config struct {
-	Driver   string `json:"driver"`   // "postgres" or "sqlite"
 	Host     string `json:"host"`     // PostgreSQL host
 	Port     int    `json:"port"`     // PostgreSQL port
-	Database string `json:"database"` // Database name or SQLite file path
+	Database string `json:"database"` // Database name
 	User     string `json:"user"`     // PostgreSQL user
 	Password string `json:"password"` // PostgreSQL password
 	SSLMode  string `json:"ssl_mode"` // PostgreSQL SSL mode
 }
 
 // DefaultConfig returns default database configuration.
-// Checks DATABASE_URL environment variable first, falls back to SQLite.
+// Reads from DATABASE_URL or individual DB_* environment variables.
 func DefaultConfig() *Config {
-	// Check for DATABASE_URL environment variable (Postgres connection string)
+	// Check for DATABASE_URL environment variable
 	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
-		// Parse DATABASE_URL (format: postgres://user:password@host:port/database?sslmode=disable)
+		// TODO: Implement proper DATABASE_URL parsing
+		// For now, return defaults - parsePostgresURL should be implemented
 		return &Config{
-			Driver:   "postgres",
 			Host:     "localhost",
 			Port:     5432,
 			Database: "pedrocli",
@@ -61,40 +59,50 @@ func DefaultConfig() *Config {
 		}
 	}
 
-	// Fall back to SQLite for local development
+	// Fall back to individual environment variables
 	return &Config{
-		Driver:   "sqlite",
-		Database: "pedrocli.db",
+		Host:     getEnv("DB_HOST", "localhost"),
+		Port:     getEnvInt("DB_PORT", 5432),
+		Database: getEnv("DB_NAME", "pedrocli"),
+		User:     getEnv("DB_USER", "pedrocli"),
+		Password: getEnv("DB_PASSWORD", "pedrocli"),
+		SSLMode:  getEnv("DB_SSLMODE", "disable"),
 	}
 }
 
-// New creates a new database connection.
-func New(cfg *Config) (*DB, error) {
-	var connStr string
-	var driver string
-
-	switch cfg.Driver {
-	case "postgres", "postgresql":
-		driver = "postgres"
-		sslMode := cfg.SSLMode
-		if sslMode == "" {
-			sslMode = "disable"
-		}
-		connStr = fmt.Sprintf(
-			"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-			cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Database, sslMode,
-		)
-	case "sqlite", "sqlite3", "":
-		driver = "sqlite3"
-		connStr = cfg.Database
-		if connStr == "" {
-			connStr = "pedrocli.db"
-		}
-	default:
-		return nil, fmt.Errorf("unsupported database driver: %s", cfg.Driver)
+// getEnv returns an environment variable or default value
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
 	}
+	return defaultValue
+}
 
-	db, err := sql.Open(driver, connStr)
+// getEnvInt returns an integer environment variable or default value
+func getEnvInt(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		// Simple parsing - could use strconv.Atoi but keeping it simple
+		var i int
+		if _, err := fmt.Sscanf(value, "%d", &i); err == nil {
+			return i
+		}
+	}
+	return defaultValue
+}
+
+// New creates a new PostgreSQL database connection.
+func New(cfg *Config) (*DB, error) {
+	// Build PostgreSQL connection string
+	sslMode := cfg.SSLMode
+	if sslMode == "" {
+		sslMode = "disable"
+	}
+	connStr := fmt.Sprintf(
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Database, sslMode,
+	)
+
+	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -115,7 +123,7 @@ func New(cfg *Config) (*DB, error) {
 
 	return &DB{
 		DB:      db,
-		driver:  driver,
+		driver:  "postgres",
 		connStr: connStr,
 	}, nil
 }
@@ -137,12 +145,8 @@ func (d *DB) Migrate(ctx context.Context) error {
 	// Set the embedded filesystem for goose
 	goose.SetBaseFS(migrationsFS)
 
-	// Set the dialect based on driver
-	dialect := "postgres"
-	if d.driver == "sqlite3" {
-		dialect = "sqlite3"
-	}
-	if err := goose.SetDialect(dialect); err != nil {
+	// Set the dialect to postgres
+	if err := goose.SetDialect("postgres"); err != nil {
 		return fmt.Errorf("failed to set goose dialect: %w", err)
 	}
 
@@ -230,12 +234,7 @@ func (d *DB) applyMigration(ctx context.Context, filename string) error {
 
 	// Parse goose migration format to extract only the "Up" section
 	sql := string(content)
-	upSQL := d.extractGooseUpSection(sql)
-
-	// Adapt SQL for SQLite if needed
-	if d.driver == "sqlite3" {
-		upSQL = d.adaptSQLForSQLite(upSQL)
-	}
+	upSQL := extractGooseUpSection(sql)
 
 	tx, err := d.BeginTx(ctx, nil)
 	if err != nil {
@@ -259,7 +258,7 @@ func (d *DB) applyMigration(ctx context.Context, filename string) error {
 // extractGooseUpSection extracts only the "Up" section from a goose migration file.
 //
 //nolint:unused // Part of old custom migration system
-func (d *DB) extractGooseUpSection(content string) string {
+func extractGooseUpSection(content string) string {
 	lines := strings.Split(content, "\n")
 	var upLines []string
 	inUpSection := false
@@ -285,26 +284,6 @@ func (d *DB) extractGooseUpSection(content string) string {
 	}
 
 	return strings.Join(upLines, "\n")
-}
-
-// adaptSQLForSQLite modifies PostgreSQL SQL to work with SQLite.
-//
-//nolint:unused // Part of old custom migration system
-func (d *DB) adaptSQLForSQLite(sql string) string {
-	// Replace TIMESTAMP with DATETIME
-	sql = strings.ReplaceAll(sql, "TIMESTAMP", "DATETIME")
-	// Replace UUID with TEXT
-	sql = strings.ReplaceAll(sql, "UUID", "TEXT")
-	// Replace JSONB with TEXT (SQLite stores JSON as text)
-	sql = strings.ReplaceAll(sql, "JSONB", "TEXT")
-	// Remove JSONB casts (::jsonb) since SQLite doesn't support them
-	sql = strings.ReplaceAll(sql, "::jsonb", "")
-	sql = strings.ReplaceAll(sql, "::JSONB", "")
-	// Replace BIGINT with INTEGER
-	sql = strings.ReplaceAll(sql, "BIGINT", "INTEGER")
-	// Remove ON DELETE CASCADE (SQLite needs PRAGMA foreign_keys = ON)
-	sql = strings.ReplaceAll(sql, "ON DELETE CASCADE", "")
-	return sql
 }
 
 // NewUUID generates a new UUID.

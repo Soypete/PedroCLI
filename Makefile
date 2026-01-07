@@ -1,4 +1,4 @@
-.PHONY: build build-mac build-linux build-all test test-coverage test-coverage-report install clean run-cli run-http serve build-http build-calendar fmt lint tidy migrate-up migrate-down migrate-status migrate-reset migrate-redo db-reset db-fresh postgres-up postgres-down postgres-logs postgres-shell llama-server llama-health stop-llama whisper-server whisper-health stop-whisper
+.PHONY: build build-mac build-linux build-all test test-postgres-up test-postgres-down test-postgres-clean test-with-postgres test-coverage test-coverage-report install clean run-cli run-http serve build-http build-calendar fmt lint tidy migrate-up migrate-down migrate-status migrate-reset migrate-redo db-reset db-fresh postgres-up postgres-down postgres-logs postgres-shell llama-server llama-health stop-llama whisper-server whisper-health stop-whisper
 
 # llama-server configuration
 LLAMA_PORT ?= 8082
@@ -83,9 +83,41 @@ build-calendar:
 # Build for both platforms
 build-all: build-mac build-linux build-calendar
 
+# PostgreSQL Test Infrastructure (Podman)
+test-postgres-up:
+	@echo "Starting PostgreSQL test container with Podman..."
+	@podman run -d \
+		--name pedrocli-postgres-test \
+		-e POSTGRES_USER=pedrocli_test \
+		-e POSTGRES_PASSWORD=pedrocli_test \
+		-e POSTGRES_DB=pedrocli_test \
+		-p 5433:5432 \
+		postgres:15-alpine
+	@echo "Waiting for PostgreSQL to be ready..."
+	@sleep 3
+	@until podman exec pedrocli-postgres-test pg_isready -U pedrocli_test > /dev/null 2>&1; do \
+		echo "Waiting for PostgreSQL..."; \
+		sleep 1; \
+	done
+	@echo "PostgreSQL is ready!"
+
+test-postgres-down:
+	@echo "Stopping and removing PostgreSQL test container..."
+	@podman stop pedrocli-postgres-test 2>/dev/null || true
+	@podman rm pedrocli-postgres-test 2>/dev/null || true
+
+test-postgres-clean: test-postgres-down
+	@echo "Cleaning up PostgreSQL test volumes..."
+	@podman volume prune -f
+
+test-with-postgres: test-postgres-up
+	@echo "Running tests with PostgreSQL..."
+	@export TEST_DATABASE_URL="postgres://pedrocli_test:pedrocli_test@localhost:5433/pedrocli_test?sslmode=disable" && \
+	go test -v -count=1 ./...
+	@$(MAKE) test-postgres-down
+
 # Run tests
-test:
-	go test ./...
+test: test-with-postgres
 
 # Run tests with coverage
 test-coverage:

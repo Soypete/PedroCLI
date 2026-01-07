@@ -8,12 +8,9 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/pressly/goose/v3"
 
 	"github.com/soypete/pedrocli/pkg/hooks"
@@ -23,57 +20,37 @@ import (
 //go:embed migrations/*.sql
 var embedMigrations embed.FS
 
-// SQLiteStore implements repos.Store using SQLite
-type SQLiteStore struct {
+// Store implements repos.Store using PostgreSQL
+type Store struct {
 	db *sql.DB
 }
 
-// NewSQLiteStore creates a new SQLite store with auto-migration enabled
-func NewSQLiteStore(dbPath string) (*SQLiteStore, error) {
-	return NewSQLiteStoreWithOptions(dbPath, true)
+// NewStore creates a new PostgreSQL store from an existing database connection
+func NewStore(db *sql.DB) *Store {
+	return &Store{db: db}
 }
 
-// NewSQLiteStoreWithOptions creates a new SQLite store with configurable auto-migration
-func NewSQLiteStoreWithOptions(dbPath string, autoMigrate bool) (*SQLiteStore, error) {
-	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
-		return nil, fmt.Errorf("failed to create database directory: %w", err)
+// NewStoreWithMigration creates a new store and runs migrations
+func NewStoreWithMigration(db *sql.DB) (*Store, error) {
+	store := &Store{db: db}
+
+	// Setup and run migrations
+	if err := store.setupGoose(); err != nil {
+		return nil, fmt.Errorf("failed to setup goose: %w", err)
 	}
 
-	db, err := sql.Open("sqlite3", dbPath+"?_foreign_keys=on")
-	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
-	}
-
-	// Test connection
-	if err := db.Ping(); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to ping database: %w", err)
-	}
-
-	store := &SQLiteStore{db: db}
-
-	// Setup and run migrations if enabled
-	if autoMigrate {
-		if err := store.setupGoose(); err != nil {
-			db.Close()
-			return nil, fmt.Errorf("failed to setup goose: %w", err)
-		}
-
-		if err := store.Migrate(); err != nil {
-			db.Close()
-			return nil, fmt.Errorf("migration failed: %w", err)
-		}
+	if err := store.Migrate(); err != nil {
+		return nil, fmt.Errorf("migration failed: %w", err)
 	}
 
 	return store, nil
 }
 
-// setupGoose configures goose for SQLite with embedded migrations
-func (s *SQLiteStore) setupGoose() error {
+// setupGoose configures goose for PostgreSQL with embedded migrations
+func (s *Store) setupGoose() error {
 	goose.SetBaseFS(embedMigrations)
 
-	if err := goose.SetDialect("sqlite3"); err != nil {
+	if err := goose.SetDialect("postgres"); err != nil {
 		return err
 	}
 
@@ -84,12 +61,12 @@ func (s *SQLiteStore) setupGoose() error {
 }
 
 // Migrate runs all pending migrations
-func (s *SQLiteStore) Migrate() error {
+func (s *Store) Migrate() error {
 	return goose.Up(s.db, "migrations")
 }
 
 // MigrateDown rolls back the last migration
-func (s *SQLiteStore) MigrateDown() error {
+func (s *Store) MigrateDown() error {
 	if err := s.setupGoose(); err != nil {
 		return err
 	}
@@ -97,7 +74,7 @@ func (s *SQLiteStore) MigrateDown() error {
 }
 
 // MigrateReset rolls back all migrations
-func (s *SQLiteStore) MigrateReset() error {
+func (s *Store) MigrateReset() error {
 	if err := s.setupGoose(); err != nil {
 		return err
 	}
@@ -105,7 +82,7 @@ func (s *SQLiteStore) MigrateReset() error {
 }
 
 // MigrateRedo rolls back and re-applies the last migration
-func (s *SQLiteStore) MigrateRedo() error {
+func (s *Store) MigrateRedo() error {
 	if err := s.setupGoose(); err != nil {
 		return err
 	}
@@ -113,7 +90,7 @@ func (s *SQLiteStore) MigrateRedo() error {
 }
 
 // MigrationStatus prints the status of all migrations
-func (s *SQLiteStore) MigrationStatus() error {
+func (s *Store) MigrationStatus() error {
 	if err := s.setupGoose(); err != nil {
 		return err
 	}
@@ -121,7 +98,7 @@ func (s *SQLiteStore) MigrationStatus() error {
 }
 
 // MigrationVersion returns the current database version
-func (s *SQLiteStore) MigrationVersion() (int64, error) {
+func (s *Store) MigrationVersion() (int64, error) {
 	if err := s.setupGoose(); err != nil {
 		return 0, err
 	}
@@ -129,18 +106,18 @@ func (s *SQLiteStore) MigrationVersion() (int64, error) {
 }
 
 // Close closes the database connection
-func (s *SQLiteStore) Close() error {
+func (s *Store) Close() error {
 	return s.db.Close()
 }
 
 // DB returns the underlying database connection for use by other packages
 // (e.g., token storage that shares the same database)
-func (s *SQLiteStore) DB() *sql.DB {
+func (s *Store) DB() *sql.DB {
 	return s.db
 }
 
 // SaveRepo saves or updates a repository record
-func (s *SQLiteStore) SaveRepo(ctx context.Context, repo *repos.LocalRepo) error {
+func (s *Store) SaveRepo(ctx context.Context, repo *repos.LocalRepo) error {
 	if repo.ID == "" {
 		repo.ID = uuid.New().String()
 	}
@@ -149,14 +126,14 @@ func (s *SQLiteStore) SaveRepo(ctx context.Context, repo *repos.LocalRepo) error
 
 	query := `
 		INSERT INTO managed_repos (id, provider, owner, repo_name, local_path, default_branch, project_type, hooks_config, last_fetched, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(provider, owner, repo_name) DO UPDATE SET
-			local_path = excluded.local_path,
-			default_branch = excluded.default_branch,
-			project_type = excluded.project_type,
-			hooks_config = excluded.hooks_config,
-			last_fetched = excluded.last_fetched,
-			updated_at = excluded.updated_at
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		ON CONFLICT (provider, owner, repo_name) DO UPDATE SET
+			local_path = EXCLUDED.local_path,
+			default_branch = EXCLUDED.default_branch,
+			project_type = EXCLUDED.project_type,
+			hooks_config = EXCLUDED.hooks_config,
+			last_fetched = EXCLUDED.last_fetched,
+			updated_at = EXCLUDED.updated_at
 	`
 
 	_, err := s.db.ExecContext(ctx, query,
@@ -181,11 +158,11 @@ func (s *SQLiteStore) SaveRepo(ctx context.Context, repo *repos.LocalRepo) error
 }
 
 // GetRepo retrieves a repository by provider/owner/name
-func (s *SQLiteStore) GetRepo(ctx context.Context, provider, owner, name string) (*repos.LocalRepo, error) {
+func (s *Store) GetRepo(ctx context.Context, provider, owner, name string) (*repos.LocalRepo, error) {
 	query := `
 		SELECT id, provider, owner, repo_name, local_path, default_branch, project_type, last_fetched, created_at, updated_at
 		FROM managed_repos
-		WHERE provider = ? AND owner = ? AND repo_name = ?
+		WHERE provider = $1 AND owner = $2 AND repo_name = $3
 	`
 
 	row := s.db.QueryRowContext(ctx, query, provider, owner, name)
@@ -193,11 +170,11 @@ func (s *SQLiteStore) GetRepo(ctx context.Context, provider, owner, name string)
 }
 
 // GetRepoByID retrieves a repository by ID
-func (s *SQLiteStore) GetRepoByID(ctx context.Context, id string) (*repos.LocalRepo, error) {
+func (s *Store) GetRepoByID(ctx context.Context, id string) (*repos.LocalRepo, error) {
 	query := `
 		SELECT id, provider, owner, repo_name, local_path, default_branch, project_type, last_fetched, created_at, updated_at
 		FROM managed_repos
-		WHERE id = ?
+		WHERE id = $1
 	`
 
 	row := s.db.QueryRowContext(ctx, query, id)
@@ -205,7 +182,7 @@ func (s *SQLiteStore) GetRepoByID(ctx context.Context, id string) (*repos.LocalR
 }
 
 // ListRepos lists all repositories
-func (s *SQLiteStore) ListRepos(ctx context.Context) ([]repos.LocalRepo, error) {
+func (s *Store) ListRepos(ctx context.Context) ([]repos.LocalRepo, error) {
 	query := `
 		SELECT id, provider, owner, repo_name, local_path, default_branch, project_type, last_fetched, created_at, updated_at
 		FROM managed_repos
@@ -231,8 +208,8 @@ func (s *SQLiteStore) ListRepos(ctx context.Context) ([]repos.LocalRepo, error) 
 }
 
 // DeleteRepo deletes a repository record
-func (s *SQLiteStore) DeleteRepo(ctx context.Context, id string) error {
-	_, err := s.db.ExecContext(ctx, "DELETE FROM managed_repos WHERE id = ?", id)
+func (s *Store) DeleteRepo(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, "DELETE FROM managed_repos WHERE id = $1", id)
 	if err != nil {
 		return fmt.Errorf("failed to delete repo: %w", err)
 	}
@@ -240,7 +217,7 @@ func (s *SQLiteStore) DeleteRepo(ctx context.Context, id string) error {
 }
 
 // SaveOperation saves a repository operation record
-func (s *SQLiteStore) SaveOperation(ctx context.Context, op *repos.RepoOperation) error {
+func (s *Store) SaveOperation(ctx context.Context, op *repos.RepoOperation) error {
 	if op.ID == "" {
 		op.ID = uuid.New().String()
 	}
@@ -249,7 +226,7 @@ func (s *SQLiteStore) SaveOperation(ctx context.Context, op *repos.RepoOperation
 
 	query := `
 		INSERT INTO repo_operations (id, repo_id, operation_type, ref_before, ref_after, details, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
 
 	_, err := s.db.ExecContext(ctx, query,
@@ -270,13 +247,13 @@ func (s *SQLiteStore) SaveOperation(ctx context.Context, op *repos.RepoOperation
 }
 
 // ListOperations lists operations for a repository
-func (s *SQLiteStore) ListOperations(ctx context.Context, repoID string, limit int) ([]repos.RepoOperation, error) {
+func (s *Store) ListOperations(ctx context.Context, repoID string, limit int) ([]repos.RepoOperation, error) {
 	query := `
 		SELECT id, repo_id, operation_type, ref_before, ref_after, details, created_at
 		FROM repo_operations
-		WHERE repo_id = ?
+		WHERE repo_id = $1
 		ORDER BY created_at DESC
-		LIMIT ?
+		LIMIT $2
 	`
 
 	rows, err := s.db.QueryContext(ctx, query, repoID, limit)
@@ -306,24 +283,24 @@ func (s *SQLiteStore) ListOperations(ctx context.Context, repoID string, limit i
 }
 
 // SavePR saves or updates a tracked PR
-func (s *SQLiteStore) SavePR(ctx context.Context, pr *repos.TrackedPR) error {
+func (s *Store) SavePR(ctx context.Context, pr *repos.TrackedPR) error {
 	if pr.ID == "" {
 		pr.ID = uuid.New().String()
 	}
 
 	query := `
 		INSERT INTO tracked_prs (id, repo_id, pr_number, branch_name, base_branch, title, body, status, local_commit_hash, remote_commit_hash, html_url, created_at, updated_at, merged_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(repo_id, pr_number) DO UPDATE SET
-			branch_name = excluded.branch_name,
-			title = excluded.title,
-			body = excluded.body,
-			status = excluded.status,
-			local_commit_hash = excluded.local_commit_hash,
-			remote_commit_hash = excluded.remote_commit_hash,
-			html_url = excluded.html_url,
-			updated_at = excluded.updated_at,
-			merged_at = excluded.merged_at
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		ON CONFLICT (repo_id, pr_number) DO UPDATE SET
+			branch_name = EXCLUDED.branch_name,
+			title = EXCLUDED.title,
+			body = EXCLUDED.body,
+			status = EXCLUDED.status,
+			local_commit_hash = EXCLUDED.local_commit_hash,
+			remote_commit_hash = EXCLUDED.remote_commit_hash,
+			html_url = EXCLUDED.html_url,
+			updated_at = EXCLUDED.updated_at,
+			merged_at = EXCLUDED.merged_at
 	`
 
 	_, err := s.db.ExecContext(ctx, query,
@@ -351,11 +328,11 @@ func (s *SQLiteStore) SavePR(ctx context.Context, pr *repos.TrackedPR) error {
 }
 
 // GetPR retrieves a PR by repo ID and number
-func (s *SQLiteStore) GetPR(ctx context.Context, repoID string, prNumber int) (*repos.TrackedPR, error) {
+func (s *Store) GetPR(ctx context.Context, repoID string, prNumber int) (*repos.TrackedPR, error) {
 	query := `
 		SELECT id, repo_id, pr_number, branch_name, base_branch, title, body, status, local_commit_hash, remote_commit_hash, html_url, created_at, updated_at, merged_at
 		FROM tracked_prs
-		WHERE repo_id = ? AND pr_number = ?
+		WHERE repo_id = $1 AND pr_number = $2
 	`
 
 	row := s.db.QueryRowContext(ctx, query, repoID, prNumber)
@@ -363,11 +340,11 @@ func (s *SQLiteStore) GetPR(ctx context.Context, repoID string, prNumber int) (*
 }
 
 // ListPRs lists PRs for a repository
-func (s *SQLiteStore) ListPRs(ctx context.Context, repoID string) ([]repos.TrackedPR, error) {
+func (s *Store) ListPRs(ctx context.Context, repoID string) ([]repos.TrackedPR, error) {
 	query := `
 		SELECT id, repo_id, pr_number, branch_name, base_branch, title, body, status, local_commit_hash, remote_commit_hash, html_url, created_at, updated_at, merged_at
 		FROM tracked_prs
-		WHERE repo_id = ?
+		WHERE repo_id = $1
 		ORDER BY updated_at DESC
 	`
 
@@ -390,7 +367,7 @@ func (s *SQLiteStore) ListPRs(ctx context.Context, repoID string) ([]repos.Track
 }
 
 // SaveJob saves or updates a repo job
-func (s *SQLiteStore) SaveJob(ctx context.Context, job *repos.RepoJob) error {
+func (s *Store) SaveJob(ctx context.Context, job *repos.RepoJob) error {
 	if job.ID == "" {
 		job.ID = uuid.New().String()
 	}
@@ -401,13 +378,13 @@ func (s *SQLiteStore) SaveJob(ctx context.Context, job *repos.RepoJob) error {
 
 	query := `
 		INSERT INTO repo_jobs (id, repo_id, job_type, branch_name, status, input_payload, output_payload, validation_attempts, last_validation_result, created_at, completed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(id) DO UPDATE SET
-			status = excluded.status,
-			output_payload = excluded.output_payload,
-			validation_attempts = excluded.validation_attempts,
-			last_validation_result = excluded.last_validation_result,
-			completed_at = excluded.completed_at
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		ON CONFLICT (id) DO UPDATE SET
+			status = EXCLUDED.status,
+			output_payload = EXCLUDED.output_payload,
+			validation_attempts = EXCLUDED.validation_attempts,
+			last_validation_result = EXCLUDED.last_validation_result,
+			completed_at = EXCLUDED.completed_at
 	`
 
 	_, err := s.db.ExecContext(ctx, query,
@@ -432,11 +409,11 @@ func (s *SQLiteStore) SaveJob(ctx context.Context, job *repos.RepoJob) error {
 }
 
 // GetJob retrieves a job by ID
-func (s *SQLiteStore) GetJob(ctx context.Context, id string) (*repos.RepoJob, error) {
+func (s *Store) GetJob(ctx context.Context, id string) (*repos.RepoJob, error) {
 	query := `
 		SELECT id, repo_id, job_type, branch_name, status, input_payload, output_payload, validation_attempts, last_validation_result, created_at, completed_at
 		FROM repo_jobs
-		WHERE id = ?
+		WHERE id = $1
 	`
 
 	row := s.db.QueryRowContext(ctx, query, id)
@@ -444,11 +421,11 @@ func (s *SQLiteStore) GetJob(ctx context.Context, id string) (*repos.RepoJob, er
 }
 
 // ListJobs lists jobs for a repository
-func (s *SQLiteStore) ListJobs(ctx context.Context, repoID string) ([]repos.RepoJob, error) {
+func (s *Store) ListJobs(ctx context.Context, repoID string) ([]repos.RepoJob, error) {
 	query := `
 		SELECT id, repo_id, job_type, branch_name, status, input_payload, output_payload, validation_attempts, last_validation_result, created_at, completed_at
 		FROM repo_jobs
-		WHERE repo_id = ?
+		WHERE repo_id = $1
 		ORDER BY created_at DESC
 	`
 
@@ -471,7 +448,7 @@ func (s *SQLiteStore) ListJobs(ctx context.Context, repoID string) ([]repos.Repo
 }
 
 // SaveHookRun saves a hook run record
-func (s *SQLiteStore) SaveHookRun(ctx context.Context, run *hooks.HookRun) error {
+func (s *Store) SaveHookRun(ctx context.Context, run *hooks.HookRun) error {
 	if run.ID == "" {
 		run.ID = uuid.New().String()
 	}
@@ -480,7 +457,7 @@ func (s *SQLiteStore) SaveHookRun(ctx context.Context, run *hooks.HookRun) error
 
 	query := `
 		INSERT INTO hook_runs (id, repo_id, hook_type, triggered_by, passed, results, agent_feedback, duration_ms, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 
 	passed := 0
@@ -508,13 +485,13 @@ func (s *SQLiteStore) SaveHookRun(ctx context.Context, run *hooks.HookRun) error
 }
 
 // ListHookRuns lists hook runs for a repository
-func (s *SQLiteStore) ListHookRuns(ctx context.Context, repoID string, limit int) ([]hooks.HookRun, error) {
+func (s *Store) ListHookRuns(ctx context.Context, repoID string, limit int) ([]hooks.HookRun, error) {
 	query := `
 		SELECT id, repo_id, hook_type, triggered_by, passed, results, agent_feedback, duration_ms, created_at
 		FROM hook_runs
-		WHERE repo_id = ?
+		WHERE repo_id = $1
 		ORDER BY created_at DESC
-		LIMIT ?
+		LIMIT $2
 	`
 
 	rows, err := s.db.QueryContext(ctx, query, repoID, limit)
@@ -547,7 +524,7 @@ func (s *SQLiteStore) ListHookRuns(ctx context.Context, repoID string, limit int
 
 // Helper methods for scanning rows
 
-func (s *SQLiteStore) scanRepo(row *sql.Row) (*repos.LocalRepo, error) {
+func (s *Store) scanRepo(row *sql.Row) (*repos.LocalRepo, error) {
 	var repo repos.LocalRepo
 	var lastFetched sql.NullTime
 
@@ -578,7 +555,7 @@ func (s *SQLiteStore) scanRepo(row *sql.Row) (*repos.LocalRepo, error) {
 	return &repo, nil
 }
 
-func (s *SQLiteStore) scanRepoFromRows(rows *sql.Rows) (*repos.LocalRepo, error) {
+func (s *Store) scanRepoFromRows(rows *sql.Rows) (*repos.LocalRepo, error) {
 	var repo repos.LocalRepo
 	var lastFetched sql.NullTime
 
@@ -606,7 +583,7 @@ func (s *SQLiteStore) scanRepoFromRows(rows *sql.Rows) (*repos.LocalRepo, error)
 	return &repo, nil
 }
 
-func (s *SQLiteStore) scanPR(row *sql.Row) (*repos.TrackedPR, error) {
+func (s *Store) scanPR(row *sql.Row) (*repos.TrackedPR, error) {
 	var pr repos.TrackedPR
 	var status string
 	var mergedAt sql.NullTime
@@ -647,7 +624,7 @@ func (s *SQLiteStore) scanPR(row *sql.Row) (*repos.TrackedPR, error) {
 	return &pr, nil
 }
 
-func (s *SQLiteStore) scanPRFromRows(rows *sql.Rows) (*repos.TrackedPR, error) {
+func (s *Store) scanPRFromRows(rows *sql.Rows) (*repos.TrackedPR, error) {
 	var pr repos.TrackedPR
 	var status string
 	var mergedAt sql.NullTime
@@ -685,7 +662,7 @@ func (s *SQLiteStore) scanPRFromRows(rows *sql.Rows) (*repos.TrackedPR, error) {
 	return &pr, nil
 }
 
-func (s *SQLiteStore) scanJob(row *sql.Row) (*repos.RepoJob, error) {
+func (s *Store) scanJob(row *sql.Row) (*repos.RepoJob, error) {
 	var job repos.RepoJob
 	var inputJSON, outputJSON, validationJSON string
 	var completedAt sql.NullTime
@@ -731,7 +708,7 @@ func (s *SQLiteStore) scanJob(row *sql.Row) (*repos.RepoJob, error) {
 	return &job, nil
 }
 
-func (s *SQLiteStore) scanJobFromRows(rows *sql.Rows) (*repos.RepoJob, error) {
+func (s *Store) scanJobFromRows(rows *sql.Rows) (*repos.RepoJob, error) {
 	var job repos.RepoJob
 	var inputJSON, outputJSON, validationJSON string
 	var completedAt sql.NullTime
@@ -774,5 +751,5 @@ func (s *SQLiteStore) scanJobFromRows(rows *sql.Rows) (*repos.RepoJob, error) {
 	return &job, nil
 }
 
-// Ensure SQLiteStore implements repos.Store
-var _ repos.Store = (*SQLiteStore)(nil)
+// Ensure Store implements repos.Store
+var _ repos.Store = (*Store)(nil)
