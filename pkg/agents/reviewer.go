@@ -84,7 +84,7 @@ func (r *ReviewerAgent) Execute(ctx context.Context, input map[string]interface{
 
 		// Create context manager
 		contextMgr, err := llmcontext.NewManager(job.ID, r.config.Debug.Enabled, r.config.Model.ContextSize)
-		if err != nil{
+		if err != nil {
 			r.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return
 		}

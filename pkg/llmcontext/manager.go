@@ -20,10 +20,10 @@ type Manager struct {
 	jobDir              string
 	counter             int
 	debugMode           bool
-	lastPromptTokens    int                         // Tokens in last prompt sent (system + user)
-	contextLimit        int                         // Total context window size
-	compactionThreshold float64                     // Trigger compaction at this % (default 0.75)
-	modelName           string                      // Model name for tokenization tracking
+	lastPromptTokens    int                          // Tokens in last prompt sent (system + user)
+	contextLimit        int                          // Total context window size
+	compactionThreshold float64                      // Trigger compaction at this % (default 0.75)
+	modelName           string                       // Model name for tokenization tracking
 	statsStore          storage.CompactionStatsStore // Optional stats recording
 }
 
@@ -298,7 +298,7 @@ func (m *Manager) summarizeHistory(files []string) string {
 		// Extract the file number from the prompt file
 		baseNum := strings.TrimSuffix(roundNum, "-prompt.txt")
 		var promptNum int
-		fmt.Sscanf(baseNum, "%d", &promptNum)
+		_, _ = fmt.Sscanf(baseNum, "%d", &promptNum) // Ignore errors - default to 0 if parse fails
 
 		// Try to find tool calls file (should be a few numbers after the prompt)
 		toolCallsExist := false
@@ -358,7 +358,7 @@ func (m *Manager) summarizeHistory(files []string) string {
 			found := false
 			for offset := 1; offset <= 3; offset++ {
 				var num int
-				fmt.Sscanf(baseNum, "%d", &num)
+				_, _ = fmt.Sscanf(baseNum, "%d", &num) // Ignore errors - default to 0 if parse fails
 				nextNum := num + offset
 				responseFile := filepath.Join(m.jobDir, fmt.Sprintf("%03d-response.txt", nextNum))
 

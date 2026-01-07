@@ -29,7 +29,7 @@ func TestNewManager(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mgr, err := NewManager(tt.jobID, tt.debugMode)
+			mgr, err := NewManager(tt.jobID, tt.debugMode, 32768)
 			if err != nil {
 				t.Fatalf("NewManager() error = %v", err)
 			}
@@ -57,7 +57,7 @@ func TestNewManager(t *testing.T) {
 }
 
 func TestGetJobDir(t *testing.T) {
-	mgr, err := NewManager("test-job", false)
+	mgr, err := NewManager("test-job", false, 32768)
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
@@ -74,7 +74,7 @@ func TestGetJobDir(t *testing.T) {
 }
 
 func TestSavePrompt(t *testing.T) {
-	mgr, err := NewManager("test-job", false)
+	mgr, err := NewManager("test-job", false, 32768)
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
@@ -125,7 +125,7 @@ func TestSavePrompt(t *testing.T) {
 }
 
 func TestSaveResponse(t *testing.T) {
-	mgr, err := NewManager("test-job", false)
+	mgr, err := NewManager("test-job", false, 32768)
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
@@ -150,7 +150,7 @@ func TestSaveResponse(t *testing.T) {
 }
 
 func TestSaveToolCalls(t *testing.T) {
-	mgr, err := NewManager("test-job", false)
+	mgr, err := NewManager("test-job", false, 32768)
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
@@ -200,7 +200,7 @@ func TestSaveToolCalls(t *testing.T) {
 }
 
 func TestSaveToolResults(t *testing.T) {
-	mgr, err := NewManager("test-job", false)
+	mgr, err := NewManager("test-job", false, 32768)
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
@@ -243,7 +243,7 @@ func TestSaveToolResults(t *testing.T) {
 }
 
 func TestGetHistory(t *testing.T) {
-	mgr, err := NewManager("test-job", false)
+	mgr, err := NewManager("test-job", false, 32768)
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
@@ -281,7 +281,7 @@ func TestGetHistory(t *testing.T) {
 }
 
 func TestGetHistoryWithinBudget(t *testing.T) {
-	mgr, err := NewManager("test-job", false)
+	mgr, err := NewManager("test-job", false, 32768)
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
@@ -338,7 +338,7 @@ func TestGetHistoryWithinBudget(t *testing.T) {
 }
 
 func TestCompactHistory(t *testing.T) {
-	mgr, err := NewManager("test-job", false)
+	mgr, err := NewManager("test-job", false, 32768)
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
@@ -387,7 +387,7 @@ func TestCompactHistory(t *testing.T) {
 }
 
 func TestCompactHistoryFewFiles(t *testing.T) {
-	mgr, err := NewManager("test-job", false)
+	mgr, err := NewManager("test-job", false, 32768)
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
@@ -410,7 +410,7 @@ func TestCompactHistoryFewFiles(t *testing.T) {
 
 func TestCleanup(t *testing.T) {
 	// Test normal cleanup (debug off)
-	mgr, err := NewManager("test-cleanup-1", false)
+	mgr, err := NewManager("test-cleanup-1", false, 32768)
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
@@ -436,7 +436,7 @@ func TestCleanup(t *testing.T) {
 
 func TestCleanupDebugMode(t *testing.T) {
 	// Test cleanup with debug mode (should keep files)
-	mgr, err := NewManager("test-cleanup-2", true)
+	mgr, err := NewManager("test-cleanup-2", true, 32768)
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
@@ -462,7 +462,7 @@ func TestCleanupDebugMode(t *testing.T) {
 }
 
 func TestCounterIncrement(t *testing.T) {
-	mgr, err := NewManager("test-counter", false)
+	mgr, err := NewManager("test-counter", false, 32768)
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
