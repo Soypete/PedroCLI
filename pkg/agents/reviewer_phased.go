@@ -147,7 +147,7 @@ func (r *ReviewerPhasedAgent) Execute(ctx context.Context, input map[string]inte
 		bgCtx := context.Background()
 
 		// Create context manager
-		contextMgr, err := llmcontext.NewManager(job.ID, r.config.Debug.Enabled)
+		contextMgr, err := llmcontext.NewManager(job.ID, r.config.Debug.Enabled, r.config.Model.ContextSize)
 		if err != nil {
 			r.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
 			return

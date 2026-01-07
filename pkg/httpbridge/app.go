@@ -177,25 +177,25 @@ func registerSchedulingTools(agent interface{ RegisterTool(tools.Tool) }, ctx *A
 	}
 }
 
-// NewBuilderAgentWithTools creates a fully configured builder agent
-func (ctx *AppContext) NewBuilderAgent() *agents.BuilderAgent {
-	agent := agents.NewBuilderAgent(ctx.Config, ctx.Backend, ctx.JobManager)
+// NewBuilderAgent creates a fully configured phased builder agent
+func (ctx *AppContext) NewBuilderAgent() *agents.BuilderPhasedAgent {
+	agent := agents.NewBuilderPhasedAgent(ctx.Config, ctx.Backend, ctx.JobManager)
 	agent.SetCompactionStatsStore(ctx.CompactionStatsStore)
 	registerCodeTools(agent, ctx)
 	return agent
 }
 
-// NewDebuggerAgentWithTools creates a fully configured debugger agent
-func (ctx *AppContext) NewDebuggerAgent() *agents.DebuggerAgent {
-	agent := agents.NewDebuggerAgent(ctx.Config, ctx.Backend, ctx.JobManager)
+// NewDebuggerAgent creates a fully configured phased debugger agent
+func (ctx *AppContext) NewDebuggerAgent() *agents.DebuggerPhasedAgent {
+	agent := agents.NewDebuggerPhasedAgent(ctx.Config, ctx.Backend, ctx.JobManager)
 	agent.SetCompactionStatsStore(ctx.CompactionStatsStore)
 	registerCodeTools(agent, ctx)
 	return agent
 }
 
-// NewReviewerAgentWithTools creates a fully configured reviewer agent
-func (ctx *AppContext) NewReviewerAgent() *agents.ReviewerAgent {
-	agent := agents.NewReviewerAgent(ctx.Config, ctx.Backend, ctx.JobManager)
+// NewReviewerAgent creates a fully configured phased reviewer agent
+func (ctx *AppContext) NewReviewerAgent() *agents.ReviewerPhasedAgent {
+	agent := agents.NewReviewerPhasedAgent(ctx.Config, ctx.Backend, ctx.JobManager)
 	agent.SetCompactionStatsStore(ctx.CompactionStatsStore)
 	registerCodeTools(agent, ctx)
 	return agent
