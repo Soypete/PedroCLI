@@ -17,13 +17,57 @@ import (
 const version = "0.2.0-dev"
 
 func main() {
-	if len(os.Args) < 2 {
+	// Parse --config flag from anywhere in the command line
+	var configPath string
+	var verbose bool
+	var skipChecks bool
+
+	// Look for global flags in all args
+	args := os.Args[1:]
+	var subcommandArgs []string
+	var subcommand string
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+
+		// Handle --config
+		if arg == "--config" || arg == "-config" {
+			if i+1 < len(args) {
+				configPath = args[i+1]
+				i++ // Skip next arg (the value)
+				continue
+			}
+		}
+
+		// Handle --verbose
+		if arg == "--verbose" || arg == "-verbose" {
+			verbose = true
+			continue
+		}
+
+		// Handle --skip-checks
+		if arg == "--skip-checks" || arg == "-skip-checks" {
+			skipChecks = true
+			continue
+		}
+
+		// First non-flag arg is the subcommand
+		if subcommand == "" && !strings.HasPrefix(arg, "-") {
+			subcommand = arg
+			continue
+		}
+
+		// Rest are subcommand args
+		subcommandArgs = append(subcommandArgs, arg)
+	}
+
+	// Check if we have a subcommand
+	if subcommand == "" {
 		printUsage()
 		os.Exit(1)
 	}
 
 	// Handle help and version before config loading
-	subcommand := os.Args[1]
 	if subcommand == "help" || subcommand == "-h" || subcommand == "--help" {
 		printUsage()
 		os.Exit(0)
@@ -33,25 +77,24 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Global flags
-	verbosePtr := flag.Bool("verbose", false, "Enable verbose output")
-	skipChecksPtr := flag.Bool("skip-checks", false, "Skip dependency checks")
-
-	// Parse global flags first
-	flag.Parse()
-
 	// Load configuration
-	cfg, err := config.LoadDefault()
+	var cfg *config.Config
+	var err error
+	if configPath != "" {
+		cfg, err = config.Load(configPath)
+	} else {
+		cfg, err = config.LoadDefault()
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Override config with flags
-	if *verbosePtr {
+	if verbose {
 		cfg.Init.Verbose = true
 	}
-	if *skipChecksPtr {
+	if skipChecks {
 		cfg.Init.SkipChecks = true
 	}
 
@@ -79,21 +122,21 @@ func main() {
 	// Handle subcommands
 	switch subcommand {
 	case "build":
-		buildCommand(cfg, os.Args[2:])
+		buildCommand(cfg, subcommandArgs)
 	case "debug":
-		debugCommand(cfg, os.Args[2:])
+		debugCommand(cfg, subcommandArgs)
 	case "review":
-		reviewCommand(cfg, os.Args[2:])
+		reviewCommand(cfg, subcommandArgs)
 	case "triage":
-		triageCommand(cfg, os.Args[2:])
+		triageCommand(cfg, subcommandArgs)
 	case "blog":
-		blogCommand(cfg, os.Args[2:])
+		blogCommand(cfg, subcommandArgs)
 	case "status":
-		statusCommand(cfg, os.Args[2:])
+		statusCommand(cfg, subcommandArgs)
 	case "list":
-		listCommand(cfg, os.Args[2:])
+		listCommand(cfg, subcommandArgs)
 	case "cancel":
-		cancelCommand(cfg, os.Args[2:])
+		cancelCommand(cfg, subcommandArgs)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", subcommand)
 		printUsage()
@@ -118,6 +161,7 @@ Commands:
   cancel     Cancel a running job
 
 Global Flags:
+  -config <path>   Path to config file (default: .pedrocli.json)
   -verbose         Enable verbose output
   -skip-checks     Skip dependency checks
   -version         Print version and exit

@@ -10,6 +10,7 @@ import (
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/llmcontext"
 	"github.com/soypete/pedrocli/pkg/storage"
+	"github.com/soypete/pedrocli/pkg/toolformat"
 	"github.com/soypete/pedrocli/pkg/tools"
 )
 
@@ -64,6 +65,29 @@ func (e *InferenceExecutor) Execute(ctx context.Context, initialPrompt string) e
 		toolCalls := response.ToolCalls
 		if toolCalls == nil {
 			toolCalls = []llm.ToolCall{}
+		}
+
+		// FALLBACK: If native tool calling didn't return any calls, try parsing from text
+		if len(toolCalls) == 0 && response.Text != "" {
+			// Get appropriate formatter for model
+			formatter := toolformat.GetFormatterForModel(e.agent.config.Model.ModelName)
+
+			// Parse tool calls from response text
+			parsedCalls, err := formatter.ParseToolCalls(response.Text)
+			if err == nil && len(parsedCalls) > 0 {
+				// Convert toolformat.ToolCall to llm.ToolCall
+				toolCalls = make([]llm.ToolCall, len(parsedCalls))
+				for i, tc := range parsedCalls {
+					toolCalls[i] = llm.ToolCall{
+						Name: tc.Name,
+						Args: tc.Args,
+					}
+				}
+
+				if e.agent.config.Debug.Enabled {
+					fmt.Fprintf(os.Stderr, "  📝 Parsed %d tool call(s) from response text\n", len(toolCalls))
+				}
+			}
 		}
 
 		// Check if we're done (no more tool calls)

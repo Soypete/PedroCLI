@@ -15,7 +15,7 @@ ALTER TABLE jobs ADD COLUMN context_dir VARCHAR(512);
 
 -- Store all prompts, responses, tool calls for debugging and replay
 -- Format: [{"role": "user"|"assistant"|"tool_call"|"tool_result", "content": "...", "timestamp": "..."}]
--- SQLite TEXT with JSON content (JSONB not supported in SQLite)
+-- Use TEXT for SQLite compatibility, JSONB for PostgreSQL if available
 ALTER TABLE jobs ADD COLUMN conversation_history TEXT DEFAULT '[]';
 
 -- +goose Down

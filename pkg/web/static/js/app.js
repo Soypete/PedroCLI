@@ -161,8 +161,11 @@ const SSEManager = {
                     status: data.data.status
                 });
 
-                // Trigger HTMX refresh of job list
-                htmx.trigger('#job-list', 'sse-update');
+                // Trigger HTMX refresh of job list (only if element exists)
+                const jobList = document.getElementById('job-list');
+                if (jobList) {
+                    htmx.trigger('#job-list', 'sse-update');
+                }
             } catch (err) {
                 console.error('SSE: Failed to handle update:', err);
             }
@@ -173,8 +176,11 @@ const SSEManager = {
                 const data = JSON.parse(e.data);
                 console.log('SSE: Job list received');
 
-                // Trigger HTMX refresh
-                htmx.trigger('#job-list', 'sse-update');
+                // Trigger HTMX refresh (only if element exists)
+                const jobList = document.getElementById('job-list');
+                if (jobList) {
+                    htmx.trigger('#job-list', 'sse-update');
+                }
             } catch (err) {
                 console.error('SSE: Failed to handle list:', err);
             }
