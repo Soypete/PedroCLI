@@ -164,7 +164,7 @@ type VoiceConfig struct {
 // RepoStorageConfig contains repository storage settings
 type RepoStorageConfig struct {
 	BasePath       string                      `json:"base_path"`
-	DatabasePath   string                      `json:"database_path,omitempty"`
+	DatabasePath   string                      `json:"database_path,omitempty"` // Deprecated: no longer used (was for SQLite)
 	GitCredentials map[string]GitCredentialDef `json:"git_credentials,omitempty"`
 	AutoPruneDays  int                         `json:"auto_prune_days,omitempty"`
 	DefaultBranch  string                      `json:"default_branch,omitempty"`
@@ -294,8 +294,8 @@ type WebScrapingConfig struct {
 	RateLimits map[string]float64 `json:"rate_limits,omitempty"`
 	// Caching
 	CacheEnabled   bool   `json:"cache_enabled"`
-	CacheType      string `json:"cache_type,omitempty"` // "sqlite", "memory"
-	CachePath      string `json:"cache_path,omitempty"`
+	CacheType      string `json:"cache_type,omitempty"` // "memory" only
+	CachePath      string `json:"cache_path,omitempty"` // Deprecated: no longer used
 	CacheTTLHours  int    `json:"cache_ttl_hours,omitempty"`
 	CacheMaxSizeMB int64  `json:"cache_max_size_mb,omitempty"`
 	// API tokens (optional, for higher rate limits)
@@ -363,9 +363,8 @@ type CustomLink struct {
 	Icon string `json:"icon,omitempty"` // emoji or icon name
 }
 
-// DatabaseConfig contains database configuration
+// DatabaseConfig contains database configuration (PostgreSQL only)
 type DatabaseConfig struct {
-	Driver   string `json:"driver"` // "postgres" or "sqlite"
 	Host     string `json:"host"`
 	Port     int    `json:"port"`
 	User     string `json:"user"`
@@ -583,9 +582,7 @@ func (c *Config) setDefaults() {
 	if c.RepoStorage.BasePath == "" {
 		c.RepoStorage.BasePath = "/var/pedro/repos"
 	}
-	if c.RepoStorage.DatabasePath == "" {
-		c.RepoStorage.DatabasePath = filepath.Join(c.RepoStorage.BasePath, "pedro.db")
-	}
+	// DatabasePath is deprecated (was for SQLite), no default set
 	if c.RepoStorage.DefaultBranch == "" {
 		c.RepoStorage.DefaultBranch = "main"
 	}

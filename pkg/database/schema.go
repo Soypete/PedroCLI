@@ -1,4 +1,4 @@
-// Package database provides SQLite-based persistent storage for repository management.
+// Package database provides PostgreSQL-based persistent storage for repository management.
 //
 // # Database Schema
 //
