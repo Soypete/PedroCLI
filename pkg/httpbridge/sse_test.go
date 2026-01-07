@@ -48,10 +48,6 @@ func (m *mockJobManager) AppendConversation(ctx context.Context, id string, entr
 	return nil
 }
 
-func (m *mockJobManager) GetConversation(ctx context.Context, id string) ([]storage.ConversationEntry, error) {
-	return []storage.ConversationEntry{}, nil
-}
-
 func (m *mockJobManager) SetCurrentPhase(ctx context.Context, id string, phase string) error {
 	return nil
 }
@@ -66,6 +62,10 @@ func (m *mockJobManager) SetPlan(ctx context.Context, id string, plan map[string
 
 func (m *mockJobManager) SetWorkflowType(ctx context.Context, id string, workflowType string) error {
 	return nil
+}
+
+func (m *mockJobManager) GetConversation(ctx context.Context, id string) ([]storage.ConversationEntry, error) {
+	return []storage.ConversationEntry{}, nil
 }
 
 func TestSSEBroadcaster_AddRemoveClient(t *testing.T) {

@@ -23,9 +23,7 @@ func (m *mockExtendedTool) Execute(ctx context.Context, args map[string]interfac
 }
 func (m *mockExtendedTool) Metadata() *tools.ToolMetadata { return m.metadata }
 
-// TODO(issue): Update for native API tool calling - prompt format has changed
 func TestToolPromptGenerator_GenerateToolSection(t *testing.T) {
-	t.Skip("TODO: Tool prompt generator is for old GBNF system, needs update for native API")
 	registry := tools.NewToolRegistry()
 
 	// Register a tool with full metadata
@@ -67,20 +65,16 @@ func TestToolPromptGenerator_GenerateToolSection(t *testing.T) {
 	generator := NewToolPromptGenerator(registry)
 	output := generator.GenerateToolSection()
 
-	// Verify key elements are present
+	// Verify key elements are present (updated for simplified format)
+	// New format: ## tool\nDescription\n{example JSON}
 	assertions := []struct {
 		name     string
 		expected string
 	}{
-		{"tool name header", "## file (required)"},
+		{"tool name header", "## file"},
 		{"tool description", "Read, write, and modify files"},
-		{"parameters section", "**Parameters:**"},
-		{"action parameter", "`action` (string, required)"},
-		{"path parameter", "`path` (string, required)"},
-		{"content parameter", "`content` (string, optional)"},
-		{"enum values", "Valid values:"},
-		{"usage hint", "**When to use:**"},
-		{"examples section", "**Examples:**"},
+		{"example action", `"action"`},
+		{"example path", `"path"`},
 	}
 
 	for _, a := range assertions {
@@ -178,9 +172,7 @@ func TestToolPromptGenerator_GenerateAvailable(t *testing.T) {
 	}
 }
 
-// TODO(issue): Update for native API tool calling - prompt format has changed
 func TestToolPromptGenerator_FormatTool(t *testing.T) {
-	t.Skip("TODO: Tool prompt generator is for old GBNF system, needs update for native API")
 	registry := tools.NewToolRegistry()
 	generator := NewToolPromptGenerator(registry)
 
@@ -211,21 +203,16 @@ func TestToolPromptGenerator_FormatTool(t *testing.T) {
 
 	output := generator.FormatTool(tool)
 
-	// Verify structure
-	if !strings.Contains(output, "## test_tool (optional)") {
-		t.Error("Expected optional indicator in header")
+	// Verify structure (updated for simplified format)
+	if !strings.Contains(output, "## test_tool") {
+		t.Error("Expected tool name header")
 	}
 	if !strings.Contains(output, "A test tool for testing") {
 		t.Error("Expected tool description")
 	}
-	if !strings.Contains(output, "`input` (string, required)") {
-		t.Error("Expected parameter definition")
-	}
-	if !strings.Contains(output, "Use this for testing purposes") {
-		t.Error("Expected usage hint")
-	}
-	if !strings.Contains(output, "Basic usage") {
-		t.Error("Expected example description")
+	// New format only shows one example JSON, not full parameter docs
+	if !strings.Contains(output, `"input"`) {
+		t.Error("Expected example to contain input parameter")
 	}
 }
 
@@ -321,37 +308,6 @@ func TestToolPromptGenerator_EmptyRegistry(t *testing.T) {
 	summary := generator.GenerateSummary()
 	if summary != "No tools available." {
 		t.Errorf("Expected 'No tools available.' for empty registry summary, got %q", summary)
-	}
-}
-
-// TODO(issue): Update for native API tool calling - prompt format has changed
-func TestToolPromptGenerator_ParameterWithDefaults(t *testing.T) {
-	t.Skip("TODO: Tool prompt generator is for old GBNF system, needs update for native API")
-	registry := tools.NewToolRegistry()
-
-	defaultVal := "default_value"
-	_ = registry.RegisterExtended(&mockExtendedTool{
-		name:        "tool_with_defaults",
-		description: "Tool with default parameter values",
-		metadata: &tools.ToolMetadata{
-			Schema: &logits.JSONSchema{
-				Type: "object",
-				Properties: map[string]*logits.JSONSchema{
-					"mode": {
-						Type:        "string",
-						Description: "Operation mode",
-						Default:     defaultVal,
-					},
-				},
-			},
-		},
-	})
-
-	generator := NewToolPromptGenerator(registry)
-	output := generator.GenerateToolSection()
-
-	if !strings.Contains(output, "(default: "+defaultVal+")") {
-		t.Error("Expected default value to be shown")
 	}
 }
 
