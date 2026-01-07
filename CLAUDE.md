@@ -466,6 +466,182 @@ The web UI also supports browser-based speech recognition (Chrome/Edge) as a fal
 | Ollama | 11434 | LLM inference API |
 | PostgreSQL | 5432 | Blog storage (if enabled) |
 
+### Cal.com Scheduling Integration
+
+PedroCLI integrates with Cal.com for scheduling and booking management. This enables agents to create booking links, manage calendars, and handle podcast episode scheduling.
+
+#### Setup
+
+1. **Get your Cal.com API key**:
+   - Log into Cal.com (https://app.cal.com or your self-hosted instance)
+   - Go to **Settings** → **Developer** → **API Keys**
+   - Click **"+ Add"** button
+   - Name the key (e.g., "Pedro CLI")
+   - Click **Save** and **immediately copy the key** (format: `cal_live_xxx...`)
+
+2. **Store in 1Password** (recommended):
+   ```bash
+   # .env file
+   CAL_API_KEY="op://pedro/calcom_api_key/credential"
+   ```
+
+3. **Configure in `.pedrocli.json`**:
+   ```json
+   {
+     "calcom": {
+       "enabled": true,
+       "api_key": "",  // Leave empty to use env var CAL_API_KEY
+       "base_url": "https://api.cal.com/v1"  // Optional: for self-hosted Cal.com
+     }
+   }
+   ```
+
+4. **Run with API key** (if using 1Password):
+   ```bash
+   op run --env-file=.env -- ./pedrocli-http-server
+   ```
+
+#### Available Actions
+
+The Cal.com tool supports the following actions:
+
+**Bookings**:
+- `get_bookings` - List all bookings (filterable by status)
+- `get_booking` - Get specific booking details
+- `create_booking` - Create a new booking
+- `reschedule_booking` - Reschedule an existing booking
+- `cancel_booking` - Cancel a booking
+
+**Event Types** (booking pages):
+- `get_event_types` - List all event types
+- `get_event_type` - Get event type details
+- `create_event_type` - Create a new booking page
+- `update_event_type` - Update event type settings
+- `delete_event_type` - Delete an event type
+
+**Availability**:
+- `get_schedules` - List availability schedules
+- `get_availability` - Get available time slots for an event type
+- `get_busy_times` - Get busy/unavailable periods
+
+**User**:
+- `get_me` - Get authenticated user profile
+
+#### Example Usage
+
+```json
+{
+  "tool": "cal_com",
+  "args": {
+    "action": "get_event_types"
+  }
+}
+```
+
+```json
+{
+  "tool": "cal_com",
+  "args": {
+    "action": "create_event_type",
+    "title": "Podcast Interview",
+    "slug": "podcast-60min",
+    "length": 60,
+    "description": "60-minute podcast interview for SoypeteTech"
+  }
+}
+```
+
+#### Podcast Workflow
+
+For podcast scheduling, agents can:
+1. Fetch episode template from Notion
+2. Create Cal.com event type with template as description
+3. Return shareable booking link for guests
+
+#### Riverside.fm Integration for Podcasts
+
+Cal.com has native integration with Riverside.fm for high-quality podcast recording. You can set up Riverside in two ways:
+
+**Option 1: Native Cal.com + Riverside Integration** (Recommended)
+1. Connect Riverside to your Cal.com account:
+   - Log into Cal.com → Settings → Apps
+   - Search for "Riverside" and install the app
+   - Connect your Riverside account
+2. Create event types with Riverside location type:
+   ```json
+   {
+     "tool": "cal_com",
+     "args": {
+       "action": "create_event_type",
+       "title": "SoypeteTech Podcast Interview",
+       "slug": "podcast-interview-60min",
+       "length": 60,
+       "description": "60-minute interview for SoypeteTech podcast. We'll discuss your expertise in [TOPIC]. Recording happens on Riverside.fm for professional audio/video quality.",
+       "locations": [
+         {
+           "type": "integration",
+           "integration": "riverside"
+         }
+       ]
+     }
+   }
+   ```
+
+**Option 2: Direct Riverside Studio Link**
+If you have a dedicated Riverside studio, you can provide the direct link:
+```json
+{
+  "tool": "cal_com",
+  "args": {
+    "action": "create_event_type",
+    "title": "SoypeteTech Podcast Interview",
+    "slug": "podcast-interview-60min",
+    "length": 60,
+    "description": "60-minute interview for SoypeteTech podcast. We'll discuss your expertise in [TOPIC]. Recording happens on Riverside.fm for professional audio/video quality.",
+    "locations": [
+      {
+        "type": "link",
+        "link": "https://riverside.fm/studio/soypete-tech-podcast",
+        "displayLocationLabel": "Riverside Studio"
+      }
+    ]
+  }
+}
+```
+
+**Complete Podcast Setup Example**:
+```json
+{
+  "tool": "cal_com",
+  "args": {
+    "action": "create_event_type",
+    "title": "SoypeteTech Deep Dive - 90min",
+    "slug": "soypete-deep-dive-90",
+    "length": 90,
+    "description": "Extended 90-minute technical deep dive for SoypeteTech podcast. Topics: Cloud-native development, Go programming, AI/ML engineering, developer tools.\n\nFormat:\n- 5 min: Intro & guest background\n- 75 min: Technical discussion\n- 10 min: Rapid-fire Q&A\n\nRecording on Riverside.fm for studio-quality audio/video.",
+    "locations": [
+      {
+        "type": "integration",
+        "integration": "riverside"
+      }
+    ],
+    "minimumBookingNotice": 1440,
+    "beforeEventBuffer": 15,
+    "afterEventBuffer": 15,
+    "requiresConfirmation": true
+  }
+}
+```
+
+This creates a podcast booking page with:
+- 90-minute duration
+- Riverside.fm integration for recording
+- 24-hour minimum notice (1440 minutes)
+- 15-minute buffer before/after (prep time)
+- Manual confirmation required (screen guests)
+
+The booking link will be returned in the response as `bookingURL` (e.g., `https://cal.com/yourname/soypete-deep-dive-90`).
+
 ## Development Workflow
 
 ### Adding a New Tool

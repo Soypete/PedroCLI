@@ -212,10 +212,7 @@ func (pe *PhasedExecutor) updateJobPhase(ctx context.Context, phaseName string) 
 		Timestamp: time.Now(),
 	}
 	if err := pe.agent.jobManager.AppendConversation(ctx, pe.jobID, entry); err != nil {
-		// Log error but don't fail the execution
-		if pe.agent.config.Debug.Enabled {
-			fmt.Fprintf(os.Stderr, "  ⚠️ Failed to log phase start: %v\n", err)
-		}
+		fmt.Fprintf(os.Stderr, "  ⚠️ Failed to append conversation entry: %v\n", err)
 	}
 }
 
@@ -239,10 +236,7 @@ func (pe *PhasedExecutor) savePhaseResults(ctx context.Context) {
 		Timestamp: time.Now(),
 	}
 	if err := pe.agent.jobManager.AppendConversation(ctx, pe.jobID, entry); err != nil {
-		// Log error but don't fail the execution
-		if pe.agent.config.Debug.Enabled {
-			fmt.Fprintf(os.Stderr, "  ⚠️ Failed to log phase results: %v\n", err)
-		}
+		fmt.Fprintf(os.Stderr, "  ⚠️ Failed to append conversation entry: %v\n", err)
 	}
 }
 

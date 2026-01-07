@@ -37,6 +37,8 @@ type Config struct {
 	Database DatabaseConfig `json:"database"`
 	// Vision and image generation configuration
 	Vision VisionConfig `json:"vision"`
+	// Cal.com scheduling configuration
+	CalCom CalComConfig `json:"calcom,omitempty"`
 }
 
 // ModelConfig contains model configuration
@@ -258,6 +260,13 @@ type Cohost struct {
 	Name string `json:"name,omitempty"`
 	Bio  string `json:"bio,omitempty"`
 	Role string `json:"role,omitempty"` // e.g., "host", "cohost", "producer"
+}
+
+// CalComConfig contains Cal.com scheduling configuration
+type CalComConfig struct {
+	Enabled bool   `json:"enabled"`
+	APIKey  string `json:"api_key,omitempty"`  // Cal.com API key (prefer env var CAL_API_KEY)
+	BaseURL string `json:"base_url,omitempty"` // Optional: custom API URL for self-hosted Cal.com
 }
 
 // OAuthConfig contains OAuth client credentials for external services
