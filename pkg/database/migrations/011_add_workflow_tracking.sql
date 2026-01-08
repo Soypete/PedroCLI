@@ -1,3 +1,4 @@
+-- +goose Up
 -- Migration: Add workflow/phase tracking to jobs table
 -- This enables phased agent execution with explicit phase tracking
 
@@ -18,3 +19,12 @@ COMMENT ON COLUMN jobs.current_phase IS 'Current phase name: analyze, plan, impl
 COMMENT ON COLUMN jobs.phase_results IS 'JSON object storing results from each completed phase';
 COMMENT ON COLUMN jobs.plan IS 'Implementation plan from planning phase (for builder agents)';
 COMMENT ON COLUMN jobs.phase_started_at IS 'Timestamp when current phase started';
+
+-- +goose Down
+DROP INDEX IF EXISTS idx_jobs_current_phase;
+DROP INDEX IF EXISTS idx_jobs_workflow_type;
+ALTER TABLE jobs DROP COLUMN IF EXISTS phase_started_at;
+ALTER TABLE jobs DROP COLUMN IF EXISTS plan;
+ALTER TABLE jobs DROP COLUMN IF EXISTS phase_results;
+ALTER TABLE jobs DROP COLUMN IF EXISTS current_phase;
+ALTER TABLE jobs DROP COLUMN IF EXISTS workflow_type;

@@ -4,7 +4,7 @@
 -- Description: Track context window compaction events for monitoring and optimization
 
 CREATE TABLE IF NOT EXISTS compaction_stats (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     job_id VARCHAR(255) NOT NULL,
     inference_round INTEGER NOT NULL,
     model_name VARCHAR(255) NOT NULL,
@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS compaction_stats (
     rounds_compacted INTEGER NOT NULL,
     rounds_kept INTEGER NOT NULL,
     compaction_time_ms INTEGER NOT NULL,
-    threshold_hit BOOLEAN NOT NULL DEFAULT 0,
+    threshold_hit BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
