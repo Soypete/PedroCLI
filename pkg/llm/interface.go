@@ -26,6 +26,15 @@ type InferenceRequest struct {
 
 	// Tools for native API-based tool calling
 	Tools []ToolDefinition `json:"tools,omitempty"`
+
+	// Logit bias for controlling token probabilities
+	// Map of token ID -> bias value (-100 to 100)
+	// Positive values increase probability, negative decrease
+	LogitBias map[int]float32 `json:"logit_bias,omitempty"`
+
+	// Grammar constraint in GBNF format (llama-server only)
+	// Forces output to conform to specified grammar
+	Grammar string `json:"grammar,omitempty"`
 }
 
 // ToolDefinition defines a tool for native API-based tool calling

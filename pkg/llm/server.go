@@ -79,6 +79,23 @@ func (c *ServerClient) Infer(ctx context.Context, req *InferenceRequest) (*Infer
 		reqBody["tools"] = c.formatTools(req.Tools)
 	}
 
+	// Add logit bias if provided
+	// Note: Ollama's /v1/chat/completions may not support logit_bias
+	// For full logit bias support with Ollama, use /api/generate endpoint
+	if len(req.LogitBias) > 0 {
+		// Convert map[int]float32 to map[string]float32 for JSON
+		logitBiasJSON := make(map[string]interface{})
+		for tokenID, bias := range req.LogitBias {
+			logitBiasJSON[fmt.Sprintf("%d", tokenID)] = bias
+		}
+		reqBody["logit_bias"] = logitBiasJSON
+	}
+
+	// Add grammar constraint if provided (llama-server specific)
+	if req.Grammar != "" {
+		reqBody["grammar"] = req.Grammar
+	}
+
 	// Marshal to JSON
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
