@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS blog_post_versions (
     phase TEXT, -- Phase that created this version (if applicable)
 
     -- Content at this version
-    title TEXT,
+    post_title TEXT, -- The blog post title at this version
+    title TEXT, -- Section title (if applicable)
     raw_transcription TEXT,
     outline TEXT,
     sections TEXT, -- JSON array of section objects: [{title, content, order}]

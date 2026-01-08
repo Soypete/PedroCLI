@@ -36,7 +36,8 @@ type PostVersion struct {
 	Phase         string      `json:"phase,omitempty"`
 
 	// Content at this version
-	Title            string    `json:"title,omitempty"`
+	PostTitle        string    `json:"post_title,omitempty"` // The blog post title at this version
+	Title            string    `json:"title,omitempty"`        // Section title (if applicable)
 	RawTranscription string    `json:"raw_transcription,omitempty"`
 	Outline          string    `json:"outline,omitempty"`
 	Sections         []Section `json:"sections,omitempty"`
@@ -99,9 +100,9 @@ func (s *VersionStore) CreateVersion(ctx context.Context, v *PostVersion) error 
 	query := `
 		INSERT INTO blog_post_versions (
 			id, post_id, version_number, version_type, status, phase,
-			title, raw_transcription, outline, sections, full_content,
+			post_title, title, raw_transcription, outline, sections, full_content,
 			created_by, change_notes
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		RETURNING created_at
 	`
 
@@ -109,7 +110,7 @@ func (s *VersionStore) CreateVersion(ctx context.Context, v *PostVersion) error 
 		ctx,
 		query,
 		v.ID, v.PostID, v.VersionNumber, v.VersionType, v.Status, v.Phase,
-		v.Title, v.RawTranscription, v.Outline, sectionsJSON, v.FullContent,
+		v.PostTitle, v.Title, v.RawTranscription, v.Outline, sectionsJSON, v.FullContent,
 		v.CreatedBy, v.ChangeNotes,
 	).Scan(&v.CreatedAt)
 
@@ -124,7 +125,7 @@ func (s *VersionStore) CreateVersion(ctx context.Context, v *PostVersion) error 
 func (s *VersionStore) GetVersion(ctx context.Context, postID uuid.UUID, versionNumber int) (*PostVersion, error) {
 	query := `
 		SELECT id, post_id, version_number, version_type, status, phase,
-		       title, raw_transcription, outline, sections, full_content,
+		       post_title, title, raw_transcription, outline, sections, full_content,
 		       created_by, created_at, change_notes
 		FROM blog_post_versions
 		WHERE post_id = $1 AND version_number = $2
@@ -135,7 +136,7 @@ func (s *VersionStore) GetVersion(ctx context.Context, postID uuid.UUID, version
 
 	err := s.db.QueryRowContext(ctx, query, postID, versionNumber).Scan(
 		&version.ID, &version.PostID, &version.VersionNumber, &version.VersionType,
-		&version.Status, &version.Phase, &version.Title, &version.RawTranscription,
+		&version.Status, &version.Phase, &version.PostTitle, &version.Title, &version.RawTranscription,
 		&version.Outline, &sectionsJSON, &version.FullContent, &version.CreatedBy,
 		&version.CreatedAt, &version.ChangeNotes,
 	)
@@ -161,7 +162,7 @@ func (s *VersionStore) GetVersion(ctx context.Context, postID uuid.UUID, version
 func (s *VersionStore) ListVersions(ctx context.Context, postID uuid.UUID) ([]*PostVersion, error) {
 	query := `
 		SELECT id, post_id, version_number, version_type, status, phase,
-		       title, raw_transcription, outline, sections, full_content,
+		       post_title, title, raw_transcription, outline, sections, full_content,
 		       created_by, created_at, change_notes
 		FROM blog_post_versions
 		WHERE post_id = $1
@@ -181,7 +182,7 @@ func (s *VersionStore) ListVersions(ctx context.Context, postID uuid.UUID) ([]*P
 
 		err := rows.Scan(
 			&version.ID, &version.PostID, &version.VersionNumber, &version.VersionType,
-			&version.Status, &version.Phase, &version.Title, &version.RawTranscription,
+			&version.Status, &version.Phase, &version.PostTitle, &version.Title, &version.RawTranscription,
 			&version.Outline, &sectionsJSON, &version.FullContent, &version.CreatedBy,
 			&version.CreatedAt, &version.ChangeNotes,
 		)
@@ -210,7 +211,7 @@ func (s *VersionStore) ListVersions(ctx context.Context, postID uuid.UUID) ([]*P
 func (s *VersionStore) GetLatestVersion(ctx context.Context, postID uuid.UUID) (*PostVersion, error) {
 	query := `
 		SELECT id, post_id, version_number, version_type, status, phase,
-		       title, raw_transcription, outline, sections, full_content,
+		       post_title, title, raw_transcription, outline, sections, full_content,
 		       created_by, created_at, change_notes
 		FROM blog_post_versions
 		WHERE post_id = $1
@@ -223,7 +224,7 @@ func (s *VersionStore) GetLatestVersion(ctx context.Context, postID uuid.UUID) (
 
 	err := s.db.QueryRowContext(ctx, query, postID).Scan(
 		&version.ID, &version.PostID, &version.VersionNumber, &version.VersionType,
-		&version.Status, &version.Phase, &version.Title, &version.RawTranscription,
+		&version.Status, &version.Phase, &version.PostTitle, &version.Title, &version.RawTranscription,
 		&version.Outline, &sectionsJSON, &version.FullContent, &version.CreatedBy,
 		&version.CreatedAt, &version.ChangeNotes,
 	)
@@ -280,8 +281,16 @@ func (s *VersionStore) DiffVersions(ctx context.Context, postID uuid.UUID, v1, v
 	}
 
 	// Compare fields
-	if version1.Title != version2.Title {
+	if version1.PostTitle != version2.PostTitle {
 		diff.TitleChanged = true
+		diff.Changes = append(diff.Changes, VersionChange{
+			Field:    "post_title",
+			OldValue: version1.PostTitle,
+			NewValue: version2.PostTitle,
+		})
+	}
+
+	if version1.Title != version2.Title {
 		diff.Changes = append(diff.Changes, VersionChange{
 			Field:    "title",
 			OldValue: version1.Title,
