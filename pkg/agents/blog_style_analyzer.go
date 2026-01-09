@@ -38,8 +38,8 @@ func (a *BlogStyleAnalyzerAgent) AnalyzeStyle(ctx context.Context) (string, erro
 	// Step 1: Fetch recent posts from RSS feed
 	fmt.Println("Fetching recent posts from Substack RSS...")
 	rssResult, err := a.rssTool.Execute(ctx, map[string]interface{}{
-		"action": "fetch",
-		"limit":  10, // Analyze last 10 posts for good sample size
+		"action": "get_configured", // Use RSS feed URL from config
+		"limit":  10,                // Analyze last 10 posts for good sample size
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch RSS feed: %w", err)
