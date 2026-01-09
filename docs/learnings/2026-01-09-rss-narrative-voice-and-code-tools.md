@@ -795,6 +795,73 @@ From test blog post generation (2026-01-09):
 
 ## Future Enhancements
 
+### Priority: LoRA Fine-Tuning for Native Voice
+
+**The Ultimate Solution**: Instead of injecting a style guide into every prompt (800 token overhead), fine-tune the base model on your writing using LoRA.
+
+**Location**: `finetune/` directory contains complete training pipeline:
+- `finetune/collect_data.py` - Gather training data from blog posts, Twitch VODs
+- `finetune/prepare_dataset.py` - Format as instruction-following examples
+- `finetune/train_lora.py` - Fine-tune Qwen 3 with LoRA/QLoRA
+
+**Benefits**:
+- ✅ **Zero prompt overhead** - Voice is baked into model weights
+- ✅ **Better quality** - Model learns deep patterns, not surface rules
+- ✅ **Faster inference** - No style guide in every prompt
+- ✅ **Consistent voice** - Across all use cases (blog, docs, social)
+
+**Training Pipeline**:
+```bash
+# Step 1: Collect training data from published blog posts
+python finetune/collect_data.py \
+    --output training_data.jsonl \
+    --min-quality 0.7 \
+    --db-name pedrocli_blog
+
+# Step 2: Prepare dataset (90/10 train/val split)
+python finetune/prepare_dataset.py \
+    --input training_data.jsonl \
+    --output-dir ./datasets \
+    --train-ratio 0.9
+
+# Step 3: Fine-tune with QLoRA (4-bit, fits on 24GB VRAM)
+python finetune/train_lora.py \
+    --train-data datasets/train.jsonl \
+    --val-data datasets/val.jsonl \
+    --base-model Qwen/Qwen-3-7B \
+    --output-dir ./checkpoints \
+    --epochs 3 \
+    --batch-size 4
+```
+
+**Hardware Requirements**:
+- Minimum: RTX 3090 (24GB VRAM) for QLoRA
+- Recommended: RTX 5090 or DGX Spark for faster training
+- Training time: ~2-4 hours for 50-100 examples
+
+**Data Sources**:
+1. Published blog posts (raw dictation → final post pairs)
+2. Substack RSS feed content
+3. Twitch VOD transcripts (if available)
+4. Discord/Twitter posts (for shorter form)
+
+**Expected Results**:
+- Voice match: 9.5/10 (vs 8.5/10 with style guide)
+- Token overhead: 0 (vs 800 per prompt)
+- Inference speed: +15% faster (no extra prompt tokens)
+- Context window: Full capacity available for content
+
+**Status**: ⚠️ **Ready to train - awaiting sufficient training data**
+
+Need 50-100 high-quality examples minimum. Current progress:
+- Published blog posts: ~10 (from test generations)
+- Substack archives: ~50+ (from RSS)
+- **Action**: Generate 10-20 more blog posts, then train
+
+**See**: `finetune/README.md` for complete training guide
+
+---
+
 ### Short-term (Next Sprint)
 
 1. **Style Guide Caching**
@@ -866,9 +933,38 @@ This is the future of developer content creation: AI as a collaborator that ampl
 - **Blog Post Generated**: ID `b8ef5ee5-8f63-4838-a8ab-4d044dc7e813`
 - **Implementation**: `pkg/agents/blog_content.go`, `pkg/agents/blog_style_analyzer.go`
 - **Tools**: `pkg/tools/search.go`, `pkg/tools/navigate.go`, `pkg/tools/file.go`
+- **LoRA Training Pipeline**: `finetune/README.md`, `finetune/train_lora.py`
 - **Previous Learnings**: `docs/learnings/2026-01-08-blog-ui-style-analyzer.md`
 - **User Guide**: `docs/blog-workflow.md`
 
 ---
 
-**Next Steps**: Generate 5 more blog posts with explicit code example requests to measure code tool usage and effectiveness.
+## Next Steps
+
+### Immediate (This Week)
+1. **Generate Training Data**: Create 10-20 more blog posts with diverse topics
+2. **Test Code Tool Usage**: Explicitly request code examples in prompts
+3. **Measure Voice Match**: Collect "sounds like me" ratings from generated posts
+
+### Short-term (Next 2 Weeks)
+4. **Prepare LoRA Training Dataset**:
+   - Collect 50-100 examples from blog posts + Substack
+   - Format as instruction-following pairs (raw → edited)
+   - Split train/val (90/10)
+
+5. **Train LoRA Adapter**:
+   - Fine-tune Qwen 3 7B with QLoRA
+   - Train on RTX 3090/5090 (~2-4 hours)
+   - Validate voice match: target 9.5/10
+
+6. **Deploy LoRA Model**:
+   - Load adapter in blog workflow
+   - Compare: base + style guide vs. LoRA-tuned
+   - Measure: token overhead, inference speed, voice quality
+
+### Long-term (Next Month)
+7. **Continuous Training**: Add new blog posts to training set weekly
+8. **Multi-Domain Fine-tuning**: Train separate adapters for blog, docs, social media
+9. **Model Optimization**: Merge adapter + quantize for faster inference
+
+**Goal**: Replace 800-token style guide overhead with native voice in model weights, achieving better quality at zero context cost.
