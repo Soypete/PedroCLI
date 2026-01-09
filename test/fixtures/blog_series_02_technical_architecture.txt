@@ -1,0 +1,41 @@
+Alright, so in the last post I talked about why I'm building PedroCLI. Now let's get into the technical decisions, because this is where it gets interesting.
+
+First question everyone asks - why not just use the OpenAI API or the Anthropic API? And the answer is simple - cost and control. When you're running hundreds of inference calls for background tasks, the API costs add up fast. Plus, I wanted to understand how this stuff actually works. You can't learn that by just calling an API.
+
+So I went self-hosted. But that immediately creates a choice - do I use Ollama or llama.cpp? And here's where it gets nuanced, because I actually use both, and there's good reasons for that.
+
+Ollama is fantastic for getting started. It's literally one command to install, one command to pull a model, and you're running inference. It's dead simple. For anyone who wants to build a self-hosted code editor or AI assistant, start with Ollama. It's free, it's open source, and it just works. That's why I support Ollama in PedroCLI - because I want anyone to be able to run this without needing a PhD in machine learning.
+
+But here's the thing about Ollama - it doesn't support some of the advanced features I needed. Specifically, grammar constraints and logit bias. And this is where llama.cpp comes in.
+
+Let me explain why that matters. When I'm generating a blog post outline, I want it in a specific format. Not "hopefully it follows the format." I want to guarantee it. That's what GBNF grammar does - it's like a schema that forces the LLM to output exactly the structure you want. Super useful for structured data, for templates, for anything where you need predictable output.
+
+And logit bias? That's even cooler. It lets you bias the model toward or away from specific tokens. So when I'm generating a TLDR for a blog post, I can bias toward brevity. When I'm generating social media posts, I can enforce character limits at the token level, not by truncating after the fact. This is the kind of control that makes the output way more useful.
+
+So my architecture uses both. Ollama for general use, because it's easy and most people have it installed. llama.cpp for advanced features when I need that fine-grained control.
+
+Now let's talk about tool calls, because this is something people don't appreciate enough. When you use Claude or ChatGPT, you think you're just having a conversation, right? But under the hood, those models are making dozens of tool calls. They're searching documentation, they're reading files, they're running commands, they're editing code. You just don't see it because the UI hides it.
+
+In PedroCLI, I made tool calls explicit. Every tool has a name, a description, and parameters. The model can call tools like "read_file," "write_file," "search_code," "run_tests," "scrape_github." And I can see exactly what it's doing, because it's all logged.
+
+This is huge for debugging. When something goes wrong, I can see exactly which tool calls were made and what the results were. Try doing that with ChatGPT.
+
+The other thing I built is Whisper integration. Because here's my workflow - I'm in the car, I have an idea, I pull out my phone, I hit record, I dictate the whole thing. Then that audio gets transcribed by Whisper running on my home server, and it becomes input to PedroCLI.
+
+And because it's all behind Tailscale, I can access it from anywhere. I'm not uploading my voice to OpenAI. It's my data, on my hardware, going through my VPN. That matters to me.
+
+The technical stack is Go for the backend, PostgreSQL for persistence, and a web UI built with vanilla JavaScript because I didn't want to deal with React build times. It's simple, it's fast, and it does exactly what I need.
+
+One thing I learned building this - context window management is critical. These models have fixed context windows. Qwen 2.5 Coder 32B has a 32K token context. That sounds like a lot until you're passing in file contents, conversation history, tool results, and system prompts. You hit that limit fast.
+
+So PedroCLI uses file-based context management. Every inference round writes to disk. Prompts, responses, tool calls, all of it. This has two benefits - first, it survives crashes. Second, when you hit the context limit, you can intelligently truncate old rounds and keep the recent stuff. It's like a sliding window.
+
+The other thing is model selection. I'm using Qwen 2.5 Coder 32B as my default. It's quantized to 4-bit, so it fits in 24GB of VRAM. I'm running it on an M1 Max with 32GB of unified memory. It's not cheap hardware, but it's way cheaper than API costs over time.
+
+And here's the thing - smaller models are getting really good. You don't need a 70B model for most tasks. A well-prompted 32B model with tool calls can do amazing things.
+
+Alright, that's the technical architecture. Next post, I'm going to talk about the blog automation workflow specifically. How I dictate posts, how they get structured, how I integrate with Notion for publishing. That's where the logit bias stuff really shines.
+
+If you have questions about any of this, come find me on Discord or Twitter. Links are at the bottom of this post as always. And if you want to learn Go deeply, check out my O'Reilly course. It covers patterns like this in detail.
+
+See you next time.

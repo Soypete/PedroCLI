@@ -255,19 +255,42 @@ Each agent has specialized prompts but shares the same BaseAgent + InferenceExec
 - **Triager** (`pkg/agents/triager.go`) - Diagnose without fixing
 
 **Blog Agents** (use research tools):
+- **BlogContentAgent** (`pkg/agents/blog_content.go`) - 7-phase autonomous blog workflow (RECOMMENDED)
 - **Writer** (`pkg/agents/writer.go`) - Expand dictation into blog posts
 - **Editor** (`pkg/agents/editor.go`) - Review and refine blog content
-- **BlogOrchestrator** (`pkg/agents/blog_orchestrator.go`) - Multi-phase complex blog generation
+- **BlogOrchestrator** (`pkg/agents/blog_orchestrator.go`) - Legacy multi-phase blog generation
 
-The BlogOrchestrator handles complex prompts through a 6-phase pipeline:
-1. Analyze prompt (identify topics, sections, research needs)
-2. Execute research (calendar, RSS, static links)
-3. Generate outline
-4. Expand sections independently (handles large content)
-5. Assemble final post with newsletter
-6. Generate social media posts
+The **BlogContentAgent** is the recommended blog creation system with a 7-phase autonomous workflow:
+1. **Transcribe** - Load voice dictation or text input
+2. **Research** - Web search, RSS feeds, GitHub scraping, calendar integration
+3. **Outline** - Generate structured section outline (4-8 sections)
+4. **Generate Sections** - Expand each section + create TLDR with logit bias
+5. **Assemble** - Combine sections + generate social media posts (Twitter/Bluesky/LinkedIn)
+6. **Editor Review** - Grammar, coherence, technical accuracy review
+7. **Publish** - Save to PostgreSQL + version snapshots
 
-See `docs/blog-orchestrator.md` for full documentation.
+**Key Features:**
+- Progress tracking with tree view (like Claude Code's agent progress)
+- Version snapshots at each phase (stored in `blog_post_versions` table)
+- TLDR generation with logit bias (3-5 bullets, ~200 words)
+- Platform-specific social posts with length enforcement
+- O'Reilly course link prominently featured
+- File-based context management for long-running tasks
+- Research integration (web scraping, RSS, calendar, static links)
+
+**CLI Usage:**
+```bash
+# From transcription file
+./pedrocli blog -file transcript.txt
+
+# From prompt
+./pedrocli blog -prompt "Write about Go contexts"
+
+# From content
+./pedrocli blog -content "..." -title "My Post"
+```
+
+See `docs/blog-workflow.md` for full documentation.
 
 ### 6. Configuration (.pedroceli.json)
 

@@ -1,0 +1,7 @@
+I want to write a blog post about how we're managing context in PedroCLI's blog agent system.
+
+The key innovation is breaking the workflow into 7 distinct phases, where each phase operates on a limited context window. This means we can run the entire blog generation on local models with just 16K context, like Qwen 2.5 Coder 32B on an M1 Max.
+
+Please include code examples from the actual codebase - specifically look at pkg/agents/blog_content.go to show how the phased workflow works. Show the phaseGenerateSections method and explain how we generate each section independently to keep token usage under 2,500 tokens per section.
+
+Also analyze my writing style from my Substack RSS feed and make sure the blog post matches my authentic voice.

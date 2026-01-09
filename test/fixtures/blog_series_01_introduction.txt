@@ -1,0 +1,23 @@
+Hey everyone, Pete here. So I want to talk about this project I've been building called PedroCLI, and honestly, it's kind of become my obsession over the past few months.
+
+So here's the thing - I've been using Claude and ChatGPT for coding, right? And they're amazing. But there's always this friction. Like, I'm walking my dog, I have an idea, I dictate it into my phone, and then I have to wait until I get home to actually implement it. Or I'm at the gym between sets and I'm thinking about a blog post, but by the time I get home, I've forgotten half the good ideas.
+
+And then there's the mobile apps. Claude has this mobile app that's actually pretty good for editing code. But you know what? I wanted to understand how that works. I wanted to build something similar myself. Not because I think I can do it better than Anthropic - they're brilliant - but because I learn by building. That's how I've always learned.
+
+So PedroCLI started as this experiment. Can I build a background coding agent that runs on my own hardware? Something that's completely self-hosted, completely open source, and that I can customize however I want?
+
+And the more I built it, the more use cases I found. It's not just coding anymore. It's blog writing, it's podcast prep, it's scheduling, it's all the menial assistant work that I need to support my hustle.
+
+Because here's the reality - I'm a developer, I make content, I'm working on launching a podcast with some friends, and there's only so many hours in the day. I need an assistant, but hiring someone isn't in the budget right now. So I built one.
+
+This is going to be a series of posts where I break down how I built PedroCLI, the technical decisions I made, the tools I integrated, and honestly, the mistakes I made along the way. Because there were plenty.
+
+In the next post, I'm going to dive into the technical architecture. Why I chose Ollama versus llama.cpp, what the hell tool calls actually are and why they matter, and how I integrated Whisper for voice dictation so I can access this from anywhere with Tailscale.
+
+But for this first post, I just want to set the stage. This is about building something that actually solves real problems for me. Not theoretical problems. Real ones. The kind where you're on a walk and you have a brilliant idea and you want to act on it immediately.
+
+That's what PedroCLI is. It's my AI assistant that I can dictate to from anywhere, that runs the tedious work in the background, and that I control completely because I built it.
+
+And honestly, if you're someone who's curious about how Claude and ChatGPT actually work under the hood, this series is going to be for you. Because we're going to get into the weeds. Tool calls, context windows, model selection, all of it.
+
+Alright, that's the intro. Next time, we're going technical. See you then.

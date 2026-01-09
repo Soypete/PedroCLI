@@ -1,6 +1,50 @@
-{{template "base" .}}
+{{define "index.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PedroCLI - Autonomous Coding Agent</title>
 
-{{define "content"}}
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+    
+    <style>
+        .job-card {
+            transition: all 0.3s ease;
+        }
+        .job-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    
+    <header class="bg-white shadow-sm border-b border-gray-200">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="text-2xl font-bold text-blue-600">Pedro</div>
+                    <div class="text-sm text-gray-500">Autonomous Coding Agent</div>
+                </div>
+                <nav class="flex items-center space-x-4">
+                    <a href="/" class="text-gray-600 hover:text-gray-900 ">Coding</a>
+                    <a href="/vision" class="text-gray-600 hover:text-gray-900 ">Vision</a>
+                    <div id="github-status" class="text-sm text-gray-500">
+                        
+                    </div>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    
+    <main class="container mx-auto px-4 py-8">
 <div class="max-w-6xl mx-auto">
     <!-- Tab Navigation -->
     <div class="mb-6">
@@ -344,7 +388,7 @@
                 </div>
 
                 <div id="blog-post-list" class="space-y-4">
-                    <div class="text-center py-12 text-gray-500">Posts will appear here after creation</div>
+                    <div class="text-center py-12 text-gray-500">Loading posts...</div>
                 </div>
             </div>
         </div>
@@ -370,6 +414,11 @@ function switchTab(tabName) {
     const activeTab = document.getElementById('tab-' + tabName);
     activeTab.classList.remove('text-gray-600', 'hover:bg-gray-100');
     activeTab.classList.add('bg-blue-600', 'text-white');
+
+    // Load blog posts when blog tab is activated
+    if (tabName === 'blog') {
+        loadBlogPosts();
+    }
 
     // Save preference
     localStorage.setItem('pedrocli_active_tab', tabName);
@@ -590,6 +639,59 @@ async function transcribeAudio(audioBlob, targetId, btn) {
     }
 }
 
+// Load blog posts from database
+async function loadBlogPosts() {
+    try {
+        const response = await fetch('/api/blog/posts');
+        if (!response.ok) {
+            throw new Error('Failed to load posts');
+        }
+
+        const data = await response.json();
+        const postList = document.getElementById('blog-post-list');
+
+        if (data.total === 0) {
+            postList.innerHTML = '<div class="text-center py-12 text-gray-500">No blog posts yet</div>';
+            return;
+        }
+
+        // Render posts
+        postList.innerHTML = data.posts.map(post => {
+            const createdDate = new Date(post.created_at).toLocaleDateString();
+            const statusClass = post.status === 'published' ? 'bg-green-100 text-green-800' :
+                              post.status === 'edited' ? 'bg-blue-100 text-blue-800' :
+                              post.status === 'drafted' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-gray-100 text-gray-800';
+
+            const wordCount = post.final_content ? Math.round(post.final_content.length / 5) : 0;
+
+            return `
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                            <h3 class="font-medium text-gray-900 mb-1">${post.title || 'Untitled'}</h3>
+                            <div class="flex items-center gap-3 text-sm text-gray-500">
+                                <span class="px-2 py-0.5 rounded ${statusClass} text-xs font-medium">${post.status}</span>
+                                <span>${createdDate}</span>
+                                <span>v${post.current_version || 1}</span>
+                                ${wordCount > 0 ? `<span>${wordCount} words</span>` : ''}
+                            </div>
+                        </div>
+                        <a href="/blog/review/${post.id}"
+                           class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm whitespace-nowrap">
+                            Review
+                        </a>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading blog posts:', error);
+        const postList = document.getElementById('blog-post-list');
+        postList.innerHTML = '<div class="text-center py-12 text-red-500">Error loading posts</div>';
+    }
+}
+
 // Blog form submission
 async function submitBlogPost(event) {
     event.preventDefault();
@@ -722,6 +824,59 @@ async function submitBlogPost(event) {
     }
 }
 
+// Podcast form submission
+async function submitPodcastJob(event) {
+    event.preventDefault();
+
+    const type = document.getElementById('podcast-type').value;
+    const topic = document.getElementById('podcast-topic').value.trim();
+    const notes = document.getElementById('podcast-notes').value.trim();
+    const submitBtn = event.target.querySelector('button[type="submit"]');
+
+    if (!topic) {
+        alert('Please provide an episode topic');
+        return;
+    }
+
+    // Disable button
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Creating...';
+
+    try {
+        const response = await fetch('/api/podcast', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                type: type,
+                topic: topic,
+                notes: notes
+            }),
+        });
+
+        const data = await response.json();
+
+        if (data.success || response.ok) {
+            // Clear form
+            document.getElementById('podcast-topic').value = '';
+            document.getElementById('podcast-notes').value = '';
+
+            // Show success message
+            alert('Podcast job created! (Note: Podcast workflow is under development)');
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Error creating podcast job:', error);
+        alert('Failed to create podcast job: ' + error.message);
+    } finally {
+        // Re-enable button
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Create Job';
+    }
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     // Restore saved tab preference
@@ -732,6 +887,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const blogForm = document.getElementById('blog-job-form');
     if (blogForm) {
         blogForm.addEventListener('submit', submitBlogPost);
+    }
+
+    // Attach podcast form handler
+    const podcastForm = document.getElementById('podcast-job-form');
+    if (podcastForm) {
+        podcastForm.addEventListener('submit', submitPodcastJob);
     }
 });
 </script>

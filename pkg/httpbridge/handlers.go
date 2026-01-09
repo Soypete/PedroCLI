@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/soypete/pedrocli/pkg/jobs"
 )
 
@@ -459,6 +460,264 @@ func (s *Server) handleVoiceStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Blog Review UI Handler
+
+// handleBlogReviewPage renders the blog review page
+func (s *Server) handleBlogReviewPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract post ID from path (/blog/review/:id)
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/blog/review/"), "/")
+	if len(parts) == 0 || parts[0] == "" {
+		http.Error(w, "Post ID required", http.StatusBadRequest)
+		return
+	}
+
+	// Render template
+	data := map[string]interface{}{
+		"title":      "Blog Review - PedroCLI",
+		"activePage": "blog",
+	}
+
+	if err := s.templates.ExecuteTemplate(w, "blog_review.html", data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+// PodcastRequest represents a podcast job creation request
+type PodcastRequest struct {
+	Type  string `json:"type"`  // create_script, create_outline
+	Topic string `json:"topic"`
+	Notes string `json:"notes"`
+}
+
+// handlePodcast handles POST /api/podcast (create podcast job)
+func (s *Server) handlePodcast(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req PodcastRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Topic == "" {
+		http.Error(w, "Topic is required", http.StatusBadRequest)
+		return
+	}
+
+	// For now, return a success response
+	// TODO: Implement actual podcast workflow when agents are ready
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "Podcast job queued (workflow under development)",
+		"type":    req.Type,
+		"topic":   req.Topic,
+	})
+}
+
+// Blog Review API Handlers
+
+// BlogPostResponse represents a blog post with version history
+type BlogPostResponse struct {
+	ID             string               `json:"id"`
+	Title          string               `json:"title"`
+	Status         string               `json:"status"`
+	FinalContent   string               `json:"final_content"`
+	SocialPosts    map[string]string    `json:"social_posts"`
+	EditorOutput   string               `json:"editor_output"`
+	CurrentVersion int                  `json:"current_version"`
+	CreatedAt      time.Time            `json:"created_at"`
+	UpdatedAt      time.Time            `json:"updated_at"`
+	Versions       []BlogVersionSummary `json:"versions,omitempty"`
+}
+
+// BlogVersionSummary represents a version summary
+type BlogVersionSummary struct {
+	VersionNumber int       `json:"version_number"`
+	VersionType   string    `json:"version_type"`
+	Phase         string    `json:"phase"`
+	Status        string    `json:"status"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+// BlogEditRequest represents a manual edit request
+type BlogEditRequest struct {
+	Content     string `json:"content"`
+	ChangeNotes string `json:"change_notes"`
+}
+
+// BlogReviseRequest represents an AI revision request
+type BlogReviseRequest struct {
+	Prompt string `json:"prompt"`
+}
+
+// handleBlogPosts handles GET /api/blog/posts (list all posts)
+func (s *Server) handleBlogPosts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Query all blog posts
+	posts, err := s.appCtx.BlogStore.List("")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to list posts: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Convert to response format
+	responses := make([]BlogPostResponse, len(posts))
+	for i, p := range posts {
+		responses[i] = BlogPostResponse{
+			ID:             p.ID.String(),
+			Title:          p.Title,
+			Status:         string(p.Status),
+			FinalContent:   p.FinalContent,
+			SocialPosts:    p.SocialPosts,
+			EditorOutput:   p.EditorOutput,
+			CurrentVersion: p.CurrentVersion,
+			CreatedAt:      p.CreatedAt,
+			UpdatedAt:      p.UpdatedAt,
+		}
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"posts": responses,
+		"total": len(posts),
+	})
+}
+
+// handleBlogPostByID handles GET /api/blog/posts/:id
+func (s *Server) handleBlogPostByID(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract ID from path
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/blog/posts/"), "/")
+	if len(parts) == 0 || parts[0] == "" {
+		http.Error(w, "Post ID required", http.StatusBadRequest)
+		return
+	}
+	postIDStr := parts[0]
+
+	// Parse UUID
+	postID, err := parseUUID(postIDStr)
+	if err != nil {
+		http.Error(w, "Invalid post ID", http.StatusBadRequest)
+		return
+	}
+
+	// Get post from database
+	post, err := s.appCtx.BlogStore.Get(postID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Post not found: %v", err), http.StatusNotFound)
+		return
+	}
+
+	// Get version history
+	versions, err := s.appCtx.VersionStore.ListVersions(r.Context(), postID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to get versions: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Convert to response format
+	versionSummaries := make([]BlogVersionSummary, len(versions))
+	for i, v := range versions {
+		versionSummaries[i] = BlogVersionSummary{
+			VersionNumber: v.VersionNumber,
+			VersionType:   string(v.VersionType),
+			Phase:         v.Phase,
+			Status:        string(v.Status),
+			CreatedAt:     v.CreatedAt,
+		}
+	}
+
+	respondJSON(w, http.StatusOK, BlogPostResponse{
+		ID:             post.ID.String(),
+		Title:          post.Title,
+		Status:         string(post.Status),
+		FinalContent:   post.FinalContent,
+		SocialPosts:    post.SocialPosts,
+		EditorOutput:   post.EditorOutput,
+		CurrentVersion: post.CurrentVersion,
+		CreatedAt:      post.CreatedAt,
+		UpdatedAt:      post.UpdatedAt,
+		Versions:       versionSummaries,
+	})
+}
+
+// handleBlogPostEdit handles POST /api/blog/posts/:id/edit (manual edit)
+func (s *Server) handleBlogPostEdit(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract ID from path
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/blog/posts/"), "/")
+	if len(parts) < 2 || parts[0] == "" {
+		http.Error(w, "Post ID required", http.StatusBadRequest)
+		return
+	}
+	postID := parts[0]
+
+	var req BlogEditRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// TODO: Update post content and create new version
+	// For now, return success
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"post_id": postID,
+		"version": 2,
+	})
+}
+
+// handleBlogPostRevise handles POST /api/blog/posts/:id/revise (AI revision)
+func (s *Server) handleBlogPostRevise(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract ID from path
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/blog/posts/"), "/")
+	if len(parts) < 2 || parts[0] == "" {
+		http.Error(w, "Post ID required", http.StatusBadRequest)
+		return
+	}
+	postID := parts[0]
+
+	var req BlogReviseRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// TODO: Create job for AI revision using Editor agent
+	// For now, return job ID placeholder
+	jobID := fmt.Sprintf("job-%d", time.Now().Unix())
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"job_id":  jobID,
+		"post_id": postID,
+	})
+}
+
 // Helper functions
 
 // respondJSON sends a JSON response
@@ -501,4 +760,9 @@ func renderJobCard(job *jobs.Job) string {
 		</div>
 	</div>
 	`, job.ID, job.Description, statusClass, statusIcon, job.Status, job.CreatedAt.Format("2006-01-02 15:04:05"))
+}
+
+// parseUUID parses a UUID string, supporting both with and without dashes
+func parseUUID(s string) (uuid.UUID, error) {
+	return uuid.Parse(s)
 }

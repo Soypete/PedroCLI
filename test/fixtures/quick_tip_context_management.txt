@@ -1,0 +1,19 @@
+Hey, quick tip for anyone building with LLMs.
+
+I was debugging an issue yesterday where my agent was losing context halfway through a coding task. It would start strong, make progress, and then suddenly forget what it was working on. Super frustrating.
+
+Turns out, I was hitting the context window limit. Qwen 32B has a 32K token context. I was passing in the entire conversation history, plus file contents, plus system prompts. Hit the limit, stuff started getting truncated, agent got confused.
+
+The fix was simple but not obvious - file-based context management. Instead of keeping everything in memory and hoping it fits, write each inference round to disk. Number the files sequentially. When you approach the token limit, truncate the oldest rounds and keep the recent ones.
+
+It's like a sliding window. The agent always has the last N rounds of context, but you're not trying to fit the entire conversation in the window.
+
+Bonus benefit - it survives crashes. If your process dies, you can resume from the last saved state. Super useful for long-running tasks.
+
+Implementation in Go is straightforward. Create a temp directory per job, write numbered files, read them back in order. Use a mutex if you have concurrent writes.
+
+Anyway, that's the tip. File-based context management for reliable LLM applications. Saved me a ton of debugging time.
+
+If you want to see how I implemented this in PedroCLI, it's all on GitHub. Check out the llmcontext package.
+
+Alright, back to coding. See you next time.

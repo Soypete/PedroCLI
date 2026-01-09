@@ -37,7 +37,7 @@ type PostVersion struct {
 
 	// Content at this version
 	PostTitle        string    `json:"post_title,omitempty"` // The blog post title at this version
-	Title            string    `json:"title,omitempty"`        // Section title (if applicable)
+	Title            string    `json:"title,omitempty"`      // Section title (if applicable)
 	RawTranscription string    `json:"raw_transcription,omitempty"`
 	Outline          string    `json:"outline,omitempty"`
 	Sections         []Section `json:"sections,omitempty"`
@@ -149,7 +149,7 @@ func (s *VersionStore) GetVersion(ctx context.Context, postID uuid.UUID, version
 	}
 
 	// Unmarshal sections if present
-	if sectionsJSON != nil {
+	if sectionsJSON != nil && len(sectionsJSON) > 0 {
 		if err := json.Unmarshal(sectionsJSON, &version.Sections); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal sections: %w", err)
 		}
@@ -191,7 +191,7 @@ func (s *VersionStore) ListVersions(ctx context.Context, postID uuid.UUID) ([]*P
 		}
 
 		// Unmarshal sections if present
-		if sectionsJSON != nil {
+		if sectionsJSON != nil && len(sectionsJSON) > 0 {
 			if err := json.Unmarshal(sectionsJSON, &version.Sections); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal sections: %w", err)
 			}
@@ -237,7 +237,7 @@ func (s *VersionStore) GetLatestVersion(ctx context.Context, postID uuid.UUID) (
 	}
 
 	// Unmarshal sections if present
-	if sectionsJSON != nil {
+	if sectionsJSON != nil && len(sectionsJSON) > 0 {
 		if err := json.Unmarshal(sectionsJSON, &version.Sections); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal sections: %w", err)
 		}

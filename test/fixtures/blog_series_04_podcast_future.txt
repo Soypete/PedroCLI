@@ -1,0 +1,57 @@
+Alright, final post in this series. Let's talk about podcast automation and where I'm taking PedroCLI next.
+
+So I'm launching a podcast with some friends. It's going to be technical deep dives, interviews with engineers, that kind of thing. And if you've ever produced a podcast, you know there's a ton of work that has nothing to do with the actual recording. Scheduling guests, preparing talking points, writing scripts, following up. It's all administrative work.
+
+And I thought - why am I doing this manually when I've built an AI assistant?
+
+So I integrated Cal.com into PedroCLI. Here's how it works.
+
+When I want to schedule a guest, I dictate something like "schedule a podcast recording with John Doe, topic is Kubernetes operators, needs to be sixty minutes." The agent creates a Cal.com event type with all the details. It includes Riverside.fm integration because that's where we record. It sets buffer time before and after. It generates a booking link and gives it to me.
+
+I send that link to the guest, they pick a time that works for them, and it's on the calendar. No back and forth emails. No timezone confusion. It just works.
+
+But here's where it gets interesting - the agent also prepares for the recording. It pulls information about the guest from their website or GitHub. It generates talking points based on the topic. It creates an outline for the episode. All of this happens automatically once the guest books the time.
+
+Then after the recording, it'll transcribe it with Whisper, generate show notes, create social media teasers, all of that. I haven't built all of this yet, but the infrastructure is there.
+
+The Cal.com integration uses tool calls, just like everything else in PedroCLI. The agent can list event types, create new ones, get availability, check bookings. It's a full two-way integration.
+
+And here's what I love about this - it's composable. The same agent that writes blog posts can also manage podcast scheduling, because they're both just sequences of tool calls orchestrated by an LLM. That's the power of building your own system.
+
+Now let me talk about vision models, because this is coming soon and I'm excited about it.
+
+Every blog post needs images. My posts usually have a header image, sometimes diagrams, sometimes screenshots. And right now, that's manual. I have to generate them, download them, upload them to Notion or Substack. It's tedious.
+
+But here's the thing - I have a logo. I have brand colors. I have a style. I have reference images that I use over and over. Why am I not feeding those to a vision model and generating images automatically?
+
+So I'm adding vision model support to PedroCLI. The workflow will be - blog post is generated, the agent identifies what images are needed based on the content, it generates them using a local Stable Diffusion model or DALL-E, and it embeds them in the Notion post automatically.
+
+I already have the image assets uploaded to the system. My logo, my reference pics, all of that. They're stored in the database. So the vision model can reference them every time. No more uploading the same logo to ChatGPT every time I need an image.
+
+This is part of a bigger pattern I'm seeing - the more you automate, the more you realize can be automated. You start with one workflow, then you see ten others that could work the same way.
+
+The other thing I want to mention is learning by building. I said this in the first post, but it bears repeating. The reason I built PedroCLI isn't because I think I can do it better than Anthropic or OpenAI. It's because I wanted to understand how this stuff works.
+
+And you can't understand it by just using APIs. You have to get your hands dirty. You have to implement tool calling. You have to manage context windows. You have to deal with prompt engineering, with model selection, with all the messy details.
+
+People use Claude and ChatGPT every day and they have no idea how many tool calls are happening under the hood. They don't think about context windows or temperature settings or sampling strategies. And that's fine - good UX should hide complexity.
+
+But if you want to build AI applications, you need to understand the complexity. You need to know why tool calls matter, how they're formatted, how the model decides which tools to call. You need to understand tokenization and why GBNF grammars are powerful.
+
+The best way to learn that is to build it yourself. That's why PedroCLI exists.
+
+And honestly, building this has made me a better engineer. Not just in AI stuff - in systems design generally. Thinking about how to structure autonomous workflows, how to make systems composable, how to handle errors gracefully when you don't have a human in the loop. These are valuable skills regardless of what you're building.
+
+So that's the series. I've taken you from the vision to the technical architecture to the blog workflow to the podcast automation. And I hope it's inspired you to think about what you can automate in your own workflow.
+
+Because here's the reality - AI isn't going to replace us. But people who use AI effectively are going to outcompete people who don't. And the way to use it effectively is to understand it deeply, not just use it superficially.
+
+PedroCLI is open source. All the code is on GitHub. If you want to dig into how I implemented tool calls or context management or any of this, it's all there. Learn from it, fork it, build your own version.
+
+And if you want to go deeper on Go programming, because that's the language I built this in, check out my O'Reilly course. It's comprehensive and it covers patterns like these in real-world contexts.
+
+I'm also active on Discord and Twitter if you want to chat about this stuff. I love talking about AI systems and autonomous agents. Come say hi.
+
+That's it for this series. Thanks for following along. Now go build something.
+
+See you next time.

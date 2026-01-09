@@ -31,9 +31,11 @@ type BlogPost struct {
 	EditorOutput              string                 `json:"editor_output,omitempty"`
 	FinalContent              string                 `json:"final_content,omitempty"`
 	NewsletterAddendum        map[string]interface{} `json:"newsletter_addendum,omitempty"`
+	SocialPosts               map[string]string      `json:"social_posts,omitempty"`
 	NotionPageID              string                 `json:"notion_page_id,omitempty"`
 	SubstackURL               string                 `json:"substack_url,omitempty"`
 	PaywallUntil              *time.Time             `json:"paywall_until,omitempty"`
+	CurrentVersion            int                    `json:"current_version,omitempty"`
 	CreatedAt                 time.Time              `json:"created_at"`
 	UpdatedAt                 time.Time              `json:"updated_at"`
 }
@@ -66,12 +68,21 @@ func (s *PostStore) Create(post *BlogPost) error {
 		}
 	}
 
+	var socialPostsJSON []byte
+	if post.SocialPosts != nil {
+		var err error
+		socialPostsJSON, err = json.Marshal(post.SocialPosts)
+		if err != nil {
+			return fmt.Errorf("failed to marshal social posts: %w", err)
+		}
+	}
+
 	query := `
 		INSERT INTO blog_posts (
 			id, title, status, raw_transcription, transcription_duration_seconds,
 			writer_output, editor_output, final_content, newsletter_addendum,
-			notion_page_id, substack_url, paywall_until
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			social_posts, notion_page_id, substack_url, paywall_until
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING created_at, updated_at
 	`
 
@@ -79,7 +90,7 @@ func (s *PostStore) Create(post *BlogPost) error {
 		query,
 		post.ID, post.Title, post.Status, post.RawTranscription,
 		post.TranscriptionDurationSecs, post.WriterOutput, post.EditorOutput,
-		post.FinalContent, addendumJSON, post.NotionPageID, post.SubstackURL,
+		post.FinalContent, addendumJSON, socialPostsJSON, post.NotionPageID, post.SubstackURL,
 		post.PaywallUntil,
 	).Scan(&post.CreatedAt, &post.UpdatedAt)
 
@@ -95,19 +106,21 @@ func (s *PostStore) Get(id uuid.UUID) (*BlogPost, error) {
 	query := `
 		SELECT id, title, status, raw_transcription, transcription_duration_seconds,
 		       writer_output, editor_output, final_content, newsletter_addendum,
-		       notion_page_id, substack_url, paywall_until, created_at, updated_at
+		       social_posts, notion_page_id, substack_url, paywall_until,
+		       current_version, created_at, updated_at
 		FROM blog_posts
 		WHERE id = $1
 	`
 
 	post := &BlogPost{}
 	var addendumJSON []byte
+	var socialPostsJSON []byte
 
 	err := s.db.QueryRow(query, id).Scan(
 		&post.ID, &post.Title, &post.Status, &post.RawTranscription,
 		&post.TranscriptionDurationSecs, &post.WriterOutput, &post.EditorOutput,
-		&post.FinalContent, &addendumJSON, &post.NotionPageID, &post.SubstackURL,
-		&post.PaywallUntil, &post.CreatedAt, &post.UpdatedAt,
+		&post.FinalContent, &addendumJSON, &socialPostsJSON, &post.NotionPageID, &post.SubstackURL,
+		&post.PaywallUntil, &post.CurrentVersion, &post.CreatedAt, &post.UpdatedAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -117,9 +130,15 @@ func (s *PostStore) Get(id uuid.UUID) (*BlogPost, error) {
 		return nil, fmt.Errorf("failed to get blog post: %w", err)
 	}
 
-	if addendumJSON != nil {
+	if addendumJSON != nil && len(addendumJSON) > 0 {
 		if err := json.Unmarshal(addendumJSON, &post.NewsletterAddendum); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal newsletter addendum: %w", err)
+		}
+	}
+
+	if socialPostsJSON != nil && len(socialPostsJSON) > 0 {
+		if err := json.Unmarshal(socialPostsJSON, &post.SocialPosts); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal social posts: %w", err)
 		}
 	}
 
@@ -137,6 +156,15 @@ func (s *PostStore) Update(post *BlogPost) error {
 		}
 	}
 
+	var socialPostsJSON []byte
+	if post.SocialPosts != nil {
+		var err error
+		socialPostsJSON, err = json.Marshal(post.SocialPosts)
+		if err != nil {
+			return fmt.Errorf("failed to marshal social posts: %w", err)
+		}
+	}
+
 	query := `
 		UPDATE blog_posts SET
 			title = $2,
@@ -147,9 +175,11 @@ func (s *PostStore) Update(post *BlogPost) error {
 			editor_output = $7,
 			final_content = $8,
 			newsletter_addendum = $9,
-			notion_page_id = $10,
-			substack_url = $11,
-			paywall_until = $12
+			social_posts = $10,
+			notion_page_id = $11,
+			substack_url = $12,
+			paywall_until = $13,
+			current_version = $14
 		WHERE id = $1
 		RETURNING updated_at
 	`
@@ -158,8 +188,8 @@ func (s *PostStore) Update(post *BlogPost) error {
 		query,
 		post.ID, post.Title, post.Status, post.RawTranscription,
 		post.TranscriptionDurationSecs, post.WriterOutput, post.EditorOutput,
-		post.FinalContent, addendumJSON, post.NotionPageID, post.SubstackURL,
-		post.PaywallUntil,
+		post.FinalContent, addendumJSON, socialPostsJSON, post.NotionPageID, post.SubstackURL,
+		post.PaywallUntil, post.CurrentVersion,
 	).Scan(&post.UpdatedAt)
 
 	if err == sql.ErrNoRows {
@@ -201,7 +231,8 @@ func (s *PostStore) List(status PostStatus) ([]*BlogPost, error) {
 		query = `
 			SELECT id, title, status, raw_transcription, transcription_duration_seconds,
 			       writer_output, editor_output, final_content, newsletter_addendum,
-			       notion_page_id, substack_url, paywall_until, created_at, updated_at
+			       social_posts, notion_page_id, substack_url, paywall_until,
+			       current_version, created_at, updated_at
 			FROM blog_posts
 			WHERE status = $1
 			ORDER BY created_at DESC
@@ -211,7 +242,8 @@ func (s *PostStore) List(status PostStatus) ([]*BlogPost, error) {
 		query = `
 			SELECT id, title, status, raw_transcription, transcription_duration_seconds,
 			       writer_output, editor_output, final_content, newsletter_addendum,
-			       notion_page_id, substack_url, paywall_until, created_at, updated_at
+			       social_posts, notion_page_id, substack_url, paywall_until,
+			       current_version, created_at, updated_at
 			FROM blog_posts
 			ORDER BY created_at DESC
 		`
@@ -227,20 +259,27 @@ func (s *PostStore) List(status PostStatus) ([]*BlogPost, error) {
 	for rows.Next() {
 		post := &BlogPost{}
 		var addendumJSON []byte
+		var socialPostsJSON []byte
 
 		err := rows.Scan(
 			&post.ID, &post.Title, &post.Status, &post.RawTranscription,
 			&post.TranscriptionDurationSecs, &post.WriterOutput, &post.EditorOutput,
-			&post.FinalContent, &addendumJSON, &post.NotionPageID, &post.SubstackURL,
-			&post.PaywallUntil, &post.CreatedAt, &post.UpdatedAt,
+			&post.FinalContent, &addendumJSON, &socialPostsJSON, &post.NotionPageID, &post.SubstackURL,
+			&post.PaywallUntil, &post.CurrentVersion, &post.CreatedAt, &post.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan blog post: %w", err)
 		}
 
-		if addendumJSON != nil {
+		if addendumJSON != nil && len(addendumJSON) > 0 {
 			if err := json.Unmarshal(addendumJSON, &post.NewsletterAddendum); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal newsletter addendum: %w", err)
+			}
+		}
+
+		if socialPostsJSON != nil && len(socialPostsJSON) > 0 {
+			if err := json.Unmarshal(socialPostsJSON, &post.SocialPosts); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal social posts: %w", err)
 			}
 		}
 

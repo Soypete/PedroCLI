@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"flag"
 	"fmt"
 	"os"
@@ -9,9 +10,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/soypete/pedrocli/pkg/agents"
 	"github.com/soypete/pedrocli/pkg/cli"
 	"github.com/soypete/pedrocli/pkg/config"
+	"github.com/soypete/pedrocli/pkg/database"
 	depcheck "github.com/soypete/pedrocli/pkg/init"
+	"github.com/soypete/pedrocli/pkg/llm"
 )
 
 const version = "0.2.0-dev"
@@ -465,49 +469,147 @@ func blogCommand(cfg *config.Config, args []string) {
 	title := fs.String("title", "", "Blog post title (optional for orchestrate)")
 	content := fs.String("content", "", "Blog post content/dictation (for simple posts)")
 	prompt := fs.String("prompt", "", "Complex blog prompt for orchestration (use this for multi-step posts)")
+	file := fs.String("file", "", "Transcription file for 7-phase BlogContentAgent workflow")
 	publish := fs.Bool("publish", false, "Auto-publish to Notion after generation")
 	fs.Parse(args)
 
-	// Check which mode we're in
-	if *prompt != "" {
-		// Orchestrated blog post (complex, multi-phase)
-		fmt.Println("Starting blog orchestrator...")
-		if *title != "" {
-			fmt.Printf("Title hint: %s\n", *title)
-		}
+	// Determine input source for 7-phase workflow
+	var transcription string
+	var postTitle string
 
-		arguments := map[string]interface{}{
-			"prompt":  *prompt,
-			"publish": *publish,
-		}
-		if *title != "" {
-			arguments["title"] = *title
-		}
-
-		callAgent(cfg, "blog_orchestrator", arguments)
-	} else if *content != "" {
-		// Simple blog post (direct to writer)
-		if *title == "" {
-			fmt.Fprintln(os.Stderr, "Error: -title is required for simple blog posts")
-			fs.Usage()
+	if *file != "" {
+		// Load from file
+		data, err := os.ReadFile(*file)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: Failed to read file: %v\n", err)
 			os.Exit(1)
 		}
-
-		fmt.Printf("Creating blog post: %s\n", *title)
-
-		arguments := map[string]interface{}{
-			"title":   *title,
-			"content": *content,
+		transcription = string(data)
+		postTitle = *title
+	} else if *content != "" {
+		// Use content directly
+		transcription = *content
+		postTitle = *title
+		if postTitle == "" {
+			fmt.Fprintln(os.Stderr, "Error: -title is required when using -content")
+			os.Exit(1)
 		}
-
-		callTool(cfg, "blog_writer", arguments)
+	} else if *prompt != "" {
+		// Use prompt as transcription (let agent expand it)
+		transcription = *prompt
+		postTitle = *title
 	} else {
-		fmt.Fprintln(os.Stderr, "Error: either -prompt (for orchestrated posts) or -content (for simple posts) is required")
+		fmt.Fprintln(os.Stderr, "Error: one of -file, -prompt, or -content is required")
 		fmt.Fprintln(os.Stderr, "\nExamples:")
-		fmt.Fprintln(os.Stderr, "  Simple post:       pedrocli blog -title \"My Post\" -content \"Raw thoughts...\"")
-		fmt.Fprintln(os.Stderr, "  Orchestrated post: pedrocli blog -prompt \"Write a 2025 recap with...\" -publish")
+		fmt.Fprintln(os.Stderr, "  From file:    pedrocli blog -file transcription.txt")
+		fmt.Fprintln(os.Stderr, "  From prompt:  pedrocli blog -prompt \"Write about building PedroCLI...\"")
+		fmt.Fprintln(os.Stderr, "  From content: pedrocli blog -title \"My Post\" -content \"Raw dictation...\"")
 		os.Exit(1)
 	}
+
+	// Run 7-phase BlogContentAgent workflow
+	runBlogContentAgent(cfg, transcription, postTitle, *publish)
+}
+
+// runBlogContentAgent executes the 7-phase blog creation workflow
+func runBlogContentAgent(cfg *config.Config, transcription string, title string, publish bool) {
+
+	// Setup LLM backend
+	var backend llm.Backend
+	switch cfg.Model.Type {
+	case "ollama":
+		backend = llm.NewOllamaClient(cfg)
+	case "llamacpp":
+		backend = llm.NewServerClient(llm.ServerClientConfig{
+			BaseURL:     cfg.Model.ServerURL,
+			ModelName:   cfg.Model.ModelName,
+			ContextSize: cfg.Model.ContextSize,
+			EnableTools: true,
+		})
+	default:
+		fmt.Fprintf(os.Stderr, "Error: Unknown model type: %s\n", cfg.Model.Type)
+		os.Exit(1)
+	}
+
+	// Setup database (optional)
+	var db *sql.DB
+	if cfg.Blog.Enabled && cfg.Database.Database != "" {
+		dbCfg := &database.Config{
+			Host:     cfg.Database.Host,
+			Port:     cfg.Database.Port,
+			User:     cfg.Database.User,
+			Password: cfg.Database.Password,
+			Database: cfg.Database.Database,
+			SSLMode:  cfg.Database.SSLMode,
+		}
+
+		dbWrapper, err := database.New(dbCfg)
+		if err != nil {
+			fmt.Printf("Warning: Database connection failed: %v\n", err)
+			fmt.Println("Continuing without database (versions won't be saved)")
+		} else {
+			db = dbWrapper.DB
+			defer db.Close()
+		}
+	}
+
+	// Extract title from first line if not provided
+	if title == "" {
+		title = "Untitled Blog Post"
+		if len(transcription) > 0 {
+			firstLine := transcription[:min(len(transcription), 100)]
+			if len(firstLine) > 10 {
+				title = firstLine[:min(len(firstLine), 60)] + "..."
+			}
+		}
+	}
+
+	// Create and execute agent
+	agent := agents.NewBlogContentAgent(agents.BlogContentAgentConfig{
+		Backend:       backend,
+		DB:            db,
+		WorkingDir:    cfg.Project.Workdir,
+		MaxIterations: 10,
+		Transcription: transcription,
+		Title:         title,
+		Config:        cfg,
+	})
+
+	fmt.Println("\n🚀 Starting BlogContentAgent workflow...")
+
+	if err := agent.Execute(context.Background()); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Workflow failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Print results
+	post := agent.GetCurrentPost()
+	socialPosts := agent.GetSocialPosts()
+
+	fmt.Println("\n" + strings.Repeat("=", 80))
+	fmt.Println("📝 FINAL BLOG POST")
+	fmt.Println(strings.Repeat("=", 80) + "\n")
+	fmt.Println(post.FinalContent)
+
+	fmt.Println("\n" + strings.Repeat("=", 80))
+	fmt.Println("📱 SOCIAL MEDIA POSTS")
+	fmt.Println(strings.Repeat("=", 80) + "\n")
+
+	for platform, post := range socialPosts {
+		fmt.Printf("**%s:**\n%s\n\n", platform, post)
+	}
+
+	fmt.Println(strings.Repeat("=", 80))
+	fmt.Println("✏️ EDITOR FEEDBACK")
+	fmt.Println(strings.Repeat("=", 80) + "\n")
+	fmt.Println(post.EditorOutput)
+
+	if db != nil {
+		fmt.Printf("\n💾 Saved to database with ID: %s\n", post.ID)
+		fmt.Println("📚 Version history available in blog_post_versions table")
+	}
+
+	fmt.Println("\n✅ Workflow complete!")
 }
 
 func statusCommand(cfg *config.Config, args []string) {

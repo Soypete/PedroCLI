@@ -44,6 +44,9 @@
     "keep_temp_files": true,
     "log_level": "info"
   },
+  "init": {
+    "skip_checks": true
+  },
   "database": {
     "driver": "postgres",
     "host": "localhost",
@@ -52,5 +55,24 @@
     "password": "pedrocli",
     "database": "pedrocli",
     "ssl_mode": "disable"
+  },
+  "blog": {
+    "enabled": true,
+    "rss_feed_url": "https://soypetetech.substack.com/feed",
+    "research": {
+      "enabled": true,
+      "calendar_enabled": true,
+      "rss_enabled": true,
+      "max_rss_posts": 5,
+      "max_calendar_days": 30
+    },
+    "static_links": {
+      "oreilly": "https://tr.ee/lbgNjvyc6f",
+      "discord": "https://discord.gg/soypete",
+      "linktree": "https://linktr.ee/soypete_tech",
+      "youtube": "https://youtube.com/@soypete",
+      "twitter": "https://twitter.com/soypete",
+      "newsletter": "https://soypetetech.substack.com"
+    }
   }
 }

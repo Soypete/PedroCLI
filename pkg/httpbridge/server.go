@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/soypete/pedrocli/pkg/config"
@@ -35,6 +36,7 @@ func NewServer(cfg *config.Config, ctx context.Context) (*Server, error) {
 		"pkg/web/templates/base.html",
 		"pkg/web/templates/index.html",
 		"pkg/web/templates/components/job_card.html",
+		"pkg/web/templates/blog_review.html",
 	))
 
 	// Create SSE broadcaster
@@ -66,6 +68,7 @@ func (s *Server) setupRoutes() {
 
 	// Web UI routes
 	s.mux.HandleFunc("/", s.handleIndex)
+	s.mux.HandleFunc("/blog/review/", s.handleBlogReviewPage)
 
 	// API routes
 	s.mux.HandleFunc("/api/jobs", s.handleJobs)
@@ -73,7 +76,28 @@ func (s *Server) setupRoutes() {
 	s.mux.HandleFunc("/api/stream/jobs/", s.handleJobStream)
 	s.mux.HandleFunc("/api/blog", s.handleBlog)
 	s.mux.HandleFunc("/api/blog/orchestrate", s.handleBlogOrchestrate)
+	s.mux.HandleFunc("/api/podcast", s.handlePodcast)
 	s.mux.HandleFunc("/api/health", s.handleHealth)
+
+	// Blog review API routes
+	s.mux.HandleFunc("/api/blog/posts", s.handleBlogPosts)
+	s.mux.HandleFunc("/api/blog/posts/", func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/blog/posts/")
+		parts := strings.Split(path, "/")
+
+		if len(parts) == 1 {
+			// /api/blog/posts/:id
+			s.handleBlogPostByID(w, r)
+		} else if len(parts) == 2 && parts[1] == "edit" {
+			// /api/blog/posts/:id/edit
+			s.handleBlogPostEdit(w, r)
+		} else if len(parts) == 2 && parts[1] == "revise" {
+			// /api/blog/posts/:id/revise
+			s.handleBlogPostRevise(w, r)
+		} else {
+			http.Error(w, "Not found", http.StatusNotFound)
+		}
+	})
 
 	// Voice transcription routes
 	s.mux.HandleFunc("/api/voice/transcribe", s.handleVoiceTranscribe)

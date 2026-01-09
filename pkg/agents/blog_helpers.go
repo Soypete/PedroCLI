@@ -10,12 +10,12 @@ import (
 
 // GenerateTLDROptions configures TLDR generation
 type GenerateTLDROptions struct {
-	Outline      string  // Blog post outline
-	Research     string  // Research data
-	MaxBullets   int     // Max number of bullet points (default: 5)
-	MaxTokens    int     // Max tokens for TLDR (default: 200)
-	Temperature  float64 // Temperature for generation (default: 0.3)
-	UseGrammar   bool    // Use grammar constraints (default: true)
+	Outline     string  // Blog post outline
+	Research    string  // Research data
+	MaxBullets  int     // Max number of bullet points (default: 5)
+	MaxTokens   int     // Max tokens for TLDR (default: 200)
+	Temperature float64 // Temperature for generation (default: 0.3)
+	UseGrammar  bool    // Use grammar constraints (default: true)
 }
 
 // GenerateTLDR generates a concise TLDR section for a blog post

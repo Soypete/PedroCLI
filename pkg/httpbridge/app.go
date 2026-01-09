@@ -11,6 +11,7 @@ import (
 	"github.com/soypete/pedrocli/pkg/jobs"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/storage"
+	"github.com/soypete/pedrocli/pkg/storage/blog"
 	"github.com/soypete/pedrocli/pkg/tools"
 )
 
@@ -24,6 +25,8 @@ type AppContext struct {
 
 	// Stores
 	CompactionStatsStore storage.CompactionStatsStore
+	BlogStore            *blog.PostStore
+	VersionStore         *blog.VersionStore
 
 	// Tools (used by agents)
 	FileTool     tools.Tool
@@ -80,6 +83,10 @@ func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, erro
 	// Create compaction stats store
 	compactionStatsStore := database.NewCompactionStatsStore(db.DB)
 
+	// Create blog stores
+	blogStore := blog.NewPostStore(db.DB)
+	versionStore := blog.NewVersionStore(db.DB)
+
 	// Migrate existing file-based jobs to database
 	migrated, err := jobManager.MigrateFromFiles(ctx, "/tmp/pedrocli-jobs")
 	if err != nil {
@@ -102,6 +109,8 @@ func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, erro
 		Database:             db,
 		WorkDir:              workDir,
 		CompactionStatsStore: compactionStatsStore,
+		BlogStore:            blogStore,
+		VersionStore:         versionStore,
 	}
 
 	// Initialize code tools

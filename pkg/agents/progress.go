@@ -28,11 +28,11 @@ type PhaseProgress struct {
 
 // ProgressTracker tracks progress across multiple phases
 type ProgressTracker struct {
-	mu       sync.RWMutex
-	phases   map[string]*PhaseProgress
-	order    []string // Maintain phase order for display
-	writers  []io.Writer
-	sseMode  bool
+	mu      sync.RWMutex
+	phases  map[string]*PhaseProgress
+	order   []string // Maintain phase order for display
+	writers []io.Writer
+	sseMode bool
 }
 
 // NewProgressTracker creates a new progress tracker

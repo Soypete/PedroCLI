@@ -1,0 +1,25 @@
+Hey everyone, this is Peter from SoypeteTech, and today I want to talk about building context-aware CLI tools in Go.
+
+So I've been working on this problem where you're building a CLI application, and you need to maintain state across multiple LLM inference calls. The challenge is that if your process crashes or you need to restart, you lose all that valuable context.
+
+The traditional approach is to keep everything in memory, right? You have your conversation history, you have your tool results, everything's in RAM. But here's the thing - if your process dies, you lose everything. And when you're doing iterative development with autonomous agents, you really want to be able to inspect what happened.
+
+What I came up with is a file-based context management system. Instead of keeping everything in memory, you write each round of inference to disk in a structured directory. So you have like a job directory in /tmp/jobs/job-id, and each inference round gets numbered files - your prompts, your responses, your tool calls, all serialized to JSON.
+
+This has some really nice properties. First, it survives crashes. Second, you can inspect the entire conversation history just by looking at the files. Third, and this is huge, you can implement natural context window management by truncating old files when you get close to your token limit.
+
+The implementation in Go is actually pretty straightforward. You create a ContextManager struct that handles the directory creation, the file numbering, and the serialization. The key insight is to use numbered filenames like 001-prompt.txt, 002-response.txt so they sort naturally.
+
+One thing I learned is you need to be careful about concurrent writes. Use a mutex to protect file operations. Also, clean up old job directories periodically - they can accumulate fast during development.
+
+The best part is debugging. When something goes wrong, you just cat the files in order and you see exactly what the LLM saw at each step. No more trying to reconstruct the conversation from logs.
+
+I'm using this pattern in PedroCLI, my autonomous coding agent project. It's been game-changing for building reliable agent systems. The code is all open source if you want to check it out.
+
+Anyway, that's the high-level idea. File-based context management for LLM applications. It's simple, it works, and it makes debugging so much easier.
+
+Let me know what you think! Are you building LLM applications? How do you handle context management? Drop a comment below or come chat in the Discord.
+
+And if you want to learn more about Go programming patterns like this, check out my course on O'Reilly. It's a comprehensive deep dive into building real-world Go applications with all the patterns and best practices I've learned.
+
+Alright, that's it for today. Thanks for reading, and I'll see you next time!

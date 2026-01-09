@@ -1,0 +1,51 @@
+Okay, so let's talk about why I automated my blog writing workflow, because this is where PedroCLI really shines.
+
+Here's my problem - most of my blog ideas come to me when I'm not at my desk. I'm at the gym on the treadmill, I'm walking the dog, I'm driving. And I've tried different solutions. I've used voice memos, I've emailed myself notes, I've used ChatGPT on my phone. But they all have the same problem - there's friction between the idea and the published post.
+
+So I built a workflow that goes from voice dictation to published post with minimal human intervention. Let me walk you through it.
+
+Step one - I open the PedroCLI web app on my phone. It's hosted on my home server but accessible through Tailscale, so I can hit it from anywhere. I tap the microphone button and I just start talking. I brain dump the entire post. Usually takes five to ten minutes.
+
+That audio hits Whisper.cpp running on my server. Whisper transcribes it, and now I have raw text. Not a blog post yet - just a transcript of me rambling.
+
+Step two is where the agent takes over. The BlogContentAgent runs a seven-phase workflow. Let me break it down.
+
+Phase one is research. Before it even starts writing, it pulls context. It checks my RSS feed for recent posts to understand my style. It checks my calendar for recent events I might reference. It has web scraping tools that can pull documentation or code examples if needed. This gives it context that raw LLMs don't have.
+
+Phase two is outlining. It takes my rambling dictation and structures it. Intro, multiple sections, conclusion. Real blog structure. And here's where the grammar constraints come in - I can force it to output the outline in a specific JSON format that's easy to parse.
+
+Phase three is TLDR generation. This is where logit bias is crucial. I want the TLDR to be three to five bullet points, max. Not a paragraph. Bullets. So I bias the model toward bullet point tokens and away from verbosity tokens. The result? Consistently formatted TLDRs that are actually concise.
+
+Phase four is section generation. It expands each section of the outline independently. This is important because it keeps the context window manageable. Instead of generating a five-thousand word post in one shot, it generates five sections of a thousand words each. Way more reliable.
+
+Phase five is assembly. It combines all the sections, adds the TLDR at the top, and adds my standard footer with links. This is templated - Discord link, YouTube, Newsletter, and most importantly, my O'Reilly course link. That needs to be prominent because it's my main product.
+
+Phase six is editor review. The agent becomes an editor. It reads through the whole post checking for grammar, coherence, and whether it's appropriate for a generalist engineer audience. Most of my posts are technical, but they need to be accessible. The editor agent makes suggestions.
+
+Now, my sister Sarah actually edits all my posts before they go live, because AI isn't perfect and she has a good eye for tone. But having the AI do a first pass means she's catching smaller issues, not fixing structure problems.
+
+Phase seven is publishing. This is where the Notion integration comes in. I have a Notion database for blog drafts. The agent creates a new page with all the content formatted in Notion blocks. Then I can review it, make final edits, and hit publish.
+
+But here's the cool part - at every phase, the agent saves a version to the database. So I have a complete history. If I don't like how section three came out, I can roll back to the outline phase and regenerate just that section. It's version control for blog posts.
+
+The whole workflow takes about five minutes to run. Five minutes from voice memo to Notion draft. Compare that to the three hours it used to take me to write a post manually.
+
+And because it's all tracked in PostgreSQL, I can see metrics. How many tokens did each section use? How long did each phase take? Which posts required the most editing? This data is gold for improving the workflow.
+
+The social media generation is another game changer. After the blog post is done, it generates platform-specific posts. Twitter gets two hundred eighty characters max. Bluesky gets three hundred. LinkedIn gets a longer form version. All automatically generated and optimized for each platform.
+
+One thing I'm working on now is LoRA fine-tuning. I've been writing for years, I have hundreds of posts. I want to fine-tune a model on my writing style so the generated content sounds more like me naturally. Haven't done this yet, but the infrastructure is there. All my posts are in the database, they're versioned, they're ready to be training data.
+
+The vision model integration is coming too. Right now I generate images for posts using DALL-E or Midjourney, and it's manual. But I have my logo, I have reference images, I have a style. I want to upload those once to the system and have it generate post images automatically. Tedious work that I can automate.
+
+Here's what I learned building this - automation isn't about replacing creativity. It's about removing the friction between idea and execution. I still come up with the ideas. I still provide the structure and the key points. But the AI handles the formatting, the consistency, the tedious stuff.
+
+And when you remove that friction, you create more. I've published more in the last two months than I did in the previous six, because the barrier to publishing dropped dramatically.
+
+If you're a content creator and you're not thinking about how to automate your workflow, you're leaving productivity on the table. You don't need to build your own PedroCLI - there are tools out there. But understand the workflow. Understand where your time is going and what can be automated.
+
+Next post I'm going to talk about the podcast automation, because that's a whole other use case. Scheduling with Cal.com, generating scripts and talking points, all of that. It's similar workflow but different tools.
+
+And as always, if you want to dive deeper into Go programming and build stuff like this yourself, check out my O'Reilly course. Link's at the bottom.
+
+See you next time.

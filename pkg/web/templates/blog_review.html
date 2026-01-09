@@ -1,0 +1,172 @@
+{{define "blog_review.html"}}
+{{template "base" .}}
+{{end}}
+
+{{define "content"}}
+<div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">Blog Post Review</h1>
+        <p class="text-gray-600">Review and edit your blog post with AI assistance</p>
+    </div>
+
+    <!-- Post Info -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h2 id="post-title" class="text-2xl font-semibold text-gray-900">Loading...</h2>
+                <div class="flex items-center space-x-4 mt-2 text-sm text-gray-500">
+                    <span id="post-status" class="px-3 py-1 rounded-full bg-gray-100">loading</span>
+                    <span id="post-created">Created: --</span>
+                    <span id="post-version">Version: --</span>
+                </div>
+            </div>
+            <div class="flex space-x-3">
+                <button onclick="saveVersion()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                    Save Version
+                </button>
+                <button onclick="publishToNotion()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
+                    Publish to Notion
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Editor Column (2/3 width) -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Content Editor -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Content</h3>
+                <textarea
+                    id="post-content"
+                    class="w-full h-96 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                    placeholder="Blog post content will load here...">
+                </textarea>
+                <div class="flex justify-between items-center mt-4">
+                    <div class="text-sm text-gray-500" id="word-count">0 words</div>
+                    <button onclick="saveManualEdit()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
+                        Save Changes
+                    </button>
+                </div>
+            </div>
+
+            <!-- AI Revision Panel -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">AI Revision</h3>
+                <textarea
+                    id="revision-prompt"
+                    class="w-full h-32 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Describe the changes you want... (e.g., 'Make the introduction more engaging', 'Add more code examples', 'Simplify the technical jargon')">
+                </textarea>
+                <div class="flex justify-between items-center mt-4">
+                    <button onclick="startVoiceDictation()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition flex items-center">
+                        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clip-rule="evenodd"></path>
+                        </svg>
+                        Voice Dictation
+                    </button>
+                    <button onclick="requestAIRevision()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
+                        Revise with AI
+                    </button>
+                </div>
+
+                <!-- AI Revision Progress -->
+                <div id="revision-progress" class="hidden mt-4">
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <div class="flex items-center">
+                            <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mr-3"></div>
+                            <div>
+                                <div class="text-sm font-medium text-blue-900">AI Revision in Progress</div>
+                                <div id="revision-status" class="text-xs text-blue-700 mt-1">Analyzing your request...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Social Media Posts -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Social Media Posts</h3>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Twitter/X</label>
+                        <textarea id="social-twitter" class="w-full h-20 px-4 py-2 border border-gray-300 rounded-lg text-sm" readonly></textarea>
+                        <div class="text-xs text-gray-500 mt-1"><span id="twitter-chars">0</span>/280 characters</div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Bluesky</label>
+                        <textarea id="social-bluesky" class="w-full h-20 px-4 py-2 border border-gray-300 rounded-lg text-sm" readonly></textarea>
+                        <div class="text-xs text-gray-500 mt-1"><span id="bluesky-chars">0</span>/300 characters</div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">LinkedIn</label>
+                        <textarea id="social-linkedin" class="w-full h-32 px-4 py-2 border border-gray-300 rounded-lg text-sm" readonly></textarea>
+                        <div class="text-xs text-gray-500 mt-1"><span id="linkedin-chars">0</span>/3000 characters</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar Column (1/3 width) -->
+        <div class="space-y-6">
+            <!-- Version History -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Version History</h3>
+                <div id="version-list" class="space-y-2">
+                    <div class="text-sm text-gray-500 text-center py-4">Loading versions...</div>
+                </div>
+            </div>
+
+            <!-- Editor Feedback -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Editor Feedback</h3>
+                <div id="editor-output" class="prose prose-sm max-w-none text-gray-700">
+                    <p class="text-sm text-gray-500">Editor feedback will appear here after Phase 6...</p>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+                <div class="space-y-2">
+                    <button onclick="copyToClipboard('post-content')" class="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm">
+                        Copy Content
+                    </button>
+                    <button onclick="downloadMarkdown()" class="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm">
+                        Download Markdown
+                    </button>
+                    <button onclick="viewDiff()" class="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm">
+                        View Changes
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Notification -->
+<div id="toast" class="hidden fixed bottom-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg">
+    <span id="toast-message">Saved successfully!</span>
+</div>
+
+<!-- Diff Modal -->
+<div id="diff-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+    <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] overflow-hidden">
+        <div class="flex items-center justify-between p-6 border-b">
+            <h3 class="text-xl font-semibold">Version Comparison</h3>
+            <button onclick="closeDiffModal()" class="text-gray-500 hover:text-gray-700">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        <div id="diff-content" class="p-6 overflow-y-auto max-h-[60vh]">
+            <!-- Diff will be rendered here -->
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/blog_review.js"></script>
+{{end}}
