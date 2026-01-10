@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/soypete/pedrocli/pkg/agents"
+	"github.com/soypete/pedrocli/pkg/cli"
 	"github.com/soypete/pedrocli/pkg/jobs"
 	"github.com/soypete/pedrocli/pkg/storage/content"
 )
@@ -836,6 +837,177 @@ func (s *Server) handleBlogPostRevise(w http.ResponseWriter, r *http.Request) {
 		"job_id":  jobID,
 		"post_id": postID,
 	})
+}
+
+// Slash Command Handlers
+
+// CommandListResponse represents the list of available slash commands
+type CommandListResponse struct {
+	Commands []CommandInfo `json:"commands"`
+	Total    int           `json:"total"`
+}
+
+// CommandInfo represents a single slash command
+type CommandInfo struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Agent       string `json:"agent,omitempty"`
+	Builtin     bool   `json:"builtin"`
+}
+
+// CommandRunRequest represents a slash command execution request
+type CommandRunRequest struct {
+	Command   string `json:"command"`   // e.g., "/blog-outline" or "blog-outline"
+	Arguments string `json:"arguments"` // e.g., "My topic here"
+}
+
+// CommandRunResponse represents a slash command execution response
+type CommandRunResponse struct {
+	Success  bool   `json:"success"`
+	Expanded string `json:"expanded,omitempty"` // Expanded prompt (if no agent)
+	JobID    string `json:"job_id,omitempty"`   // Job ID (if agent was invoked)
+	Agent    string `json:"agent,omitempty"`    // Agent that was invoked
+	Error    string `json:"error,omitempty"`
+}
+
+// handleCommands handles GET /api/commands (list available slash commands)
+func (s *Server) handleCommands(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Create command runner
+	runner := cli.NewCommandRunner(s.config, s.config.Project.Workdir)
+
+	// Get all commands
+	commands := runner.ListCommands()
+
+	// Convert to response format
+	infos := make([]CommandInfo, 0, len(commands))
+	for _, cmd := range commands {
+		infos = append(infos, CommandInfo{
+			Name:        cmd.Name,
+			Description: cmd.Description,
+			Agent:       cmd.Agent,
+			Builtin:     cmd.Source == "builtin",
+		})
+	}
+
+	respondJSON(w, http.StatusOK, CommandListResponse{
+		Commands: infos,
+		Total:    len(infos),
+	})
+}
+
+// handleCommandRun handles POST /api/commands/run (execute a slash command)
+func (s *Server) handleCommandRun(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req CommandRunRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, CommandRunResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Invalid request: %v", err),
+		})
+		return
+	}
+
+	if req.Command == "" {
+		respondJSON(w, http.StatusBadRequest, CommandRunResponse{
+			Success: false,
+			Error:   "Command is required",
+		})
+		return
+	}
+
+	// Create command runner
+	runner := cli.NewCommandRunner(s.config, s.config.Project.Workdir)
+
+	// Build the full input string
+	input := req.Command
+	if !strings.HasPrefix(input, "/") {
+		input = "/" + input
+	}
+	if req.Arguments != "" {
+		input = input + " " + req.Arguments
+	}
+
+	// Parse and expand the command
+	expanded, err := runner.RunCommand(s.ctx, input)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, CommandRunResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Command error: %v", err),
+		})
+		return
+	}
+
+	// Get the command to check if it has an associated agent
+	name, _, _ := cli.ParseSlashCommand(input)
+	cmd, ok := runner.GetCommand(name)
+
+	if ok && cmd.Agent != "" {
+		// If command specifies an agent, route to that agent
+		var job *jobs.Job
+
+		switch cmd.Agent {
+		case "blog":
+			agent := s.appCtx.NewDynamicBlogAgent()
+			job, err = agent.Execute(s.ctx, map[string]interface{}{
+				"content": expanded,
+			})
+		case "build":
+			agent := s.appCtx.NewBuilderAgent()
+			job, err = agent.Execute(s.ctx, map[string]interface{}{
+				"description": expanded,
+			})
+		case "debug":
+			agent := s.appCtx.NewDebuggerAgent()
+			job, err = agent.Execute(s.ctx, map[string]interface{}{
+				"symptoms": expanded,
+			})
+		case "review":
+			agent := s.appCtx.NewReviewerAgent()
+			job, err = agent.Execute(s.ctx, map[string]interface{}{
+				"description": expanded,
+			})
+		case "triage":
+			agent := s.appCtx.NewTriagerAgent()
+			job, err = agent.Execute(s.ctx, map[string]interface{}{
+				"description": expanded,
+			})
+		default:
+			respondJSON(w, http.StatusBadRequest, CommandRunResponse{
+				Success: false,
+				Error:   fmt.Sprintf("Unknown agent: %s", cmd.Agent),
+			})
+			return
+		}
+
+		if err != nil {
+			respondJSON(w, http.StatusInternalServerError, CommandRunResponse{
+				Success: false,
+				Error:   fmt.Sprintf("Failed to start agent: %v", err),
+			})
+			return
+		}
+
+		respondJSON(w, http.StatusOK, CommandRunResponse{
+			Success: true,
+			JobID:   job.ID,
+			Agent:   cmd.Agent,
+		})
+	} else {
+		// No agent specified, return the expanded prompt
+		respondJSON(w, http.StatusOK, CommandRunResponse{
+			Success:  true,
+			Expanded: expanded,
+		})
+	}
 }
 
 // Helper functions
