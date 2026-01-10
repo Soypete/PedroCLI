@@ -11,20 +11,38 @@
     "threads": 8,
     "n_gpu_layers": 35,
     "enable_grammar": false,
-    "grammar_logging": true
+    "grammar_logging": true,
+    "enable_tools": true
   },
   "project": {
     "name": "PedroCLI",
     "workdir": "/Users/miriahpeterson/Code/go-projects/pedrocli",
-    "tech_stack": ["Go"]
+    "tech_stack": [
+      "Go"
+    ]
   },
   "tools": {
     "allowed_bash_commands": [
-      "go", "git", "cat", "ls", "head", "tail", "wc", "sort", "uniq",
-      "make", "gh", "npm", "curl", "grep"
+      "go",
+      "git",
+      "cat",
+      "ls",
+      "head",
+      "tail",
+      "wc",
+      "sort",
+      "uniq",
+      "make",
+      "gh",
+      "npm",
+      "curl",
+      "grep"
     ],
     "forbidden_commands": [
-      "rm", "mv", "dd", "sudo"
+      "rm",
+      "mv",
+      "dd",
+      "sudo"
     ]
   },
   "repo_storage": {

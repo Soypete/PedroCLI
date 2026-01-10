@@ -30,7 +30,10 @@ type AppContext struct {
 	CompactionStatsStore storage.CompactionStatsStore
 	BlogStorage          blog.BlogStorage // Abstracted blog storage interface
 
-	// Tools (used by agents)
+	// Code tools setup (registry + all standard tools)
+	CodeTools *tools.CodeToolsSetup
+
+	// Keep individual tool references for backward compatibility
 	FileTool     tools.Tool
 	GitTool      tools.Tool
 	BashTool     tools.Tool
@@ -38,6 +41,7 @@ type AppContext struct {
 	CodeEditTool tools.Tool
 	SearchTool   tools.Tool
 	NavigateTool tools.Tool
+	GitHubTool   tools.Tool // NEW: Previously missing
 	LSPTool      *tools.LSPTool
 
 	// Blog tools
@@ -106,6 +110,9 @@ func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, erro
 	// Create workspace manager for HTTP bridge jobs
 	workspaceManager := NewWorkspaceManager(cfg.HTTPBridge.WorkspacePath)
 
+	// Create code tools setup (registry + all tools)
+	codeTools := tools.NewCodeToolsSetup(cfg, workDir)
+
 	// Create tools
 	appCtx := &AppContext{
 		Config:               cfg,
@@ -116,16 +123,18 @@ func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, erro
 		WorkspaceManager:     workspaceManager,
 		CompactionStatsStore: compactionStatsStore,
 		BlogStorage:          blogStorage,
+		CodeTools:            codeTools,
 	}
 
-	// Initialize code tools
-	appCtx.FileTool = tools.NewFileTool()
-	appCtx.GitTool = tools.NewGitTool(workDir)
-	appCtx.BashTool = tools.NewBashTool(cfg, workDir)
-	appCtx.TestTool = tools.NewTestTool(workDir)
-	appCtx.CodeEditTool = tools.NewCodeEditTool()
-	appCtx.SearchTool = tools.NewSearchTool(workDir)
-	appCtx.NavigateTool = tools.NewNavigateTool(workDir)
+	// Store individual tool references for backward compatibility
+	appCtx.FileTool = codeTools.FileTool
+	appCtx.CodeEditTool = codeTools.CodeEditTool
+	appCtx.SearchTool = codeTools.SearchTool
+	appCtx.NavigateTool = codeTools.NavigateTool
+	appCtx.GitTool = codeTools.GitTool
+	appCtx.BashTool = codeTools.BashTool
+	appCtx.TestTool = codeTools.TestTool
+	appCtx.GitHubTool = codeTools.GitHubTool
 
 	// Initialize LSP tool if enabled
 	if cfg.LSP.Enabled {
@@ -221,16 +230,14 @@ func registerWorkspaceTools(agent interface{ RegisterTool(tools.Tool) }, wt *Wor
 	}
 }
 
-// registerCodeTools registers standard code tools with an agent
-func registerCodeTools(agent interface{ RegisterTool(tools.Tool) }, ctx *AppContext) {
-	agent.RegisterTool(ctx.FileTool)
-	agent.RegisterTool(ctx.CodeEditTool)
-	agent.RegisterTool(ctx.SearchTool)
-	agent.RegisterTool(ctx.NavigateTool)
-	agent.RegisterTool(ctx.GitTool)
-	agent.RegisterTool(ctx.BashTool)
-	agent.RegisterTool(ctx.TestTool)
-	// Register LSP tool if enabled
+// registerCodeTools registers standard code tools with an agent using the app context's setup
+func registerCodeTools(agent interface {
+	RegisterTool(tools.Tool)
+	SetRegistry(*tools.ToolRegistry)
+}, ctx *AppContext) {
+	ctx.CodeTools.RegisterWithAgent(agent)
+
+	// Also register LSP tool if enabled (not part of standard code tools)
 	if ctx.LSPTool != nil {
 		agent.RegisterTool(ctx.LSPTool)
 	}

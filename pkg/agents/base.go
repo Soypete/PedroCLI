@@ -351,27 +351,48 @@ func (a *BaseAgent) executeTool(ctx context.Context, name string, args map[strin
 
 // convertToolsToDefinitions converts registered tools to LLM tool definitions for native API calling
 func (a *BaseAgent) convertToolsToDefinitions() []llm.ToolDefinition {
-	if a.registry == nil {
+	// Prefer registry if available (has rich metadata with JSON schemas)
+	if a.registry != nil {
+		var toolDefs []llm.ToolDefinition
+		for _, extTool := range a.registry.List() {
+			metadata := extTool.Metadata()
+
+			// Convert JSONSchema to map for API
+			schema := make(map[string]interface{})
+			if metadata.Schema != nil {
+				schema["type"] = "object"
+				schema["properties"] = metadata.Schema.Properties
+				if len(metadata.Schema.Required) > 0 {
+					schema["required"] = metadata.Schema.Required
+				}
+			}
+
+			toolDefs = append(toolDefs, llm.ToolDefinition{
+				Name:        extTool.Name(),
+				Description: extTool.Description(),
+				Parameters:  schema,
+			})
+		}
+		return toolDefs
+	}
+
+	// Fallback: Convert tools from simple map (for backward compatibility)
+	// This path is used when agents are created without a registry (e.g., interactive mode)
+	if len(a.tools) == 0 {
 		return nil
 	}
 
 	var toolDefs []llm.ToolDefinition
-	for _, extTool := range a.registry.List() {
-		metadata := extTool.Metadata()
-
-		// Convert JSONSchema to map for API
+	for _, tool := range a.tools {
+		// Simple schema that allows any properties
+		// LLM must infer parameters from tool description
 		schema := make(map[string]interface{})
-		if metadata.Schema != nil {
-			schema["type"] = "object"
-			schema["properties"] = metadata.Schema.Properties
-			if len(metadata.Schema.Required) > 0 {
-				schema["required"] = metadata.Schema.Required
-			}
-		}
+		schema["type"] = "object"
+		schema["additionalProperties"] = true // Allow any properties the LLM wants to send
 
 		toolDefs = append(toolDefs, llm.ToolDefinition{
-			Name:        extTool.Name(),
-			Description: extTool.Description(),
+			Name:        tool.Name(),
+			Description: tool.Description(),
 			Parameters:  schema,
 		})
 	}

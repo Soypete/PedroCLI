@@ -81,39 +81,22 @@ func NewCLIBridge(cfg CLIBridgeConfig) (*CLIBridge, error) {
 		return nil, fmt.Errorf("failed to create LLM backend: %w", err)
 	}
 
-	// Create code tools for agents
-	fileTool := tools.NewFileTool()
-	gitTool := tools.NewGitTool(cfg.WorkDir)
-	bashTool := tools.NewBashTool(cfg.Config, cfg.WorkDir)
-	testTool := tools.NewTestTool(cfg.WorkDir)
-	codeEditTool := tools.NewCodeEditTool()
-	searchTool := tools.NewSearchTool(cfg.WorkDir)
-	navigateTool := tools.NewNavigateTool(cfg.WorkDir)
-
-	// Helper function to register code tools with an agent
-	registerCodeTools := func(agent interface{ RegisterTool(tools.Tool) }) {
-		agent.RegisterTool(fileTool)
-		agent.RegisterTool(codeEditTool)
-		agent.RegisterTool(searchTool)
-		agent.RegisterTool(navigateTool)
-		agent.RegisterTool(gitTool)
-		agent.RegisterTool(bashTool)
-		agent.RegisterTool(testTool)
-	}
+	// Create code tools setup (registry + all tools)
+	codeTools := tools.NewCodeToolsSetup(cfg.Config, cfg.WorkDir)
 
 	// Register coding agents (using phased implementations)
 	builderAgent := agents.NewBuilderPhasedAgent(cfg.Config, backend, jobManager)
-	registerCodeTools(builderAgent)
+	codeTools.RegisterWithAgent(builderAgent)
 
 	debuggerAgent := agents.NewDebuggerPhasedAgent(cfg.Config, backend, jobManager)
-	registerCodeTools(debuggerAgent)
+	codeTools.RegisterWithAgent(debuggerAgent)
 
 	reviewerAgent := agents.NewReviewerPhasedAgent(cfg.Config, backend, jobManager)
-	registerCodeTools(reviewerAgent)
+	codeTools.RegisterWithAgent(reviewerAgent)
 
 	// Note: TriagerAgent doesn't have a phased version yet
 	triagerAgent := agents.NewTriagerAgent(cfg.Config, backend, jobManager)
-	registerCodeTools(triagerAgent)
+	codeTools.RegisterWithAgent(triagerAgent)
 
 	codingAgents := []agents.Agent{
 		builderAgent,
@@ -194,6 +177,9 @@ func (b *CLIBridge) GetJobManager() *jobs.Manager {
 
 // ExecuteAgent creates and executes an agent with the given name and description
 func (b *CLIBridge) ExecuteAgent(ctx context.Context, agentName string, description string) (*toolformat.ToolResult, error) {
+	// Create code tools setup for agent
+	codeTools := tools.NewCodeToolsSetup(b.config, b.config.Project.Workdir)
+
 	// Get config and create agent based on name
 	var agent interface {
 		Execute(ctx context.Context, args map[string]interface{}) (*jobs.Job, error)
@@ -202,47 +188,19 @@ func (b *CLIBridge) ExecuteAgent(ctx context.Context, agentName string, descript
 	switch agentName {
 	case "build":
 		builderAgent := agents.NewBuilderPhasedAgent(b.config, b.backend, b.jobManager)
-		// Register code tools
-		builderAgent.RegisterTool(tools.NewFileTool())
-		builderAgent.RegisterTool(tools.NewCodeEditTool())
-		builderAgent.RegisterTool(tools.NewSearchTool(b.config.Project.Workdir))
-		builderAgent.RegisterTool(tools.NewNavigateTool(b.config.Project.Workdir))
-		builderAgent.RegisterTool(tools.NewGitTool(b.config.Project.Workdir))
-		builderAgent.RegisterTool(tools.NewBashTool(b.config, b.config.Project.Workdir))
-		builderAgent.RegisterTool(tools.NewTestTool(b.config.Project.Workdir))
+		codeTools.RegisterWithAgent(builderAgent)
 		agent = builderAgent
 	case "debug":
 		debuggerAgent := agents.NewDebuggerPhasedAgent(b.config, b.backend, b.jobManager)
-		// Register code tools
-		debuggerAgent.RegisterTool(tools.NewFileTool())
-		debuggerAgent.RegisterTool(tools.NewCodeEditTool())
-		debuggerAgent.RegisterTool(tools.NewSearchTool(b.config.Project.Workdir))
-		debuggerAgent.RegisterTool(tools.NewNavigateTool(b.config.Project.Workdir))
-		debuggerAgent.RegisterTool(tools.NewGitTool(b.config.Project.Workdir))
-		debuggerAgent.RegisterTool(tools.NewBashTool(b.config, b.config.Project.Workdir))
-		debuggerAgent.RegisterTool(tools.NewTestTool(b.config.Project.Workdir))
+		codeTools.RegisterWithAgent(debuggerAgent)
 		agent = debuggerAgent
 	case "review":
 		reviewerAgent := agents.NewReviewerPhasedAgent(b.config, b.backend, b.jobManager)
-		// Register code tools
-		reviewerAgent.RegisterTool(tools.NewFileTool())
-		reviewerAgent.RegisterTool(tools.NewCodeEditTool())
-		reviewerAgent.RegisterTool(tools.NewSearchTool(b.config.Project.Workdir))
-		reviewerAgent.RegisterTool(tools.NewNavigateTool(b.config.Project.Workdir))
-		reviewerAgent.RegisterTool(tools.NewGitTool(b.config.Project.Workdir))
-		reviewerAgent.RegisterTool(tools.NewBashTool(b.config, b.config.Project.Workdir))
-		reviewerAgent.RegisterTool(tools.NewTestTool(b.config.Project.Workdir))
+		codeTools.RegisterWithAgent(reviewerAgent)
 		agent = reviewerAgent
 	case "triage":
 		triagerAgent := agents.NewTriagerAgent(b.config, b.backend, b.jobManager)
-		// Register code tools
-		triagerAgent.RegisterTool(tools.NewFileTool())
-		triagerAgent.RegisterTool(tools.NewCodeEditTool())
-		triagerAgent.RegisterTool(tools.NewSearchTool(b.config.Project.Workdir))
-		triagerAgent.RegisterTool(tools.NewNavigateTool(b.config.Project.Workdir))
-		triagerAgent.RegisterTool(tools.NewGitTool(b.config.Project.Workdir))
-		triagerAgent.RegisterTool(tools.NewBashTool(b.config, b.config.Project.Workdir))
-		triagerAgent.RegisterTool(tools.NewTestTool(b.config.Project.Workdir))
+		codeTools.RegisterWithAgent(triagerAgent)
 		agent = triagerAgent
 	default:
 		return &toolformat.ToolResult{

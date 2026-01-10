@@ -102,6 +102,10 @@ func (s *Server) setupRoutes() {
 	// Voice transcription routes
 	s.mux.HandleFunc("/api/voice/transcribe", s.handleVoiceTranscribe)
 	s.mux.HandleFunc("/api/voice/status", s.handleVoiceStatus)
+
+	// Slash command routes
+	s.mux.HandleFunc("/api/commands", s.handleCommands)
+	s.mux.HandleFunc("/api/commands/run", s.handleCommandRun)
 }
 
 // Run starts the HTTP server

@@ -41,16 +41,27 @@ type Phase struct {
 	Validator    func(result *PhaseResult) error // Validates the phase output
 }
 
+// ToolCallSummary captures what a tool did during a phase
+type ToolCallSummary struct {
+	ToolName      string   `json:"tool_name"`
+	Success       bool     `json:"success"`
+	Output        string   `json:"output,omitempty"`
+	Error         string   `json:"error,omitempty"`
+	ModifiedFiles []string `json:"modified_files,omitempty"`
+}
+
 // PhaseResult contains the result of executing a phase (for phased executor)
 type PhaseResult struct {
-	PhaseName   string                 `json:"phase_name"`
-	Success     bool                   `json:"success"`
-	Output      string                 `json:"output"`
-	Data        map[string]interface{} `json:"data,omitempty"`
-	Error       string                 `json:"error,omitempty"`
-	StartedAt   time.Time              `json:"started_at"`
-	CompletedAt time.Time              `json:"completed_at"`
-	RoundsUsed  int                    `json:"rounds_used"`
+	PhaseName     string                 `json:"phase_name"`
+	Success       bool                   `json:"success"`
+	Output        string                 `json:"output"`         // Full LLM response text
+	Data          map[string]interface{} `json:"data,omitempty"` // Structured data (JSON)
+	Error         string                 `json:"error,omitempty"`
+	StartedAt     time.Time              `json:"started_at"`
+	CompletedAt   time.Time              `json:"completed_at"`
+	RoundsUsed    int                    `json:"rounds_used"`
+	ToolCalls     []ToolCallSummary      `json:"tool_calls,omitempty"`     // Tools called during this phase
+	ModifiedFiles []string               `json:"modified_files,omitempty"` // All files modified
 }
 
 // ExecutionMode determines how the agent runs
