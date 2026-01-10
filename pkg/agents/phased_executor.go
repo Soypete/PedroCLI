@@ -16,6 +16,10 @@ import (
 
 // Note: Phase and PhaseResult are now defined in orchestrator.go
 
+// PhaseCallback is called after each phase completes
+// Return true to continue, false to stop execution
+type PhaseCallback func(phase Phase, result *PhaseResult) (shouldContinue bool, err error)
+
 // PhasedExecutor handles multi-phase workflow execution
 type PhasedExecutor struct {
 	agent            *BaseAgent
@@ -25,6 +29,7 @@ type PhasedExecutor struct {
 	currentPhase     int
 	jobID            string
 	defaultMaxRounds int
+	phaseCallback    PhaseCallback // Optional callback after each phase
 }
 
 // NewPhasedExecutor creates a new phased executor
@@ -37,11 +42,22 @@ func NewPhasedExecutor(agent *BaseAgent, contextMgr *llmcontext.Manager, phases 
 		currentPhase:     0,
 		jobID:            contextMgr.GetJobID(),
 		defaultMaxRounds: agent.config.Limits.MaxInferenceRuns,
+		phaseCallback:    nil,
 	}
+}
+
+// SetPhaseCallback sets a callback to be called after each phase completes
+func (pe *PhasedExecutor) SetPhaseCallback(callback PhaseCallback) {
+	pe.phaseCallback = callback
 }
 
 // Execute runs all phases sequentially
 func (pe *PhasedExecutor) Execute(ctx context.Context, initialInput string) error {
+	// Check if a phase callback is provided via context
+	if callback, ok := GetPhaseCallback(ctx); ok {
+		pe.SetPhaseCallback(callback)
+	}
+
 	currentInput := initialInput
 
 	for pe.currentPhase < len(pe.phases) {
@@ -49,6 +65,30 @@ func (pe *PhasedExecutor) Execute(ctx context.Context, initialInput string) erro
 
 		fmt.Fprintf(os.Stderr, "\n📋 Phase %d/%d: %s\n", pe.currentPhase+1, len(pe.phases), phase.Name)
 		fmt.Fprintf(os.Stderr, "   %s\n", phase.Description)
+
+		// Show registered tools for debugging (first phase only)
+		if pe.currentPhase == 0 && pe.agent.config.Debug.Enabled {
+			toolCount := len(pe.agent.tools)
+			if pe.agent.registry != nil {
+				toolCount = len(pe.agent.registry.List())
+			}
+			fmt.Fprintf(os.Stderr, "   [DEBUG] Registered tools: %d", toolCount)
+			if toolCount > 0 {
+				toolNames := []string{}
+				if pe.agent.registry != nil {
+					for _, t := range pe.agent.registry.List() {
+						toolNames = append(toolNames, t.Name())
+					}
+				} else {
+					for name := range pe.agent.tools {
+						toolNames = append(toolNames, name)
+					}
+				}
+				fmt.Fprintf(os.Stderr, " (%v)", toolNames)
+			}
+			fmt.Fprintf(os.Stderr, "\n")
+			fmt.Fprintf(os.Stderr, "   [DEBUG] Tool calling enabled: %v\n", pe.agent.config.Model.EnableTools)
+		}
 
 		// Update job with current phase
 		pe.updateJobPhase(ctx, phase.Name)
@@ -84,6 +124,17 @@ func (pe *PhasedExecutor) Execute(ctx context.Context, initialInput string) erro
 
 		fmt.Fprintf(os.Stderr, "   ✅ Phase %s completed in %d rounds\n", phase.Name, result.RoundsUsed)
 
+		// Call phase callback if set (for interactive stepwise mode)
+		if pe.phaseCallback != nil {
+			shouldContinue, err := pe.phaseCallback(phase, result)
+			if err != nil {
+				return fmt.Errorf("phase callback error: %w", err)
+			}
+			if !shouldContinue {
+				return fmt.Errorf("execution stopped by user")
+			}
+		}
+
 		// Use phase output as input for next phase
 		currentInput = pe.buildNextPhaseInput(result)
 		pe.currentPhase++
@@ -96,9 +147,11 @@ func (pe *PhasedExecutor) Execute(ctx context.Context, initialInput string) erro
 // ExecutePhase executes a single phase and returns the result
 func (pe *PhasedExecutor) executePhase(ctx context.Context, phase Phase, input string) (*PhaseResult, error) {
 	result := &PhaseResult{
-		PhaseName: phase.Name,
-		StartedAt: time.Now(),
-		Data:      make(map[string]interface{}),
+		PhaseName:     phase.Name,
+		StartedAt:     time.Now(),
+		Data:          make(map[string]interface{}),
+		ToolCalls:     []ToolCallSummary{},
+		ModifiedFiles: []string{},
 	}
 
 	// Determine max rounds for this phase
@@ -115,6 +168,7 @@ func (pe *PhasedExecutor) executePhase(ctx context.Context, phase Phase, input s
 		maxRounds:    maxRounds,
 		currentRound: 0,
 		jobID:        pe.jobID,
+		result:       result, // Pass result so executor can track tool calls
 	}
 
 	// Execute the inference loop for this phase
@@ -225,6 +279,7 @@ type phaseInferenceExecutor struct {
 	maxRounds    int
 	currentRound int
 	jobID        string
+	result       *PhaseResult // Track tool calls in this phase
 }
 
 // execute runs the inference loop for a phase
@@ -234,6 +289,10 @@ func (pie *phaseInferenceExecutor) execute(ctx context.Context, input string) (s
 	for pie.currentRound < pie.maxRounds {
 		pie.currentRound++
 
+		// TODO(#83): Replace with Claude Code-style tree progress view
+		// Current: Simple "🔄 Round 1/10" output
+		// Desired: Tree structure with tool counts, tokens, collapsible sections
+		// See: https://github.com/Soypete/PedroCLI/issues/83
 		fmt.Fprintf(os.Stderr, "   🔄 Round %d/%d\n", pie.currentRound, pie.maxRounds)
 
 		// Log user prompt
@@ -259,9 +318,22 @@ func (pie *phaseInferenceExecutor) execute(ctx context.Context, input string) (s
 			toolCalls = []llm.ToolCall{}
 		}
 
+		// Debug: Log tool call status
+		if pie.agent.config.Debug.Enabled {
+			fmt.Fprintf(os.Stderr, "   [DEBUG] LLM returned %d tool calls\n", len(toolCalls))
+			if len(toolCalls) == 0 {
+				fmt.Fprintf(os.Stderr, "   [DEBUG] Response contains PHASE_COMPLETE: %v\n", pie.isPhaseComplete(response.Text))
+			}
+		}
+
 		// Check if phase is complete (no more tool calls and completion signal)
 		if len(toolCalls) == 0 {
 			if pie.isPhaseComplete(response.Text) {
+				// Debug: Show what was accomplished
+				if pie.agent.config.Debug.Enabled {
+					fmt.Fprintf(os.Stderr, "   [DEBUG] Phase completing with %d tool calls made, %d files modified\n",
+						len(pie.result.ToolCalls), len(pie.result.ModifiedFiles))
+				}
 				return response.Text, pie.currentRound, nil
 			}
 
@@ -298,9 +370,15 @@ func (pie *phaseInferenceExecutor) executeInference(ctx context.Context, systemP
 	budget := llm.CalculateBudget(pie.agent.config, systemPrompt, userPrompt, "")
 
 	// Get tool definitions using the agent's conversion method
+	// Note: convertToolsToDefinitions() handles both registry and tools map fallback
 	var toolDefs []llm.ToolDefinition
-	if pie.agent.config.Model.EnableTools && pie.agent.registry != nil {
+	if pie.agent.config.Model.EnableTools {
 		toolDefs = pie.agent.convertToolsToDefinitions()
+
+		// Debug: Show how many tools are being sent
+		if pie.agent.config.Debug.Enabled {
+			fmt.Fprintf(os.Stderr, "   [DEBUG] Converting tools for inference: %d tool definitions\n", len(toolDefs))
+		}
 	}
 
 	req := &llm.InferenceRequest{
@@ -341,8 +419,33 @@ func (pie *phaseInferenceExecutor) filterToolCalls(calls []llm.ToolCall) []llm.T
 func (pie *phaseInferenceExecutor) executeTools(ctx context.Context, calls []llm.ToolCall) ([]*tools.Result, error) {
 	results := make([]*tools.Result, len(calls))
 
+	// BEFORE executing tools: Save tool calls to context manager
+	if pie.contextMgr != nil {
+		contextCalls := make([]llmcontext.ToolCall, len(calls))
+		for i, tc := range calls {
+			contextCalls[i] = llmcontext.ToolCall{
+				Name: tc.Name,
+				Args: tc.Args,
+			}
+		}
+		if err := pie.contextMgr.SaveToolCalls(contextCalls); err != nil {
+			// Log error but continue
+			fmt.Fprintf(os.Stderr, "   ⚠️  Failed to save tool calls: %v\n", err)
+		}
+	}
+
 	for i, call := range calls {
-		fmt.Fprintf(os.Stderr, "   🔧 %s\n", call.Name)
+		fmt.Fprintf(os.Stderr, "   🔧 %s", call.Name)
+
+		// Debug: Show arguments for write/edit operations
+		if pie.agent.config.Debug.Enabled {
+			if call.Name == "code_edit" || call.Name == "file_write" {
+				if file, ok := call.Args["file"].(string); ok {
+					fmt.Fprintf(os.Stderr, " → %s", file)
+				}
+			}
+		}
+		fmt.Fprintf(os.Stderr, "\n")
 
 		// Log tool call
 		pie.logConversation(ctx, "tool_call", "", call.Name, call.Args, nil)
@@ -357,6 +460,38 @@ func (pie *phaseInferenceExecutor) executeTools(ctx context.Context, calls []llm
 
 		results[i] = result
 
+		// Debug: Log tool result details
+		if pie.agent.config.Debug.Enabled {
+			fmt.Fprintf(os.Stderr, "      [DEBUG] Success: %v, Modified files: %v\n", result.Success, result.ModifiedFiles)
+		}
+
+		// Track tool call in phase result
+		if pie.result != nil {
+			summary := ToolCallSummary{
+				ToolName:      call.Name,
+				Success:       result.Success,
+				Output:        result.Output,
+				Error:         result.Error,
+				ModifiedFiles: result.ModifiedFiles,
+			}
+			pie.result.ToolCalls = append(pie.result.ToolCalls, summary)
+
+			// Track modified files at phase level
+			for _, file := range result.ModifiedFiles {
+				// Check if already in list
+				found := false
+				for _, existing := range pie.result.ModifiedFiles {
+					if existing == file {
+						found = true
+						break
+					}
+				}
+				if !found {
+					pie.result.ModifiedFiles = append(pie.result.ModifiedFiles, file)
+				}
+			}
+		}
+
 		// Log tool result
 		success := result.Success
 		pie.logConversationWithSuccess(ctx, call.Name, result, &success)
@@ -365,6 +500,23 @@ func (pie *phaseInferenceExecutor) executeTools(ctx context.Context, calls []llm
 			fmt.Fprintf(os.Stderr, "   ✅ %s\n", call.Name)
 		} else {
 			fmt.Fprintf(os.Stderr, "   ❌ %s: %s\n", call.Name, result.Error)
+		}
+	}
+
+	// AFTER executing tools: Save tool results to context manager
+	if pie.contextMgr != nil {
+		contextResults := make([]llmcontext.ToolResult, len(results))
+		for i, r := range results {
+			contextResults[i] = llmcontext.ToolResult{
+				Name:          calls[i].Name,
+				Success:       r.Success,
+				Output:        r.Output,
+				Error:         r.Error,
+				ModifiedFiles: r.ModifiedFiles,
+			}
+		}
+		if err := pie.contextMgr.SaveToolResults(contextResults); err != nil {
+			fmt.Fprintf(os.Stderr, "   ⚠️  Failed to save tool results: %v\n", err)
 		}
 	}
 
@@ -425,22 +577,30 @@ func (pie *phaseInferenceExecutor) hasCompletionSignal(results []*tools.Result) 
 
 // logConversation logs a conversation entry
 func (pie *phaseInferenceExecutor) logConversation(ctx context.Context, role, content, tool string, args map[string]interface{}, result interface{}) {
-	if pie.agent.jobManager == nil {
-		return
+	// Log to job manager if available
+	if pie.agent.jobManager != nil {
+		entry := storage.ConversationEntry{
+			Role:      role,
+			Content:   content,
+			Tool:      tool,
+			Args:      args,
+			Result:    result,
+			Timestamp: time.Now(),
+		}
+
+		if err := pie.agent.jobManager.AppendConversation(ctx, pie.jobID, entry); err != nil {
+			if pie.agent.config.Debug.Enabled {
+				fmt.Fprintf(os.Stderr, "   ⚠️ Failed to log conversation: %v\n", err)
+			}
+		}
 	}
 
-	entry := storage.ConversationEntry{
-		Role:      role,
-		Content:   content,
-		Tool:      tool,
-		Args:      args,
-		Result:    result,
-		Timestamp: time.Now(),
-	}
-
-	if err := pie.agent.jobManager.AppendConversation(ctx, pie.jobID, entry); err != nil {
-		if pie.agent.config.Debug.Enabled {
-			fmt.Fprintf(os.Stderr, "   ⚠️ Failed to log conversation: %v\n", err)
+	// Always log to context manager for debugging
+	if pie.contextMgr != nil {
+		if role == "user" && content != "" {
+			_ = pie.contextMgr.SavePrompt(content)
+		} else if role == "assistant" && content != "" {
+			_ = pie.contextMgr.SaveResponse(content)
 		}
 	}
 }

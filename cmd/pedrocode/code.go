@@ -42,11 +42,27 @@ func runCodeMode(debugMode bool) error {
 		return fmt.Errorf("failed to create session: %w", err)
 	}
 
+	// Check for incomplete jobs from previous sessions
+	persister, err := repl.NewJobStatePersister()
+	if err == nil {
+		repl.CheckForIncompleteJobs(persister)
+	}
+
 	// Create REPL
 	replInstance, err := repl.NewREPL(session)
 	if err != nil {
 		return fmt.Errorf("failed to create REPL: %w", err)
 	}
+
+	// Setup cleanup on exit
+	defer func() {
+		// Mark any running jobs as incomplete
+		if persister != nil {
+			for _, job := range session.JobManager.ActiveJobs() {
+				_ = persister.MarkJobIncomplete(job.ID)
+			}
+		}
+	}()
 
 	// Run REPL
 	return replInstance.Run()

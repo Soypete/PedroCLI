@@ -42,6 +42,7 @@ func NewOllamaClientFromModel(cfg *config.Config, modelCfg config.ModelConfig) *
 		ContextSize: contextSize,
 		EnableTools: modelCfg.EnableTools,
 		APIPath:     "/v1/chat/completions", // Ollama supports OpenAI-compatible API
+		MaxRetries:  modelCfg.MaxRetries,    // Pass retry config
 	})
 
 	return &OllamaClient{

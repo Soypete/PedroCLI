@@ -36,6 +36,7 @@ func NewLlamaCppClientFromModel(cfg *config.Config, modelCfg config.ModelConfig)
 		ContextSize: modelCfg.ContextSize,
 		EnableTools: modelCfg.EnableTools,
 		APIPath:     "/v1/chat/completions", // OpenAI-compatible endpoint
+		MaxRetries:  modelCfg.MaxRetries,    // Pass retry config
 	})
 
 	return &LlamaCppClient{

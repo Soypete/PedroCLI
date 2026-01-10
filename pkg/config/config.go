@@ -57,6 +57,9 @@ type ModelConfig struct {
 
 	// Tool calling
 	EnableTools bool `json:"enable_tools,omitempty"` // Enable native tool calling via chat template
+
+	// Retry configuration
+	MaxRetries int `json:"max_retries,omitempty"` // Maximum number of retries for failed requests (default: 3)
 }
 
 // ExecutionConfig contains execution settings

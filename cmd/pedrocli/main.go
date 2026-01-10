@@ -137,6 +137,10 @@ func main() {
 		blogCommand(cfg, subcommandArgs)
 	case "podcast":
 		podcastCommand(cfg, subcommandArgs)
+	case "run":
+		runSlashCommand(cfg, subcommandArgs)
+	case "commands":
+		listSlashCommands(cfg)
 	case "status":
 		statusCommand(cfg, subcommandArgs)
 	case "list":
@@ -163,6 +167,8 @@ Commands:
   triage     Diagnose and triage an issue (no fix)
   blog       Create a blog post (writes to Notion)
   podcast    Podcast episode preparation workflows
+  run        Execute a slash command (e.g., /blog-outline)
+  commands   List available slash commands
   status     Get status of a job
   list       List all jobs
   cancel     Cancel a running job
@@ -181,6 +187,9 @@ Examples:
   pedrocli blog -title "My Post" -content "Raw thoughts here..."
   pedrocli podcast script -outline outline.md -episode "S01E03"
   pedrocli blog -prompt "Write a 2025 recap with calendar events..." -publish
+  pedrocli run /blog-outline "Building CLI tools in Go"
+  pedrocli run /test
+  pedrocli commands
   pedrocli status job-1234567890
   pedrocli list
   pedrocli cancel job-1234567890
@@ -690,4 +699,95 @@ func cancelCommand(cfg *config.Config, args []string) {
 	}
 
 	callTool(cfg, "cancel_job", arguments)
+}
+
+// runSlashCommand executes a slash command and displays the expanded prompt
+func runSlashCommand(cfg *config.Config, args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Error: command required")
+		fmt.Fprintln(os.Stderr, "Usage: pedrocli run /command-name [arguments...]")
+		fmt.Fprintln(os.Stderr, "\nRun 'pedrocli commands' to see available commands")
+		os.Exit(1)
+	}
+
+	// Get working directory
+	workDir, err := os.Getwd()
+	if err != nil {
+		workDir = "."
+	}
+
+	// Create command runner
+	runner := cli.NewCommandRunner(cfg, workDir)
+
+	// Build the input string (e.g., "/blog-outline My topic here")
+	input := args[0]
+	if !strings.HasPrefix(input, "/") {
+		input = "/" + input
+	}
+	if len(args) > 1 {
+		input = input + " " + strings.Join(args[1:], " ")
+	}
+
+	// Parse and expand the command
+	ctx := context.Background()
+	expanded, err := runner.RunCommand(ctx, input)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		fmt.Fprintln(os.Stderr, "\nRun 'pedrocli commands' to see available commands")
+		os.Exit(1)
+	}
+
+	// Get the command to check if it has an associated agent
+	name, _, _ := cli.ParseSlashCommand(input)
+	cmd, ok := runner.GetCommand(name)
+
+	if ok && cmd.Agent != "" {
+		// If command specifies an agent, run it through that agent
+		fmt.Printf("Running /%s with %s agent...\n\n", name, cmd.Agent)
+
+		// Map agent name to tool name
+		agentToolMap := map[string]string{
+			"blog":     "blog_content",
+			"build":    "builder",
+			"debug":    "debugger",
+			"review":   "reviewer",
+			"triage":   "triager",
+			"research": "research",
+		}
+
+		agentTool := agentToolMap[cmd.Agent]
+		if agentTool == "" {
+			agentTool = cmd.Agent
+		}
+
+		// For blog agent, pass expanded prompt as transcription
+		if cmd.Agent == "blog" {
+			runBlogContentAgent(cfg, expanded, "", false)
+		} else {
+			// For other agents, pass expanded prompt as description
+			callAgent(cfg, agentTool, map[string]interface{}{
+				"description": expanded,
+			})
+		}
+	} else {
+		// No agent specified, just display the expanded prompt
+		fmt.Println("Expanded command:")
+		fmt.Println(strings.Repeat("-", 60))
+		fmt.Println(expanded)
+		fmt.Println(strings.Repeat("-", 60))
+		fmt.Println("\nTip: To run this with an agent, add 'agent: <name>' to the command's frontmatter")
+	}
+}
+
+// listSlashCommands displays all available slash commands
+func listSlashCommands(cfg *config.Config) {
+	// Get working directory
+	workDir, err := os.Getwd()
+	if err != nil {
+		workDir = "."
+	}
+
+	// Create command runner and print help
+	runner := cli.NewCommandRunner(cfg, workDir)
+	runner.PrintHelp()
 }
