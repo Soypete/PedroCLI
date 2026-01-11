@@ -21,6 +21,7 @@ type Config struct {
 	LSP         LSPConfig         `json:"lsp"`
 	FileIO      FileIOConfig      `json:"fileio"`
 	Web         WebConfig         `json:"web"`
+	HTTPBridge  HTTPBridgeConfig  `json:"http_bridge"`
 	Voice       VoiceConfig       `json:"voice"`
 	RepoStorage RepoStorageConfig `json:"repo_storage"`
 	Hooks       HooksConfig       `json:"hooks"`
@@ -152,6 +153,16 @@ type WebConfig struct {
 	Enabled bool   `json:"enabled"`
 	Port    int    `json:"port"`
 	Host    string `json:"host"`
+}
+
+// HTTPBridgeConfig contains HTTP bridge/API server workspace settings
+type HTTPBridgeConfig struct {
+	// WorkspacePath is where job workspaces are created (default: ~/.cache/pedrocli/jobs)
+	WorkspacePath string `json:"workspace_path,omitempty"`
+	// CleanupOnComplete determines whether to delete workspaces after successful PR creation
+	// Default: false (preserve for debugging). When false, workspaces accumulate.
+	// Manual cleanup: rm -rf ~/.cache/pedrocli/jobs/* or future 'pedrocli cache clean'
+	CleanupOnComplete bool `json:"cleanup_on_complete"`
 }
 
 // VoiceConfig contains voice/whisper.cpp settings
@@ -538,11 +549,12 @@ func (c *Config) setDefaults() {
 	if len(c.Tools.AllowedBashCommands) == 0 {
 		c.Tools.AllowedBashCommands = []string{
 			"git", "gh", "go", "cat", "ls", "head", "tail", "wc", "sort", "uniq",
+			"sed", "awk", "tee", "cut", "tr", // File editing tools
 		}
 	}
 	if len(c.Tools.ForbiddenCommands) == 0 {
 		c.Tools.ForbiddenCommands = []string{
-			"sed", "grep", "find", "xargs", "rm", "mv", "dd", "sudo",
+			"grep", "find", "xargs", "rm", "mv", "dd", "sudo", // Note: sed removed (now allowed)
 		}
 	}
 
@@ -569,6 +581,14 @@ func (c *Config) setDefaults() {
 	if c.Web.Host == "" {
 		c.Web.Host = "0.0.0.0" // Bind to all interfaces for Tailscale/remote access
 	}
+
+	// HTTP Bridge defaults
+	if c.HTTPBridge.WorkspacePath == "" {
+		// Use XDG Base Directory spec: ~/.cache/pedrocli/jobs
+		homeDir, _ := os.UserHomeDir()
+		c.HTTPBridge.WorkspacePath = filepath.Join(homeDir, ".cache", "pedrocli", "jobs")
+	}
+	// CleanupOnComplete defaults to false (preserve workspaces for debugging)
 
 	// Voice defaults
 	if c.Voice.WhisperURL == "" {
