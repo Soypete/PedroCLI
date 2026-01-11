@@ -521,7 +521,7 @@ func (c *Config) setDefaults() {
 		c.Git.Remote = "origin"
 	}
 	if c.Git.BranchPrefix == "" {
-		c.Git.BranchPrefix = "pedroceli/"
+		c.Git.BranchPrefix = "pedrocli/"
 	}
 
 	// Limits defaults

@@ -98,8 +98,8 @@ func NewCLIBridge(cfg CLIBridgeConfig) (*CLIBridge, error) {
 		agent.RegisterTool(testTool)
 	}
 
-	// Register coding agents
-	builderAgent := agents.NewBuilderAgent(cfg.Config, backend, jobManager)
+	// Register coding agents (use phased builder for structured workflow)
+	builderAgent := agents.NewBuilderPhasedAgent(cfg.Config, backend, jobManager)
 	registerCodeTools(builderAgent)
 
 	debuggerAgent := agents.NewDebuggerAgent(cfg.Config, backend, jobManager)

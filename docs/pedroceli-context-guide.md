@@ -261,7 +261,7 @@ Steps 6-8:
 ## CLI Warnings
 
 ```bash
-$ pedroceli build --description "Refactor database layer"
+$ pedrocli build --description "Refactor database layer"
 
 📊 Context Budget Analysis:
   Model: qwen2.5-coder:32b
@@ -289,7 +289,7 @@ Job started: job-1699401234
 The temp file system helps with context:
 
 ```
-/tmp/pedroceli-jobs/job-123/
+/tmp/pedrocli-jobs/job-123/
 ├── 001-prompt.txt          # Pre-parsed, token counted
 ├── 002-response.txt         # Can reference without re-reading
 ├── 003-tool-calls.json      # Structured, easy to summarize
@@ -306,14 +306,14 @@ The temp file system helps with context:
 ## Config Validation
 
 ```bash
-$ pedroceli build --description "Test"
+$ pedrocli build --description "Test"
 
 ❌ Configuration Error:
 
 context_size is too large: 500000
 Model qwen2.5-coder:32b has max context of 32768
 
-Fix: Update .pedroceli.json:
+Fix: Update .pedrocli.json:
 {
   "model": {
     "context_size": 32768,

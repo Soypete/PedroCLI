@@ -7,9 +7,9 @@ Verify that the implementation works correctly and meets quality standards.
 
 ## Available Tools
 - `test`: Run tests (Go, npm, Python)
-- `bash`: Run linter, build, other validation commands
-- `file`: Read files to check changes
-- `code_edit`: Fix any issues found
+- `bash_edit`: Run linter, build, validation commands, fix multi-file issues with sed
+- `file`: Read files to check changes, simple replacements
+- `code_edit`: Fix issues with precise edits (preferred for single-file fixes)
 - `lsp`: Check for type errors and diagnostics
 
 ## Validation Process
@@ -17,21 +17,21 @@ Verify that the implementation works correctly and meets quality standards.
 ### 1. Run the Build
 Verify the code compiles/builds:
 ```json
-{"tool": "bash", "args": {"command": "go build ./..."}}
+{"tool": "bash_edit", "args": {"command": "go build ./..."}}
 ```
 or
 ```json
-{"tool": "bash", "args": {"command": "npm run build"}}
+{"tool": "bash_edit", "args": {"command": "npm run build"}}
 ```
 
 ### 2. Run the Linter
 Check for style and quality issues:
 ```json
-{"tool": "bash", "args": {"command": "golangci-lint run"}}
+{"tool": "bash_edit", "args": {"command": "golangci-lint run"}}
 ```
 or
 ```json
-{"tool": "bash", "args": {"command": "npm run lint"}}
+{"tool": "bash_edit", "args": {"command": "npm run lint"}}
 ```
 
 ### 3. Run Tests
@@ -44,9 +44,24 @@ Execute the test suite:
 If any validation step fails:
 1. Read the error message carefully
 2. Identify the root cause
-3. Make targeted fixes using code_edit
+3. Choose the right tool for the fix:
+   - **Single file issue** → Use `code_edit` for precise fix
+   - **Same issue across multiple files** → Use `bash_edit` with sed
+   - **Simple string replacement** → Use `file` tool
 4. Re-run the failed validation
 5. Repeat until passing
+
+**Example: Linter reports unused imports in 10 files:**
+```json
+// Fix all at once with sed
+{"tool": "bash_edit", "args": {"command": "goimports -w pkg/**/*.go"}}
+```
+
+**Example: Single test failure:**
+```json
+// Fix precisely with code_edit
+{"tool": "code_edit", "args": {"action": "edit_lines", "path": "handler_test.go", "start_line": 25, "end_line": 27, "new_content": "..."}}
+```
 
 ### 5. Check LSP Diagnostics
 Verify no type errors in changed files:

@@ -59,7 +59,7 @@ func (b *BuilderPhasedAgent) GetPhases() []Phase {
 			Name:         "analyze",
 			Description:  "Analyze the request, evaluate repo state, gather requirements",
 			SystemPrompt: builderAnalyzePrompt,
-			Tools:        []string{"search", "navigate", "file", "git", "github", "lsp"},
+			Tools:        []string{"search", "navigate", "file", "git", "github", "lsp", "bash_explore"},
 			MaxRounds:    10,
 			ExpectsJSON:  true,
 			Validator: func(result *PhaseResult) error {
@@ -76,7 +76,7 @@ func (b *BuilderPhasedAgent) GetPhases() []Phase {
 			Name:         "plan",
 			Description:  "Create a detailed implementation plan with numbered steps",
 			SystemPrompt: builderPlanPrompt,
-			Tools:        []string{"search", "navigate", "file", "context"},
+			Tools:        []string{"search", "navigate", "file", "context", "bash_explore"},
 			MaxRounds:    5,
 			ExpectsJSON:  true,
 			Validator: func(result *PhaseResult) error {
@@ -90,7 +90,7 @@ func (b *BuilderPhasedAgent) GetPhases() []Phase {
 			Name:         "implement",
 			Description:  "Write code following the plan, chunk by chunk",
 			SystemPrompt: builderImplementPrompt,
-			Tools:        []string{"file", "code_edit", "search", "navigate", "git", "bash", "lsp", "context"},
+			Tools:        []string{"file", "code_edit", "search", "navigate", "git", "bash_edit", "lsp", "context"},
 			MaxRounds:    30, // More rounds for implementation
 			Validator: func(result *PhaseResult) error {
 				// Implementation should produce some file modifications
@@ -101,7 +101,7 @@ func (b *BuilderPhasedAgent) GetPhases() []Phase {
 			Name:         "validate",
 			Description:  "Run tests, linter, verify the implementation works",
 			SystemPrompt: builderValidatePrompt,
-			Tools:        []string{"test", "bash", "file", "code_edit", "lsp"},
+			Tools:        []string{"test", "bash_edit", "file", "code_edit", "lsp"},
 			MaxRounds:    15, // Allow iterations to fix failing tests
 			Validator: func(result *PhaseResult) error {
 				return nil

@@ -58,7 +58,7 @@ type Manager struct {
 // Deprecated: Use NewDBManager for production use.
 func NewManager(stateDir string) (*Manager, error) {
 	if stateDir == "" {
-		stateDir = "/tmp/pedroceli-jobs"
+		stateDir = "/tmp/pedrocli-jobs"
 	}
 
 	if err := os.MkdirAll(stateDir, 0755); err != nil {

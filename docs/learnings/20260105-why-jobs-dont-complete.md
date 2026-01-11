@@ -182,7 +182,7 @@ This affects ALL builder/debugger jobs:
 
 ## Related Files
 
-- `/tmp/pedroceli-jobs/f13ec17a-8833-4648-9253-a3f7ef64a0d0-20260105-222433/`
+- `/tmp/pedrocli-jobs/f13ec17a-8833-4648-9253-a3f7ef64a0d0-20260105-222433/`
   - 002-response.txt - shows code_edit attempt
   - 003-tool-calls.json - shows code_edit was NOT parsed
   - 004-tool-results.json - shows "unknown action" errors

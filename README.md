@@ -30,8 +30,8 @@ curl -fsSL https://ollama.com/install.sh | sh
 ollama pull qwen2.5-coder:32b
 
 # 3. Create config file
-cp ~/.pedrocli/.pedroceli.example.ollama.json ~/.pedroceli.json
-# Edit ~/.pedroceli.json to set your project path
+cp ~/.pedrocli/.pedrocli.example.ollama.json ~/.pedrocli.json
+# Edit ~/.pedrocli.json to set your project path
 
 # 4. Run your first agent
 pedrocli build -description "Add a health check endpoint to the API"
@@ -118,8 +118,8 @@ curl -fsSL https://ollama.com/install.sh | sh
 ollama pull qwen2.5-coder:32b
 
 # Create config
-cp ~/.pedrocli/.pedroceli.example.ollama.json ~/.pedroceli.json
-# Edit ~/.pedroceli.json to set your project path
+cp ~/.pedrocli/.pedrocli.example.ollama.json ~/.pedrocli.json
+# Edit ~/.pedrocli.json to set your project path
 
 # Start coding!
 pedrocli build -description "your feature"
@@ -146,7 +146,7 @@ curl -fsSL https://raw.githubusercontent.com/Soypete/PedroCLI/main/docker-compos
 docker-compose up -d
 
 # Or run directly
-docker run -v $(pwd):/workspace -v ~/.pedroceli.json:/root/.pedroceli.json ghcr.io/soypete/pedrocli:latest help
+docker run -v $(pwd):/workspace -v ~/.pedrocli.json:/root/.pedrocli.json ghcr.io/soypete/pedrocli:latest help
 ```
 
 ### From Source
@@ -172,10 +172,10 @@ curl -fsSL https://ollama.com/install.sh | sh
 ollama pull qwen2.5-coder:32b  # or :14b, :7b for smaller hardware
 
 # Create config
-cp .pedroceli.example.ollama.json ~/.pedroceli.json
+cp .pedrocli.example.ollama.json ~/.pedrocli.json
 ```
 
-Edit `.pedroceli.json`:
+Edit `.pedrocli.json`:
 ```json
 {
   "model": {
@@ -216,10 +216,10 @@ cd /path/to/PedroCLI
 make build
 
 # 5. Create config
-cp .pedroceli-llamacpp-server.json.example .pedroceli.json
+cp .pedrocli-llamacpp-server.json.example .pedrocli.json
 ```
 
-Edit `.pedroceli.json`:
+Edit `.pedrocli.json`:
 ```json
 {
   "model": {
@@ -486,7 +486,7 @@ I reserve the right to reject PRs that don't align with the project's goals of b
 
 ### "Tests keep failing"
 - The agent will retry automatically
-- Check the job directory in `/tmp/pedroceli-jobs/` for full history
+- Check the job directory in `/tmp/pedrocli-jobs/` for full history
 - Set `debug.keep_temp_files: true` to inspect what happened
 
 ### "No response from model"
@@ -514,7 +514,7 @@ As of v0.3.0, agents execute directly in-process:
 
 ### File-Based Context
 
-Unlike in-memory systems, PedroCLI writes all context to `/tmp/pedroceli-jobs/`:
+Unlike in-memory systems, PedroCLI writes all context to `/tmp/pedrocli-jobs/`:
 - Survives process crashes
 - Easy to debug (just read the files)
 - Natural context window management
@@ -536,7 +536,7 @@ PedroCLI includes a **Podcast Tools Mode** for managing podcast content. This mo
 
 1. Copy the podcast config template:
 ```bash
-cp .pedroceli.example.podcast.json ~/.pedroceli.json
+cp .pedrocli.example.podcast.json ~/.pedrocli.json
 ```
 
 2. Fill in the TODO placeholders:

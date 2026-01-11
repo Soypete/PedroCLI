@@ -62,7 +62,7 @@ func (d *DebuggerPhasedAgent) GetPhases() []Phase {
 			Name:         "reproduce",
 			Description:  "Reproduce the issue consistently",
 			SystemPrompt: debuggerReproducePrompt,
-			Tools:        []string{"test", "bash", "file", "search"},
+			Tools:        []string{"test", "bash_edit", "file", "search"},
 			MaxRounds:    8,
 			ExpectsJSON:  true,
 			Validator: func(result *PhaseResult) error {
@@ -87,7 +87,7 @@ func (d *DebuggerPhasedAgent) GetPhases() []Phase {
 			Name:         "isolate",
 			Description:  "Narrow down to the exact root cause",
 			SystemPrompt: debuggerIsolatePrompt,
-			Tools:        []string{"file", "lsp", "search", "bash", "context"},
+			Tools:        []string{"file", "lsp", "search", "bash_explore", "context"},
 			MaxRounds:    10,
 			ExpectsJSON:  true,
 			Validator: func(result *PhaseResult) error {
@@ -108,7 +108,7 @@ func (d *DebuggerPhasedAgent) GetPhases() []Phase {
 			Name:         "verify",
 			Description:  "Verify the fix works and doesn't break anything",
 			SystemPrompt: debuggerVerifyPrompt,
-			Tools:        []string{"test", "bash", "lsp", "file", "code_edit"},
+			Tools:        []string{"test", "bash_edit", "lsp", "file", "code_edit"},
 			MaxRounds:    15, // Allow iterations for fix adjustments
 			Validator: func(result *PhaseResult) error {
 				return nil

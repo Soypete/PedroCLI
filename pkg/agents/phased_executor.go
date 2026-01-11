@@ -262,6 +262,12 @@ func (pie *phaseInferenceExecutor) execute(ctx context.Context, input string) (s
 		// Log user prompt
 		pie.logConversation(ctx, "user", currentPrompt, "", nil, nil)
 
+		// Save prompt to context files
+		fullPrompt := fmt.Sprintf("System: %s\n\nUser: %s", pie.phase.SystemPrompt, currentPrompt)
+		if err := pie.contextMgr.SavePrompt(fullPrompt); err != nil {
+			return "", pie.currentRound, fmt.Errorf("failed to save prompt: %w", err)
+		}
+
 		// Execute inference with phase-specific system prompt
 		systemPrompt := pie.phase.SystemPrompt
 		if systemPrompt == "" {
@@ -275,6 +281,11 @@ func (pie *phaseInferenceExecutor) execute(ctx context.Context, input string) (s
 
 		// Log assistant response
 		pie.logConversation(ctx, "assistant", response.Text, "", nil, nil)
+
+		// Save response to context files
+		if err := pie.contextMgr.SaveResponse(response.Text); err != nil {
+			return "", pie.currentRound, fmt.Errorf("failed to save response: %w", err)
+		}
 
 		// Get tool calls
 		toolCalls := response.ToolCalls
@@ -298,10 +309,37 @@ func (pie *phaseInferenceExecutor) execute(ctx context.Context, input string) (s
 			toolCalls = pie.filterToolCalls(toolCalls)
 		}
 
+		// Save tool calls to context files
+		contextCalls := make([]llmcontext.ToolCall, len(toolCalls))
+		for i, tc := range toolCalls {
+			contextCalls[i] = llmcontext.ToolCall{
+				Name: tc.Name,
+				Args: tc.Args,
+			}
+		}
+		if err := pie.contextMgr.SaveToolCalls(contextCalls); err != nil {
+			return "", pie.currentRound, fmt.Errorf("failed to save tool calls: %w", err)
+		}
+
 		// Execute tools
 		results, err := pie.executeTools(ctx, toolCalls)
 		if err != nil {
 			return "", pie.currentRound, fmt.Errorf("tool execution failed: %w", err)
+		}
+
+		// Save tool results to context files
+		contextResults := make([]llmcontext.ToolResult, len(results))
+		for i, r := range results {
+			contextResults[i] = llmcontext.ToolResult{
+				Name:          toolCalls[i].Name,
+				Success:       r.Success,
+				Output:        r.Output,
+				Error:         r.Error,
+				ModifiedFiles: r.ModifiedFiles,
+			}
+		}
+		if err := pie.contextMgr.SaveToolResults(contextResults); err != nil {
+			return "", pie.currentRound, fmt.Errorf("failed to save tool results: %w", err)
 		}
 
 		// Build feedback prompt

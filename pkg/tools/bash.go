@@ -195,7 +195,7 @@ func NewBashExploreTool(cfg *config.Config, workDir string) *BashExploreTool {
 
 // Name returns the tool name
 func (b *BashExploreTool) Name() string {
-	return "bash"
+	return "bash_explore"
 }
 
 // Description returns the tool description
@@ -250,7 +250,7 @@ func NewBashEditTool(cfg *config.Config, workDir string) *BashEditTool {
 
 // Name returns the tool name
 func (b *BashEditTool) Name() string {
-	return "bash"
+	return "bash_edit"
 }
 
 // Description returns the tool description

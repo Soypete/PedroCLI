@@ -20,7 +20,7 @@
 **Model**: Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf
 **Config**: `.pedrocli.json` (llamacpp type)
 **Job ID**: 23283e6f-1bba-41cc-b7c7-b02b360a7539
-**Job Dir**: `/tmp/pedroceli-jobs/23283e6f-1bba-41cc-b7c7-b02b360a7539-20260104-101620/`
+**Job Dir**: `/tmp/pedrocli-jobs/23283e6f-1bba-41cc-b7c7-b02b360a7539-20260104-101620/`
 
 ## Root Cause Analysis
 
@@ -325,7 +325,7 @@ mv .pedrocli.json.backup .pedrocli.json
    - Error handling for malformed output
 
 ### Test Files:
-- `/tmp/pedroceli-jobs/23283e6f-1bba-41cc-b7c7-b02b360a7539-20260104-101620/002-response.txt`
+- `/tmp/pedrocli-jobs/23283e6f-1bba-41cc-b7c7-b02b360a7539-20260104-101620/002-response.txt`
 - `/tmp/pedrocli-grammar-debug.gbnf` (after Phase 1)
 
 ## Success Criteria
@@ -381,7 +381,7 @@ kill $PID
 cat /tmp/pedrocli-grammar-debug.gbnf
 
 # 6. Check model output
-find /tmp/pedroceli-jobs -name "*-20260104-*" -type d | tail -1 | xargs ls -la
+find /tmp/pedrocli-jobs -name "*-20260104-*" -type d | tail -1 | xargs ls -la
 # Look at 002-response.txt
 
 # 7. Compare to expected format
@@ -400,7 +400,7 @@ make build-cli
 - Grammar guide: `docs/gbnf-grammar-guide.md`
 - Builder usage: `docs/builder-agent-usage.md`
 - llama.cpp grammars: https://github.com/ggerganov/llama.cpp/tree/master/grammars
-- Current job logs: `/tmp/pedroceli-jobs/23283e6f-*/`
+- Current job logs: `/tmp/pedrocli-jobs/23283e6f-*/`
 
 ## Notes
 
