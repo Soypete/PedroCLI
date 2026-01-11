@@ -23,6 +23,9 @@ type AppContext struct {
 	Database   *database.DB
 	WorkDir    string
 
+	// Workspace manager for HTTP bridge jobs
+	WorkspaceManager *WorkspaceManager
+
 	// Stores
 	CompactionStatsStore storage.CompactionStatsStore
 	BlogStore            *blog.PostStore
@@ -101,6 +104,9 @@ func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, erro
 		workDir, _ = os.Getwd()
 	}
 
+	// Create workspace manager for HTTP bridge jobs
+	workspaceManager := NewWorkspaceManager(cfg.HTTPBridge.WorkspacePath)
+
 	// Create tools
 	appCtx := &AppContext{
 		Config:               cfg,
@@ -108,6 +114,7 @@ func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, erro
 		JobManager:           jobManager,
 		Database:             db,
 		WorkDir:              workDir,
+		WorkspaceManager:     workspaceManager,
 		CompactionStatsStore: compactionStatsStore,
 		BlogStore:            blogStore,
 		VersionStore:         versionStore,
