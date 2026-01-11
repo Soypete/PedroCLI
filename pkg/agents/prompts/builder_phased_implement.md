@@ -195,4 +195,34 @@ If LSP reports errors:
 - Don't modify code unrelated to the current task
 
 ## Completion
-When all implementation steps are complete, say PHASE_COMPLETE.
+
+**CRITICAL**: Before declaring PHASE_COMPLETE, you MUST verify your work:
+
+### 1. Check Git Status
+```json
+{"tool": "git", "args": {"action": "status"}}
+```
+
+Verify that:
+- Expected files were created/modified
+- No unexpected files changed
+- Working directory shows your changes
+
+### 2. View Changes with Git Diff
+```json
+{"tool": "git", "args": {"action": "diff"}}
+```
+
+Review the diff output to confirm:
+- Code changes match the implementation plan
+- No accidental modifications to unrelated files
+- Changes compile and look correct
+
+### 3. Run LSP Diagnostics on Modified Files
+For each file you modified, verify no errors:
+```json
+{"tool": "lsp", "args": {"operation": "diagnostics", "file": "path/to/modified/file.go"}}
+```
+
+### 4. Declare Completion
+Only after verifying all changes are present and correct, say PHASE_COMPLETE.
