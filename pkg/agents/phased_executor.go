@@ -317,13 +317,14 @@ func (pie *phaseInferenceExecutor) execute(ctx context.Context, input string) (s
 			}
 		}
 
-		// Check if phase is complete (no more tool calls and completion signal)
+		// If no tool calls, check for completion or prompt for action
 		if len(toolCalls) == 0 {
+			// Check if phase is complete
 			if pie.isPhaseComplete(response.Text) {
 				return response.Text, pie.currentRound, nil
 			}
 
-			// No tool calls but not complete - prompt for action
+			// No tool calls and not complete - prompt for action
 			currentPrompt = "Please continue with the current phase. Use tools if needed, or indicate completion with PHASE_COMPLETE or TASK_COMPLETE."
 			continue
 		}
@@ -364,6 +365,12 @@ func (pie *phaseInferenceExecutor) execute(ctx context.Context, input string) (s
 		}
 		if err := pie.contextMgr.SaveToolResults(contextResults); err != nil {
 			return "", pie.currentRound, fmt.Errorf("failed to save tool results: %w", err)
+		}
+
+		// Check for completion signal in response text (AFTER tools executed)
+		// This handles cases where agent outputs tool calls + PHASE_COMPLETE in same response
+		if pie.isPhaseComplete(response.Text) {
+			return response.Text, pie.currentRound, nil
 		}
 
 		// Build feedback prompt
