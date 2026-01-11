@@ -59,13 +59,13 @@ Thoroughly understand the request and codebase before any implementation begins.
 {"tool": "lsp", "args": {"operation": "definition", "file": "main.go", "line": 42, "column": 10}}
 ```
 
-### bash_explore - Shell commands for searching (Analyze phase only)
+### bash - Shell commands for searching (Analyze phase only)
 ```json
 // Use grep for complex patterns
-{"tool": "bash_explore", "args": {"command": "grep -r 'prometheus' pkg/"}}
+{"tool": "bash", "args": {"command": "grep -r 'prometheus' pkg/"}}
 
 // Find files
-{"tool": "bash_explore", "args": {"command": "find . -name '*metrics*' -type f"}}
+{"tool": "bash", "args": {"command": "find . -name '*metrics*' -type f"}}
 ```
 
 ## Analysis Process

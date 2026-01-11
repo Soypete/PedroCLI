@@ -7,7 +7,7 @@ Verify that the implementation works correctly and meets quality standards.
 
 ## Available Tools
 - `test`: Run tests (Go, npm, Python)
-- `bash_edit`: Run linter, build, validation commands, fix multi-file issues with sed
+- `bash`: Run linter, build, validation commands, fix multi-file issues with sed
 - `file`: Read files to check changes, simple replacements
 - `code_edit`: Fix issues with precise edits (preferred for single-file fixes)
 - `lsp`: Check for type errors and diagnostics
@@ -17,21 +17,21 @@ Verify that the implementation works correctly and meets quality standards.
 ### 1. Run the Build
 Verify the code compiles/builds:
 ```json
-{"tool": "bash_edit", "args": {"command": "go build ./..."}}
+{"tool": "bash", "args": {"command": "go build ./..."}}
 ```
 or
 ```json
-{"tool": "bash_edit", "args": {"command": "npm run build"}}
+{"tool": "bash", "args": {"command": "npm run build"}}
 ```
 
 ### 2. Run the Linter
 Check for style and quality issues:
 ```json
-{"tool": "bash_edit", "args": {"command": "golangci-lint run"}}
+{"tool": "bash", "args": {"command": "golangci-lint run"}}
 ```
 or
 ```json
-{"tool": "bash_edit", "args": {"command": "npm run lint"}}
+{"tool": "bash", "args": {"command": "npm run lint"}}
 ```
 
 ### 3. Run Tests
@@ -46,7 +46,7 @@ If any validation step fails:
 2. Identify the root cause
 3. Choose the right tool for the fix:
    - **Single file issue** → Use `code_edit` for precise fix
-   - **Same issue across multiple files** → Use `bash_edit` with sed
+   - **Same issue across multiple files** → Use `bash` with sed
    - **Simple string replacement** → Use `file` tool
 4. Re-run the failed validation
 5. Repeat until passing
@@ -54,7 +54,7 @@ If any validation step fails:
 **Example: Linter reports unused imports in 10 files:**
 ```json
 // Fix all at once with sed
-{"tool": "bash_edit", "args": {"command": "goimports -w pkg/**/*.go"}}
+{"tool": "bash", "args": {"command": "goimports -w pkg/**/*.go"}}
 ```
 
 **Example: Single test failure:**

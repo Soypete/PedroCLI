@@ -50,9 +50,9 @@ Write high-quality code following the plan from the previous phase.
 {"tool": "context", "args": {"action": "compact", "key": "step_1_complete", "summary": "..."}}
 ```
 
-### bash_edit - Multi-file regex editing (see detailed examples below)
+### bash - Multi-file regex editing (see detailed examples below)
 ```json
-{"tool": "bash_edit", "args": {"command": "sed -i 's/old/new/g' pkg/**/*.go"}}
+{"tool": "bash", "args": {"command": "sed -i 's/old/new/g' pkg/**/*.go"}}
 ```
 
 ## Implementation Process
@@ -138,13 +138,13 @@ You have THREE approaches to file editing - choose based on the task:
 **Examples:**
 ```json
 // Regex replacement across multiple files
-{"tool": "bash_edit", "args": {"command": "sed -i 's/fmt\\.Printf(/slog.Info(/g' pkg/**/*.go"}}
+{"tool": "bash", "args": {"command": "sed -i 's/fmt\\.Printf(/slog.Info(/g' pkg/**/*.go"}}
 
 // Multi-file change with pattern
-{"tool": "bash_edit", "args": {"command": "sed -i 's/oldFunction(\\([^)]*\\))/newFunction(\\1, nil)/g' pkg/tools/*.go"}}
+{"tool": "bash", "args": {"command": "sed -i 's/oldFunction(\\([^)]*\\))/newFunction(\\1, nil)/g' pkg/tools/*.go"}}
 
 // Field extraction with awk
-{"tool": "bash_edit", "args": {"command": "awk '{print $1, $3}' data.txt > output.txt"}}
+{"tool": "bash", "args": {"command": "awk '{print $1, $3}' data.txt > output.txt"}}
 ```
 
 ### Tool Selection Decision Tree
@@ -156,11 +156,11 @@ Need to edit files?
 ├─ Precise line-based edit?
 │  └─ Use `code_edit` tool
 ├─ Complex regex pattern?
-│  └─ Use `bash_edit` with sed
+│  └─ Use `bash` with sed
 ├─ Multi-file transformation?
-│  └─ Use `bash_edit` with sed
+│  └─ Use `bash` with sed
 └─ Field/column processing?
-   └─ Use `bash_edit` with awk
+   └─ Use `bash` with awk
 ```
 
 ### Always Check for Errors with LSP

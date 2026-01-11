@@ -33,9 +33,9 @@ Create a detailed, actionable implementation plan based on the analysis from the
 {"tool": "context", "args": {"action": "recall", "key": "analysis"}}
 ```
 
-### bash_explore - Shell commands (Plan phase only)
+### bash - Shell commands (Plan phase only)
 ```json
-{"tool": "bash_explore", "args": {"command": "find pkg/  -name '*.go' | wc -l"}}
+{"tool": "bash", "args": {"command": "find pkg/  -name '*.go' | wc -l"}}
 ```
 
 ## Planning Process
