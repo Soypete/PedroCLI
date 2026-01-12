@@ -74,5 +74,22 @@
       "twitter": "https://twitter.com/soypete",
       "newsletter": "https://soypetetech.substack.com"
     }
+  },
+  "lsp": {
+    "enabled": true,
+    "auto_discover": true,
+    "timeout": 30,
+    "servers": {
+      "gopls": {
+        "command": "/Users/miriahpeterson/code/go/bin/gopls",
+        "args": ["serve"],
+        "languages": ["go"],
+        "enabled": true,
+        "init_options": {
+          "usePlaceholders": true,
+          "completionDocumentation": true
+        }
+      }
+    }
   }
 }
