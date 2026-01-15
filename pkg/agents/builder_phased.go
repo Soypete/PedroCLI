@@ -59,7 +59,7 @@ func (b *BuilderPhasedAgent) GetPhases() []Phase {
 			Name:         "analyze",
 			Description:  "Analyze the request, evaluate repo state, gather requirements",
 			SystemPrompt: builderAnalyzePrompt,
-			Tools:        []string{"search", "navigate", "file", "git", "github", "lsp"},
+			Tools:        []string{"search", "navigate", "file", "git", "github", "lsp", "bash"},
 			MaxRounds:    10,
 			ExpectsJSON:  true,
 			Validator: func(result *PhaseResult) error {
@@ -76,7 +76,7 @@ func (b *BuilderPhasedAgent) GetPhases() []Phase {
 			Name:         "plan",
 			Description:  "Create a detailed implementation plan with numbered steps",
 			SystemPrompt: builderPlanPrompt,
-			Tools:        []string{"search", "navigate", "file", "context"},
+			Tools:        []string{"search", "navigate", "file", "context", "bash"},
 			MaxRounds:    5,
 			ExpectsJSON:  true,
 			Validator: func(result *PhaseResult) error {
@@ -101,7 +101,7 @@ func (b *BuilderPhasedAgent) GetPhases() []Phase {
 			Name:         "validate",
 			Description:  "Run tests, linter, verify the implementation works",
 			SystemPrompt: builderValidatePrompt,
-			Tools:        []string{"test", "bash", "file", "code_edit", "lsp"},
+			Tools:        []string{"test", "bash", "file", "code_edit", "lsp", "search", "navigate"},
 			MaxRounds:    15, // Allow iterations to fix failing tests
 			Validator: func(result *PhaseResult) error {
 				return nil

@@ -286,8 +286,8 @@ func buildCommand(cfg *config.Config, args []string) {
 		arguments["issue"] = *issue
 	}
 
-	// Call builder agent and poll for completion
-	callAgent(cfg, "builder", arguments)
+	// Call phased builder agent (preferred over legacy builder)
+	callAgent(cfg, "builder_phased", arguments)
 }
 
 // callAgent is a helper function to call an agent and poll for completion

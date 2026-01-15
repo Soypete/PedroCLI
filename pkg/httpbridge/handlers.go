@@ -490,7 +490,7 @@ func (s *Server) handleBlogReviewPage(w http.ResponseWriter, r *http.Request) {
 
 // PodcastRequest represents a podcast job creation request
 type PodcastRequest struct {
-	Type  string `json:"type"`  // create_script, create_outline
+	Type  string `json:"type"` // create_script, create_outline
 	Topic string `json:"topic"`
 	Notes string `json:"notes"`
 }

@@ -29,7 +29,7 @@ type ServerClientConfig struct {
 	ContextSize int
 	EnableTools bool
 	APIPath     string        // Optional, defaults to "/v1/chat/completions"
-	Timeout     time.Duration // Optional, defaults to 5min
+	Timeout     time.Duration // Optional, defaults to 20min for large models
 }
 
 // NewServerClient creates a new HTTP server client
@@ -38,7 +38,7 @@ func NewServerClient(cfg ServerClientConfig) *ServerClient {
 		cfg.APIPath = "/v1/chat/completions" // OpenAI-compatible default
 	}
 	if cfg.Timeout == 0 {
-		cfg.Timeout = 5 * time.Minute
+		cfg.Timeout = 20 * time.Minute // Increased for 32B+ models
 	}
 
 	usableSize := cfg.ContextSize

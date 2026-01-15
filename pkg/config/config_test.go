@@ -202,8 +202,8 @@ func TestSetDefaults(t *testing.T) {
 				if c.Git.Remote != "origin" {
 					t.Errorf("Git.Remote = %v, want origin", c.Git.Remote)
 				}
-				if c.Git.BranchPrefix != "pedroceli/" {
-					t.Errorf("Git.BranchPrefix = %v, want pedroceli/", c.Git.BranchPrefix)
+				if c.Git.BranchPrefix != "pedrocli/" {
+					t.Errorf("Git.BranchPrefix = %v, want pedrocli/", c.Git.BranchPrefix)
 				}
 				if c.Limits.MaxTaskDurationMinutes != 30 {
 					t.Errorf("Limits.MaxTaskDurationMinutes = %v, want 30", c.Limits.MaxTaskDurationMinutes)
@@ -287,15 +287,19 @@ func TestSetDefaults(t *testing.T) {
 				if len(c.Tools.ForbiddenCommands) == 0 {
 					t.Error("Tools.ForbiddenCommands should have defaults")
 				}
-				// Check for a few expected forbidden commands
-				hasSed := false
+				// Check for a few expected forbidden commands (rm, sudo should always be forbidden)
+				hasRm := false
+				hasSudo := false
 				for _, cmd := range c.Tools.ForbiddenCommands {
-					if cmd == "sed" {
-						hasSed = true
+					if cmd == "rm" {
+						hasRm = true
+					}
+					if cmd == "sudo" {
+						hasSudo = true
 					}
 				}
-				if !hasSed {
-					t.Error("Tools.ForbiddenCommands should include 'sed'")
+				if !hasRm || !hasSudo {
+					t.Error("Tools.ForbiddenCommands should include 'rm' and 'sudo'")
 				}
 			},
 		},

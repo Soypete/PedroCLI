@@ -26,11 +26,11 @@ type BlogContentAgent struct {
 	outline       string
 	sections      []SectionContent
 	tldr          string
-	socialPosts   map[string]string          // platform -> post
-	toolsList     []tools.Tool               // Tools for InferenceExecutor
-	config        *config.Config             // Configuration for Notion publishing
-	styleAnalyzer *BlogStyleAnalyzerAgent    // Optional style analyzer
-	useStyleGuide bool                       // Whether to use style guide in editor
+	socialPosts   map[string]string       // platform -> post
+	toolsList     []tools.Tool            // Tools for InferenceExecutor
+	config        *config.Config          // Configuration for Notion publishing
+	styleAnalyzer *BlogStyleAnalyzerAgent // Optional style analyzer
+	useStyleGuide bool                    // Whether to use style guide in editor
 }
 
 // SectionContent represents a generated blog section
@@ -248,7 +248,7 @@ func (a *BlogContentAgent) phaseAnalyzeStyle(ctx context.Context) error {
 	}
 
 	fmt.Println("\n📚 Analyzing your writing style from Substack RSS feed...")
-	fmt.Println("   This will help generate content in your authentic voice...\n")
+	fmt.Println("   This will help generate content in your authentic voice...")
 
 	styleGuide, err := a.styleAnalyzer.AnalyzeStyle(ctx)
 	if err != nil {
@@ -257,7 +257,7 @@ func (a *BlogContentAgent) phaseAnalyzeStyle(ctx context.Context) error {
 
 	fmt.Printf("\n✓ Writing style analysis complete!\n")
 	fmt.Printf("  Generated style guide: %d characters\n", len(styleGuide))
-	fmt.Println("  All content phases will now use your personal writing style\n")
+	fmt.Println("  All content phases will now use your personal writing style")
 
 	return nil
 }
@@ -617,7 +617,7 @@ func (a *BlogContentAgent) phaseEditorReview(ctx context.Context) error {
 			fmt.Printf("⚠️  Warning: Style analysis failed: %v\n", err)
 			fmt.Println("   Continuing with standard editor review...")
 		} else {
-			fmt.Println("✓ Style guide generated - will apply to editor review\n")
+			fmt.Println("✓ Style guide generated - will apply to editor review")
 		}
 	}
 

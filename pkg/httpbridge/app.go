@@ -23,20 +23,25 @@ type AppContext struct {
 	Database   *database.DB
 	WorkDir    string
 
+	// Workspace manager for HTTP bridge jobs
+	WorkspaceManager *WorkspaceManager
+
 	// Stores
 	CompactionStatsStore storage.CompactionStatsStore
 	BlogStore            *blog.PostStore
 	VersionStore         *blog.VersionStore
 
 	// Tools (used by agents)
-	FileTool     tools.Tool
-	GitTool      tools.Tool
-	BashTool     tools.Tool
-	TestTool     tools.Tool
-	CodeEditTool tools.Tool
-	SearchTool   tools.Tool
-	NavigateTool tools.Tool
-	LSPTool      *tools.LSPTool
+	FileTool        tools.Tool
+	GitTool         tools.Tool
+	BashTool        tools.Tool
+	BashExploreTool tools.Tool
+	BashEditTool    tools.Tool
+	TestTool        tools.Tool
+	CodeEditTool    tools.Tool
+	SearchTool      tools.Tool
+	NavigateTool    tools.Tool
+	LSPTool         *tools.LSPTool
 
 	// Blog tools
 	RSSFeedTool     tools.Tool
@@ -101,6 +106,9 @@ func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, erro
 		workDir, _ = os.Getwd()
 	}
 
+	// Create workspace manager for HTTP bridge jobs
+	workspaceManager := NewWorkspaceManager(cfg.HTTPBridge.WorkspacePath)
+
 	// Create tools
 	appCtx := &AppContext{
 		Config:               cfg,
@@ -108,6 +116,7 @@ func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, erro
 		JobManager:           jobManager,
 		Database:             db,
 		WorkDir:              workDir,
+		WorkspaceManager:     workspaceManager,
 		CompactionStatsStore: compactionStatsStore,
 		BlogStore:            blogStore,
 		VersionStore:         versionStore,
@@ -117,6 +126,8 @@ func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, erro
 	appCtx.FileTool = tools.NewFileTool()
 	appCtx.GitTool = tools.NewGitTool(workDir)
 	appCtx.BashTool = tools.NewBashTool(cfg, workDir)
+	appCtx.BashExploreTool = tools.NewBashExploreTool(cfg, workDir)
+	appCtx.BashEditTool = tools.NewBashEditTool(cfg, workDir)
 	appCtx.TestTool = tools.NewTestTool(workDir)
 	appCtx.CodeEditTool = tools.NewCodeEditTool()
 	appCtx.SearchTool = tools.NewSearchTool(workDir)
@@ -172,6 +183,8 @@ func registerCodeTools(agent interface{ RegisterTool(tools.Tool) }, ctx *AppCont
 	agent.RegisterTool(ctx.NavigateTool)
 	agent.RegisterTool(ctx.GitTool)
 	agent.RegisterTool(ctx.BashTool)
+	agent.RegisterTool(ctx.BashExploreTool)
+	agent.RegisterTool(ctx.BashEditTool)
 	agent.RegisterTool(ctx.TestTool)
 	// Register LSP tool if enabled
 	if ctx.LSPTool != nil {

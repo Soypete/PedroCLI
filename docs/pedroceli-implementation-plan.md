@@ -8,9 +8,9 @@
 │  ┌──────────────────┐           ┌──────────────────┐        │
 │  │   CLI Client     │           │   Web Client     │        │
 │  │                  │           │  (Speech-to-Text)│        │
-│  │  pedroceli build │           │                  │        │
-│  │  pedroceli debug │           │  Whisper.cpp STT │        │
-│  │  pedroceli review│           │  Voice Recording │        │
+│  │  pedrocli build │           │                  │        │
+│  │  pedrocli debug │           │  Whisper.cpp STT │        │
+│  │  pedrocli review│           │  Voice Recording │        │
 │  └──────────────────┘           └──────────────────┘        │
 └─────────────────────────────────────────────────────────────┘
                             │
@@ -45,7 +45,7 @@
 ## Project Structure
 
 ```
-pedroceli/
+pedrocli/
 ├── cmd/
 │   ├── mcp-server.go      # MCP server entrypoint
 │   ├── cli.go             # CLI client (wraps MCP calls)
@@ -82,7 +82,7 @@ pedroceli/
 │   │   └── styles.css
 │   └── api/
 │       └── handlers.go    # HTTP handlers
-└── .pedroceli.json        # Config file
+└── .pedrocli.json        # Config file
 ```
 
 ## Context Management Strategy
@@ -94,7 +94,7 @@ pedroceli/
 **Solution**: Write everything to temp files as we go.
 
 ```
-/tmp/pedroceli-jobs/
+/tmp/pedrocli-jobs/
 └── job-1699401234/
     ├── 001-initial-prompt.txt        # First inference prompt
     ├── 002-response.txt               # First inference response
@@ -119,7 +119,7 @@ type ContextManager struct {
 
 func NewContextManager(jobID string, debugMode bool) *ContextManager {
     timestamp := time.Now().Format("20060102-150405")
-    jobDir := filepath.Join("/tmp/pedroceli-jobs", fmt.Sprintf("%s-%s", jobID, timestamp))
+    jobDir := filepath.Join("/tmp/pedrocli-jobs", fmt.Sprintf("%s-%s", jobID, timestamp))
     os.MkdirAll(jobDir, 0755)
     
     return &ContextManager{
@@ -297,7 +297,7 @@ func (a *Agent) ExecuteTask(ctx context.Context, task Task) (*Job, error) {
 ### Debug Mode
 
 ```json
-// .pedroceli.json
+// .pedrocli.json
 {
   "debug": {
     "enabled": false,
@@ -310,9 +310,9 @@ func (a *Agent) ExecuteTask(ctx context.Context, task Task) (*Job, error) {
 ```bash
 # Enable debug mode
 export PEDROCELI_DEBUG=true
-pedroceli build --description "Add rate limiting"
+pedrocli build --description "Add rate limiting"
 
-# Temp files kept in /tmp/pedroceli-jobs/job-123-20250107-143022/
+# Temp files kept in /tmp/pedrocli-jobs/job-123-20250107-143022/
 ```
 
 ### Benefits
@@ -726,7 +726,7 @@ func main() {
 
 **Success:**
 ```
-$ pedroceli build --description "Add rate limiting"
+$ pedrocli build --description "Add rate limiting"
 ✓ All dependencies OK
   ✓ llama.cpp: v1.2.3
   ✓ Model file: 21349MB
@@ -739,7 +739,7 @@ Job started: job-1699401234
 
 **Failure:**
 ```
-$ pedroceli build --description "Add rate limiting"
+$ pedrocli build --description "Add rate limiting"
 
 ❌ Dependency check failed:
 
@@ -752,7 +752,7 @@ Please install missing dependencies and try again.
 ### Config Flag
 
 ```json
-// .pedroceli.json
+// .pedrocli.json
 {
   "init": {
     "skip_checks": false,
@@ -763,7 +763,7 @@ Please install missing dependencies and try again.
 
 ```bash
 # Skip checks (not recommended)
-pedroceli build --skip-checks --description "Add feature"
+pedrocli build --skip-checks --description "Add feature"
 ```
 
 ### Benefits
@@ -798,7 +798,7 @@ Different models have different context windows, and we need to be **acutely awa
 #### llama.cpp (User Configurable)
 
 ```json
-// .pedroceli.json
+// .pedrocli.json
 {
   "model": {
     "type": "llamacpp",
@@ -842,7 +842,7 @@ func (o *OllamaClient) GetUsableContext() int {
 ```
 
 ```json
-// .pedroceli.json (Ollama)
+// .pedrocli.json (Ollama)
 {
   "model": {
     "type": "ollama",
@@ -1153,7 +1153,7 @@ func (c *Config) Validate() error {
 ### CLI Warnings
 
 ```bash
-$ pedroceli build --description "Refactor entire codebase"
+$ pedrocli build --description "Refactor entire codebase"
 
 ⚠️  Context Budget:
   Total: 32768 tokens
@@ -1554,16 +1554,16 @@ func (b *BashTool) Execute(ctx context.Context, args map[string]interface{}) (To
 
 # Default build for current platform
 build:
-	go build -o pedroceli cmd/cli.go
+	go build -o pedrocli cmd/cli.go
 
 # Build for macOS
 build-mac:
-	GOOS=darwin GOARCH=arm64 go build -o pedroceli-mac-arm64 cmd/cli.go
-	GOOS=darwin GOARCH=amd64 go build -o pedroceli-mac-amd64 cmd/cli.go
+	GOOS=darwin GOARCH=arm64 go build -o pedrocli-mac-arm64 cmd/cli.go
+	GOOS=darwin GOARCH=amd64 go build -o pedrocli-mac-amd64 cmd/cli.go
 
 # Build for Linux (Ubuntu on Spark)
 build-linux:
-	GOOS=linux GOARCH=amd64 go build -o pedroceli-linux-amd64 cmd/cli.go
+	GOOS=linux GOARCH=amd64 go build -o pedrocli-linux-amd64 cmd/cli.go
 
 # Build for both
 build-all: build-mac build-linux
@@ -1574,11 +1574,11 @@ test:
 
 # Install locally
 install:
-	go build -o pedroceli cmd/cli.go
-	sudo mv pedroceli /usr/local/bin/
+	go build -o pedrocli cmd/cli.go
+	sudo mv pedrocli /usr/local/bin/
 
 clean:
-	rm -f pedroceli pedroceli-*
+	rm -f pedrocli pedrocli-*
 ```
 
 #### Usage
@@ -1586,17 +1586,17 @@ clean:
 ```bash
 # Development on Mac
 make build
-./pedroceli build --description "Test"
+./pedrocli build --description "Test"
 
 # Build for Ubuntu (Spark)
 make build-linux
 
 # Copy to Spark
-scp pedroceli-linux-amd64 miriah@dgx-spark-01:~/bin/pedroceli
+scp pedrocli-linux-amd64 miriah@dgx-spark-01:~/bin/pedrocli
 
 # Run on Spark
 ssh miriah@dgx-spark-01
-~/bin/pedroceli build --description "Test"
+~/bin/pedrocli build --description "Test"
 ```
 
 ### Dependency Checker Updates
@@ -1675,7 +1675,7 @@ func (dc *DependencyChecker) checkUbuntuVersion() CheckResult {
 ### Configuration
 
 ```json
-// .pedroceli.json
+// .pedrocli.json
 {
   "platform": {
     "os": "auto",
@@ -1712,15 +1712,15 @@ func (dc *DependencyChecker) checkUbuntuVersion() CheckResult {
 # On Mac (development)
 make test
 make build
-./pedroceli build --description "Test Mac"
+./pedrocli build --description "Test Mac"
 
 # Build Linux binary on Mac
 make build-linux
 
 # Test on Ubuntu (Spark)
-scp pedroceli-linux-amd64 spark:~/pedroceli
+scp pedrocli-linux-amd64 spark:~/pedrocli
 ssh spark
-~/pedroceli build --description "Test Ubuntu"
+~/pedrocli build --description "Test Ubuntu"
 ```
 
 #### CI/CD (Future)
@@ -1786,7 +1786,7 @@ jobs:
 
 #### 1.1 Basic Infrastructure
 - [ ] Project setup with Go modules
-- [ ] Config file parsing (`.pedroceli.json`)
+- [ ] Config file parsing (`.pedrocli.json`)
 - [ ] **OS detection and platform utilities**
 - [ ] **Dependency checker with platform-specific checks**
 - [ ] **File-based context manager (temp files, not in-memory)**
@@ -1879,7 +1879,7 @@ Output: success/failure
 
 ```bash
 # Test MCP server directly
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"build_feature","arguments":{"description":"Add rate limiting"}}}' | pedroceli mcp-server
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"build_feature","arguments":{"description":"Add rate limiting"}}}' | pedrocli mcp-server
 ```
 
 ---
@@ -1892,25 +1892,25 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"build_feat
 
 ```bash
 # Build feature
-pedroceli build --description "Add rate limiting" --issue GH-123
+pedrocli build --description "Add rate limiting" --issue GH-123
 
 # Debug issue
-pedroceli debug --symptoms "Bot crashes on startup" --logs error.log
+pedrocli debug --symptoms "Bot crashes on startup" --logs error.log
 
 # Review PR
-pedroceli review --branch feature/rate-limiting
+pedrocli review --branch feature/rate-limiting
 
 # Triage issue
-pedroceli triage --description "Memory leak in Discord handler"
+pedrocli triage --description "Memory leak in Discord handler"
 
 # Check status
-pedroceli status [job-id]
+pedrocli status [job-id]
 
 # List jobs
-pedroceli list
+pedrocli list
 
 # Cancel job
-pedroceli cancel <job-id>
+pedrocli cancel <job-id>
 ```
 
 #### 2.2 Implementation
@@ -1921,11 +1921,11 @@ package main
 
 import (
     "github.com/spf13/cobra"
-    "pedroceli/pkg/mcp"
+    "pedrocli/pkg/mcp"
 )
 
 func main() {
-    rootCmd := &cobra.Command{Use: "pedroceli"}
+    rootCmd := &cobra.Command{Use: "pedrocli"}
     
     // Build command
     buildCmd := &cobra.Command{
@@ -1936,7 +1936,7 @@ func main() {
             issue, _ := cmd.Flags().GetString("issue")
             
             // Start MCP server as subprocess
-            client := mcp.NewClient("pedroceli", []string{"mcp-server"})
+            client := mcp.NewClient("pedrocli", []string{"mcp-server"})
             
             // Call build_feature tool
             result := client.CallTool("build_feature", map[string]interface{}{
@@ -1959,7 +1959,7 @@ func main() {
             symptoms, _ := cmd.Flags().GetString("symptoms")
             logs, _ := cmd.Flags().GetString("logs")
             
-            client := mcp.NewClient("pedroceli", []string{"mcp-server"})
+            client := mcp.NewClient("pedrocli", []string{"mcp-server"})
             
             result := client.CallTool("debug_issue", map[string]interface{}{
                 "symptoms": symptoms,
@@ -1980,7 +1980,7 @@ func main() {
         RunE: func(cmd *cobra.Command, args []string) error {
             branch, _ := cmd.Flags().GetString("branch")
             
-            client := mcp.NewClient("pedroceli", []string{"mcp-server"})
+            client := mcp.NewClient("pedrocli", []string{"mcp-server"})
             
             result := client.CallTool("review_pr", map[string]interface{}{
                 "branch": branch,
@@ -1999,7 +1999,7 @@ func main() {
         RunE: func(cmd *cobra.Command, args []string) error {
             description, _ := cmd.Flags().GetString("description")
             
-            client := mcp.NewClient("pedroceli", []string{"mcp-server"})
+            client := mcp.NewClient("pedrocli", []string{"mcp-server"})
             
             result := client.CallTool("triage_issue", map[string]interface{}{
                 "description": description,
@@ -2018,7 +2018,7 @@ func main() {
         Short: "Get job status",
         Args:  cobra.MaximumNArgs(1),
         RunE: func(cmd *cobra.Command, args []string) error {
-            client := mcp.NewClient("pedroceli", []string{"mcp-server"})
+            client := mcp.NewClient("pedrocli", []string{"mcp-server"})
             
             if len(args) == 0 {
                 // List all jobs
@@ -2045,9 +2045,9 @@ func main() {
 ```bash
 # Example usage
 cd ~/pedro-bot
-pedroceli build --description "Add webhook validation" --issue GH-123
+pedrocli build --description "Add webhook validation" --issue GH-123
 # Output: Job started: job-1699401234
-# Monitor: pedroceli status job-1699401234
+# Monitor: pedrocli status job-1699401234
 ```
 
 ---
@@ -2082,7 +2082,7 @@ func (o *OllamaClient) Infer(ctx context.Context, req InferenceRequest) (*Infere
 #### 3.2 Config Switch
 
 ```json
-// .pedroceli.json
+// .pedrocli.json
 {
   "model": {
     "type": "ollama",  // or "llamacpp"
@@ -2121,7 +2121,7 @@ func main() {
     whisper := stt.NewWhisperClient("/usr/local/bin/whisper-cpp")
     
     // Connect to MCP server
-    mcpClient := mcp.NewClient("pedroceli", []string{"mcp-server"})
+    mcpClient := mcp.NewClient("pedrocli", []string{"mcp-server"})
     
     // Setup routes
     http.HandleFunc("/", serveIndex)
@@ -2235,8 +2235,8 @@ func (w *WhisperClient) Transcribe(audioFile string) (string, error) {
 
 ```bash
 # On DGX Spark
-cd pedroceli
-go build -o pedroceli-web cmd/web.go
+cd pedrocli
+go build -o pedrocli-web cmd/web.go
 
 # Setup Tailscale
 sudo tailscale serve https / http://localhost:8080
@@ -2251,7 +2251,7 @@ sudo tailscale serve https / http://localhost:8080
 
 ## Configuration File
 
-### .pedroceli.json
+### .pedrocli.json
 
 ```json
 {
@@ -2270,7 +2270,7 @@ sudo tailscale serve https / http://localhost:8080
   },
   "git": {
     "always_draft_pr": true,
-    "branch_prefix": "pedroceli/",
+    "branch_prefix": "pedrocli/",
     "remote": "origin"
   },
   "tools": {
@@ -2455,8 +2455,8 @@ sudo tailscale serve https / http://localhost:8080
 
 ```bash
 # 1. Clone/create repo
-mkdir pedroceli && cd pedroceli
-go mod init pedroceli
+mkdir pedrocli && cd pedrocli
+go mod init pedrocli
 
 # 2. Create structure
 mkdir -p cmd pkg/{mcp,agents,llm,tools,jobs,config}
@@ -2465,13 +2465,13 @@ mkdir -p cmd pkg/{mcp,agents,llm,tools,jobs,config}
 # Implement MCP server and llama.cpp backend
 
 # 4. Test locally
-pedroceli mcp-server
+pedrocli mcp-server
 
 # 5. Build CLI wrapper
-go build -o pedroceli cmd/cli.go
+go build -o pedrocli cmd/cli.go
 
 # 6. Use it!
-pedroceli build --description "Add rate limiting"
+pedrocli build --description "Add rate limiting"
 ```
 
 ---

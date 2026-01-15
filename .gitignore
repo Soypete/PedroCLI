@@ -36,3 +36,4 @@ coverage.out
 .env
 *.db
 postgres-data/
+.claude/
