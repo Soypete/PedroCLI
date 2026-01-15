@@ -101,7 +101,7 @@ func (b *BuilderPhasedAgent) GetPhases() []Phase {
 			Name:         "validate",
 			Description:  "Run tests, linter, verify the implementation works",
 			SystemPrompt: builderValidatePrompt,
-			Tools:        []string{"test", "bash", "file", "code_edit", "lsp"},
+			Tools:        []string{"test", "bash", "file", "code_edit", "lsp", "search", "navigate"},
 			MaxRounds:    15, // Allow iterations to fix failing tests
 			Validator: func(result *PhaseResult) error {
 				return nil
