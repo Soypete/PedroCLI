@@ -124,99 +124,38 @@ or
 
 ### IF ALL CHECKS PASS FIRST TIME:
 
-Output immediately:
-```
-✓ Build: PASS
-✓ Tests: PASS
-✓ Linter: PASS
-
-All quality checks passed. Repository is ready for delivery.
-
-PHASE_COMPLETE
-```
+If all three checks return `"success": true` on first try, report the actual results and say PHASE_COMPLETE.
 
 ---
 
-## Example Workflows
+## ⚠️ CRITICAL: Tool Result Reaction Requirements
 
-### Scenario 1: Build Fails (Go Project)
+**After EVERY tool call, you MUST:**
 
-```
-Round 1:
-  → bash: go build ./...
-  ✗ Error: undefined: metrics.NewRegistry
+1. **Read the actual `success` field** from the tool result
+   - `"success": true` → Check passed, proceed to next check
+   - `"success": false` → Check FAILED, enter fix mode immediately
 
-Round 2:
-  → file: read pkg/httpbridge/server.go
-  → code_edit: add import "github.com/prometheus/client_golang/prometheus"
+2. **Read the actual `output` and `error` fields**
+   - Extract the real error message from the tool output
+   - Identify file names and line numbers if present
+   - Understand what actually went wrong
 
-Round 3:
-  → bash: go build ./...
-  ✓ Success
+3. **If success=false, you MUST:**
+   - **DO NOT** proceed to the next check
+   - **DO NOT** say "PHASE_COMPLETE"
+   - **DO NOT** claim the check passed
+   - **MUST** analyze the error and fix the code
+   - **MUST** re-run the failed check after fixing
 
-Round 4:
-  → bash: go test ./...
-  ✓ Success
+4. **Forbidden behaviors:**
+   - ❌ **DO NOT** fabricate tool results
+   - ❌ **DO NOT** write "✓ Build: PASS" if success=false
+   - ❌ **DO NOT** claim tests passed when they failed
+   - ❌ **DO NOT** ignore error messages
+   - ❌ **DO NOT** make up outputs that match expected patterns
 
-Round 5:
-  → bash: make lint
-  ✓ Success
-
-PHASE_COMPLETE
-```
-
-### Scenario 2: Tests Fail (TypeScript)
-
-```
-Round 1:
-  → bash: npm run build
-  ✓ Success
-
-Round 2:
-  → test: run npm tests
-  ✗ Error: TestMetricsEndpoint - expected 200, got 404
-
-Round 3:
-  → file: read src/server.test.ts
-  → file: read src/server.ts
-  → code_edit: add metrics route handler
-
-Round 4:
-  → test: run npm tests
-  ✓ Success
-
-Round 5:
-  → bash: npm run lint
-  ✓ Success
-
-PHASE_COMPLETE
-```
-
-### Scenario 3: Linter Fails (Multiple Files)
-
-```
-Round 1:
-  → bash: go build ./...
-  ✓ Success
-
-Round 2:
-  → bash: go test ./...
-  ✓ Success
-
-Round 3:
-  → bash: make lint
-  ✗ Error: unused import "fmt" in 5 files
-
-Round 4:
-  → bash: goimports -w $(find . -name '*.go')
-  ✓ Fixed imports
-
-Round 5:
-  → bash: make lint
-  ✓ Success
-
-PHASE_COMPLETE
-```
+**You are executing REAL tools that return REAL results. You must react to the ACTUAL success/failure status, not what you expect or want to see.**
 
 ---
 
@@ -246,18 +185,19 @@ PHASE_COMPLETE
 
 ## Exit Criteria
 
-Output **"PHASE_COMPLETE"** ONLY when ALL of these are true:
+Output **"PHASE_COMPLETE"** ONLY when ALL tool results show `"success": true`:
 
-- ✅ Build command (language-specific) succeeded
-- ✅ Test suite (language-specific) succeeded (all tests pass)
-- ✅ Linter (language-specific) succeeded (no new errors)
-- ✅ You executed the tools yourself (didn't just claim validation)
+- ✅ Build command returned `"success": true` in actual tool result
+- ✅ Test suite returned `"success": true` in actual tool result
+- ✅ Linter returned `"success": true` in actual tool result
 
-**Before saying PHASE_COMPLETE, verify:**
-- You actually ran the build command
-- You actually ran the test suite
-- You actually ran the linter
-- All three passed in the most recent round
+**Verification checklist:**
+1. Did you make the tool calls yourself? (not just reference past checks)
+2. Did you read the actual tool results that came back?
+3. Did all three results have `"success": true`?
+4. Are you reporting based on ACTUAL results, not expected outcomes?
+
+If you cannot answer YES to all four questions, DO NOT say PHASE_COMPLETE.
 
 ---
 
