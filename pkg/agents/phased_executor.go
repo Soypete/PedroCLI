@@ -182,20 +182,235 @@ func (pe *PhasedExecutor) GetCurrentPhase() int {
 	return pe.currentPhase
 }
 
+// sanitizePhaseOutput removes context pollution from phase outputs.
+// It strips:
+// - JSON blocks (fenced with ```json or bare objects)
+// - File paths (lines containing .go, .js, .py, etc.)
+// - Tool call examples (lines with {"tool":)
+// - Code snippets (fenced code blocks)
+// Keeps:
+// - Plain text summaries
+// - High-level descriptions
+// - Phase completion markers
+func sanitizePhaseOutput(output string, phaseName string) string {
+	if output == "" {
+		return output
+	}
+
+	// Special handling for specific phases
+	switch phaseName {
+	case "plan":
+		// Plan output is pure JSON - extract summary only
+		return sanitizePlanOutput(output)
+	case "analyze":
+		// Analyze may have code snippets - remove them
+		return sanitizeAnalyzeOutput(output)
+	case "implement":
+		// Implement may have tool call examples - remove them
+		return sanitizeImplementOutput(output)
+	default:
+		// Generic sanitization for other phases
+		return sanitizeGenericOutput(output)
+	}
+}
+
+// sanitizePlanOutput extracts high-level summary from plan JSON
+func sanitizePlanOutput(output string) string {
+	// Try to extract just the title and step count
+	var summary strings.Builder
+	summary.WriteString("A detailed implementation plan was created.\n\n")
+
+	// Count steps if JSON is parseable
+	var planData map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &planData); err == nil {
+		if plan, ok := planData["plan"].(map[string]interface{}); ok {
+			if title, ok := plan["title"].(string); ok {
+				summary.WriteString(fmt.Sprintf("Title: %s\n", title))
+			}
+			// Prefer total_steps field if present, else count array
+			if totalSteps, ok := plan["total_steps"].(float64); ok {
+				summary.WriteString(fmt.Sprintf("Total steps: %d\n", int(totalSteps)))
+			} else if steps, ok := plan["steps"].([]interface{}); ok {
+				summary.WriteString(fmt.Sprintf("Total steps: %d\n", len(steps)))
+			}
+		}
+	}
+
+	summary.WriteString("\nUse the context tool to recall the full plan:\n")
+	summary.WriteString(`{"tool": "context", "args": {"action": "recall", "key": "implementation_plan"}}`)
+
+	return summary.String()
+}
+
+// sanitizeAnalyzeOutput removes code snippets but keeps findings
+func sanitizeAnalyzeOutput(output string) string {
+	lines := strings.Split(output, "\n")
+	var sanitized []string
+	inCodeBlock := false
+
+	for _, line := range lines {
+		// Toggle code block state
+		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+			inCodeBlock = !inCodeBlock
+			continue // Skip fence markers
+		}
+
+		// Skip lines inside code blocks
+		if inCodeBlock {
+			continue
+		}
+
+		// Skip lines that look like file paths
+		if isFilePath(line) {
+			continue
+		}
+
+		// Skip lines with JSON tool calls
+		if strings.Contains(line, `{"tool":`) {
+			continue
+		}
+
+		sanitized = append(sanitized, line)
+	}
+
+	return strings.Join(sanitized, "\n")
+}
+
+// sanitizeImplementOutput removes tool call examples
+func sanitizeImplementOutput(output string) string {
+	lines := strings.Split(output, "\n")
+	var sanitized []string
+	inJSONBlock := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Toggle JSON block state
+		if trimmed == "```json" || trimmed == "```" {
+			inJSONBlock = !inJSONBlock
+			continue
+		}
+
+		// Skip JSON blocks
+		if inJSONBlock {
+			continue
+		}
+
+		// Skip standalone JSON objects
+		if strings.HasPrefix(trimmed, "{") && strings.Contains(trimmed, `"tool"`) {
+			continue
+		}
+
+		// Remove inline tool calls (e.g., "Step 1: Done {"tool": "file", ...}")
+		// Look for patterns like {"tool": and remove until closing }
+		if strings.Contains(line, `{"tool"`) {
+			// Simple approach: remove from {"tool" to end of line
+			// More robust: find matching closing brace
+			idx := strings.Index(line, `{"tool"`)
+			if idx >= 0 {
+				// Find the closing brace
+				depth := 0
+				start := idx
+				foundOpen := false
+				end := len(line)
+
+				for i := start; i < len(line); i++ {
+					if line[i] == '{' {
+						depth++
+						foundOpen = true
+					} else if line[i] == '}' {
+						depth--
+						if depth == 0 && foundOpen {
+							end = i + 1
+							break
+						}
+					}
+				}
+
+				// Remove the tool call JSON from the line
+				line = line[:start] + line[end:]
+				line = strings.TrimSpace(line)
+			}
+		}
+
+		sanitized = append(sanitized, line)
+	}
+
+	return strings.Join(sanitized, "\n")
+}
+
+// sanitizeGenericOutput applies general sanitization rules
+func sanitizeGenericOutput(output string) string {
+	lines := strings.Split(output, "\n")
+	var sanitized []string
+	inCodeBlock := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Toggle code block state
+		if strings.HasPrefix(trimmed, "```") {
+			inCodeBlock = !inCodeBlock
+			continue
+		}
+
+		// Skip code blocks
+		if inCodeBlock {
+			continue
+		}
+
+		// Skip file paths
+		if isFilePath(line) {
+			continue
+		}
+
+		// Skip JSON lines
+		if strings.HasPrefix(trimmed, "{") && strings.Contains(trimmed, ":") {
+			continue
+		}
+
+		sanitized = append(sanitized, line)
+	}
+
+	return strings.Join(sanitized, "\n")
+}
+
+// isFilePath checks if a line looks like a file path
+func isFilePath(line string) bool {
+	trimmed := strings.TrimSpace(line)
+
+	// Common file extensions
+	extensions := []string{".go", ".js", ".py", ".ts", ".java", ".cpp", ".h", ".md", ".json", ".yaml", ".yml"}
+	for _, ext := range extensions {
+		if strings.Contains(trimmed, ext) {
+			return true
+		}
+	}
+
+	// Path patterns (e.g., "pkg/metrics/metrics.go")
+	if strings.Contains(trimmed, "/") && len(strings.Split(trimmed, "/")) > 1 {
+		// Check if it's likely a path (has no spaces, reasonable length)
+		if !strings.Contains(trimmed, " ") && len(trimmed) < 200 {
+			return true
+		}
+	}
+
+	return false
+}
+
 // buildNextPhaseInput builds the input for the next phase based on previous result
 func (pe *PhasedExecutor) buildNextPhaseInput(result *PhaseResult) string {
 	var sb strings.Builder
 
 	sb.WriteString(fmt.Sprintf("# Previous Phase: %s\n\n", result.PhaseName))
 	sb.WriteString("## Output\n")
-	sb.WriteString(result.Output)
 
-	if len(result.Data) > 0 {
-		sb.WriteString("\n\n## Structured Data\n```json\n")
-		data, _ := json.MarshalIndent(result.Data, "", "  ")
-		sb.WriteString(string(data))
-		sb.WriteString("\n```")
-	}
+	// Sanitize output to prevent context pollution
+	sanitized := sanitizePhaseOutput(result.Output, result.PhaseName)
+	sb.WriteString(sanitized)
+
+	// Note: We no longer include raw Structured Data to prevent pollution
+	// Agents should use context tool to recall structured data if needed
 
 	return sb.String()
 }

@@ -80,7 +80,197 @@ For each step in the plan:
 - Handle errors appropriately
 - Don't over-engineer - keep it simple
 
-### 4. After Each Chunk
+### 4. Writing Unit Tests
+
+**CRITICAL: Every new package, function, or feature MUST have unit tests.**
+
+#### What is a Unit Test?
+A unit test tests a SINGLE unit of code (function, method, struct) in **complete isolation**:
+- ✅ Tests pure functions with inputs and outputs
+- ✅ Tests logic, calculations, transformations
+- ✅ Uses mocks/fakes for dependencies
+- ✅ Runs fast (milliseconds)
+- ✅ Requires no external setup
+
+#### The Golden Rule: NO I/O IN UNIT TESTS
+
+**Forbidden in unit tests:**
+- ❌ Network calls (HTTP, gRPC, WebSocket)
+- ❌ Database calls (SQL, Redis, MongoDB)
+- ❌ Filesystem operations (os.Open, ioutil.ReadFile)
+- ❌ Time dependencies (time.Now(), time.Sleep)
+- ❌ Environment variables (os.Getenv)
+- ❌ External processes (exec.Command)
+- ❌ Random number generation (rand.Int without seed)
+
+**Exception: `httptest` package is allowed** for testing HTTP handlers:
+```go
+import "net/http/httptest"
+
+func TestHandler(t *testing.T) {
+    req := httptest.NewRequest("GET", "/api/status", nil)
+    w := httptest.NewRecorder()
+    handler.ServeHTTP(w, req)
+    // assertions...
+}
+```
+
+#### How to Avoid I/O: Dependency Injection
+
+**Bad (hard to test):**
+```go
+func ProcessUser(id int) error {
+    user, err := db.GetUser(id)  // ❌ Database call
+    if err != nil {
+        return err
+    }
+    return sendEmail(user.Email)  // ❌ Network call
+}
+```
+
+**Good (testable):**
+```go
+type UserService struct {
+    db    UserRepository    // Interface
+    email EmailSender       // Interface
+}
+
+func (s *UserService) ProcessUser(id int) error {
+    user, err := s.db.GetUser(id)  // ✅ Can mock
+    if err != nil {
+        return err
+    }
+    return s.email.Send(user.Email)  // ✅ Can mock
+}
+
+// Test with mocks
+func TestProcessUser(t *testing.T) {
+    mockDB := &MockUserRepository{
+        users: map[int]*User{1: {Email: "test@example.com"}},
+    }
+    mockEmail := &MockEmailSender{sent: []string{}}
+
+    service := &UserService{db: mockDB, email: mockEmail}
+    err := service.ProcessUser(1)
+
+    assert.NoError(t, err)
+    assert.Equal(t, 1, len(mockEmail.sent))
+}
+```
+
+#### Unit Test Structure (Table-Driven)
+
+**Preferred pattern for Go unit tests:**
+```go
+func TestFunctionName(t *testing.T) {
+    tests := []struct {
+        name    string
+        input   InputType
+        want    OutputType
+        wantErr bool
+    }{
+        {
+            name:    "valid input",
+            input:   validInput,
+            want:    expectedOutput,
+            wantErr: false,
+        },
+        {
+            name:    "invalid input",
+            input:   invalidInput,
+            want:    nil,
+            wantErr: true,
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            got, err := FunctionName(tt.input)
+
+            if (err != nil) != tt.wantErr {
+                t.Errorf("FunctionName() error = %v, wantErr %v", err, tt.wantErr)
+                return
+            }
+
+            if !reflect.DeepEqual(got, tt.want) {
+                t.Errorf("FunctionName() = %v, want %v", got, tt.want)
+            }
+        })
+    }
+}
+```
+
+#### When to Write Tests
+
+**Write tests IMMEDIATELY after writing implementation code:**
+1. Write the implementation (e.g., `metrics.go`)
+2. **Write the unit tests** (e.g., `metrics_test.go`)
+3. **Run the tests** with `go test ./pkg/metrics/...`
+4. **If tests fail** → Fix the implementation
+5. **Repeat steps 3-4** until all tests pass
+6. Only then move to the next feature
+
+**DO NOT:**
+- ❌ Write implementation without tests
+- ❌ Say PHASE_COMPLETE without running tests
+- ❌ Create empty test files
+- ❌ Write tests that always pass (no assertions)
+
+#### Example: Prometheus Metrics Package
+
+**Implementation (pkg/metrics/metrics.go):**
+```go
+package metrics
+
+import "github.com/prometheus/client_golang/prometheus"
+
+var (
+    HTTPRequestsTotal = prometheus.NewCounterVec(
+        prometheus.CounterOpts{
+            Name: "http_requests_total",
+            Help: "Total number of HTTP requests",
+        },
+        []string{"method", "path", "status"},
+    )
+)
+
+func init() {
+    prometheus.MustRegister(HTTPRequestsTotal)
+}
+```
+
+**Unit Tests (pkg/metrics/metrics_test.go):**
+```go
+package metrics
+
+import (
+    "testing"
+    "github.com/prometheus/client_golang/prometheus/testutil"
+)
+
+func TestHTTPRequestsTotal(t *testing.T) {
+    // Reset counter before test
+    HTTPRequestsTotal.Reset()
+
+    // Increment counter
+    HTTPRequestsTotal.WithLabelValues("GET", "/api/status", "200").Inc()
+    HTTPRequestsTotal.WithLabelValues("GET", "/api/status", "200").Inc()
+    HTTPRequestsTotal.WithLabelValues("POST", "/api/jobs", "201").Inc()
+
+    // Verify counts
+    count := testutil.ToFloat64(HTTPRequestsTotal.WithLabelValues("GET", "/api/status", "200"))
+    if count != 2 {
+        t.Errorf("Expected 2 GET requests, got %f", count)
+    }
+
+    count = testutil.ToFloat64(HTTPRequestsTotal.WithLabelValues("POST", "/api/jobs", "201"))
+    if count != 1 {
+        t.Errorf("Expected 1 POST request, got %f", count)
+    }
+}
+```
+
+### 5. After Each Chunk
 Use context to summarize completed work:
 ```json
 {"tool": "context", "args": {"action": "compact", "key": "step_1_complete", "summary": "Created new model struct with fields X, Y, Z"}}
@@ -224,5 +414,78 @@ For each file you modified, verify no errors:
 {"tool": "lsp", "args": {"operation": "diagnostics", "file": "path/to/modified/file.go"}}
 ```
 
-### 4. Declare Completion
-Only after verifying all changes are present and correct, say PHASE_COMPLETE.
+### 4. Verify Your Implementation Works
+
+**⚠️ CRITICAL: You MUST verify your code compiles and tests pass before saying PHASE_COMPLETE.**
+
+#### Step 4a: Build Check (REQUIRED)
+```json
+{"tool": "bash", "args": {"command": "go build ./..."}}
+```
+
+**If build fails:**
+1. Read the compilation errors carefully
+2. Identify what's missing:
+   - `undefined: X` → Variable/function X doesn't exist, add it
+   - `imported and not used` → Remove unused import
+   - `syntax error` → Fix the syntax error
+3. Fix the code using file/code_edit tools
+4. Run `go build ./...` again
+5. **Repeat until build succeeds** ✅
+
+**DO NOT skip to the next step if build fails.**
+
+#### Step 4b: Test Your New Code (REQUIRED)
+Run tests on the packages you created/modified:
+```json
+{"tool": "bash", "args": {"command": "go test ./pkg/metrics/... -v"}}
+```
+
+**If tests fail:**
+1. Read the test failure output carefully
+2. Identify the problem:
+   - `undefined: X` → Implementation missing variable/function X
+   - `got X, want Y` → Logic error, fix the implementation
+   - `panic` → Runtime error, add nil checks or fix logic
+3. **Fix the IMPLEMENTATION** (not the test)
+4. Run tests again
+5. **Repeat until all tests pass** ✅
+
+**Example failure + fix cycle:**
+```
+Test fails: "undefined: httpRequestsTotal"
+→ Realize: metrics.go is empty
+→ Add the Prometheus counter to metrics.go
+→ Run test again
+→ Test passes ✅
+```
+
+**DO NOT:**
+- ❌ Run the same failing test 5+ times without fixing code
+- ❌ Say PHASE_COMPLETE with failing tests
+- ❌ Modify tests to make them pass (fix implementation instead)
+
+#### Step 4c: Run Formatter (RECOMMENDED)
+```json
+{"tool": "bash", "args": {"command": "go fmt ./..."}}
+```
+
+### 5. Final Review
+
+Before declaring completion, confirm:
+- ✅ All new files created
+- ✅ All planned changes made
+- ✅ Code compiles successfully (`go build` passed)
+- ✅ Unit tests written AND passing (`go test` passed)
+- ✅ LSP diagnostics show no errors
+- ✅ Git diff looks correct
+
+### 6. Declare Completion
+
+**Only after ALL of the above checks pass**, say:
+
+```
+PHASE_COMPLETE
+```
+
+**If you skip any of these verification steps, the Validate phase will fail and you'll waste rounds.**

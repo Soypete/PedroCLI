@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/soypete/pedrocli/pkg/agents"
 	"github.com/soypete/pedrocli/pkg/config"
@@ -14,9 +15,10 @@ import (
 
 // CLIBridge provides a unified interface for the CLI to call tools using direct execution
 type CLIBridge struct {
-	bridge toolformat.ToolBridge
-	ctx    context.Context
-	cancel context.CancelFunc
+	bridge  toolformat.ToolBridge
+	ctx     context.Context
+	cancel  context.CancelFunc
+	lspTool *tools.LSPTool // LSP tool for cleanup
 }
 
 // CLIBridgeConfig configures the CLI bridge
@@ -87,6 +89,12 @@ func NewCLIBridge(cfg CLIBridgeConfig) (*CLIBridge, error) {
 	searchTool := tools.NewSearchTool(cfg.WorkDir)
 	navigateTool := tools.NewNavigateTool(cfg.WorkDir)
 
+	// Create LSP tool if enabled
+	var lspTool *tools.LSPTool
+	if cfg.Config.LSP.Enabled {
+		lspTool = tools.NewLSPTool(cfg.Config, cfg.WorkDir)
+	}
+
 	// Helper function to register code tools with an agent
 	registerCodeTools := func(agent interface{ RegisterTool(tools.Tool) }) {
 		agent.RegisterTool(fileTool)
@@ -96,6 +104,10 @@ func NewCLIBridge(cfg CLIBridgeConfig) (*CLIBridge, error) {
 		agent.RegisterTool(gitTool)
 		agent.RegisterTool(bashTool)
 		agent.RegisterTool(testTool)
+		// Register LSP tool if enabled
+		if lspTool != nil {
+			agent.RegisterTool(lspTool)
+		}
 	}
 
 	// Register coding agents (use phased builder for structured workflow)
@@ -154,9 +166,10 @@ func NewCLIBridge(cfg CLIBridgeConfig) (*CLIBridge, error) {
 	ctx := context.Background()
 
 	return &CLIBridge{
-		bridge: bridge,
-		ctx:    ctx,
-		cancel: func() {},
+		bridge:  bridge,
+		ctx:     ctx,
+		cancel:  func() {},
+		lspTool: lspTool,
 	}, nil
 }
 
@@ -184,5 +197,11 @@ func (b *CLIBridge) Context() context.Context {
 func (b *CLIBridge) Close() {
 	if b.cancel != nil {
 		b.cancel()
+	}
+	// Shutdown LSP servers
+	if b.lspTool != nil {
+		if err := b.lspTool.Shutdown(context.Background()); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to shutdown LSP: %v\n", err)
+		}
 	}
 }
