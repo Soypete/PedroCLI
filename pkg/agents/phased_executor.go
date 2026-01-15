@@ -618,6 +618,15 @@ func (pie *phaseInferenceExecutor) executeInference(ctx context.Context, systemP
 		Tools:        toolDefs,
 	}
 
+	// Apply anti-hallucination logit bias in Validate phase when processing tool results
+	// This prevents the agent from fabricating tool outputs
+	if pie.phase.Name == "validate" && strings.HasPrefix(userPrompt, "Tool results:") {
+		req.LogitBias = GetToolResultValidationBias()
+		if pie.agent.config.Debug.Enabled {
+			fmt.Fprintln(os.Stderr, "  🎯 Applied anti-hallucination logit bias")
+		}
+	}
+
 	return pie.agent.llm.Infer(ctx, req)
 }
 
