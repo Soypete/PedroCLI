@@ -1,0 +1,36 @@
+# Pedro Eval Configuration
+# Default settings for running evaluations
+
+# Model provider: "ollama" or "llama_cpp"
+provider: ollama
+
+# Provider endpoint URL
+endpoint: http://localhost:11434
+
+# Model to evaluate
+model: llama3:8b
+
+# Model for LLM-based grading (optional, defaults to same as model)
+# Use a larger model for better grading accuracy
+# llm_grader_model: llama3:70b
+
+# Output directory for results and transcripts
+output_dir: ./results
+
+# Save full trial transcripts for debugging
+save_transcripts: true
+
+# Number of concurrent trials
+concurrency: 2
+
+# Number of trials per task (for statistical significance)
+trials_per_task: 3
+
+# Model temperature (lower = more deterministic)
+temperature: 0.2
+
+# Max tokens per response
+max_tokens: 4096
+
+# Timeout per trial in seconds
+timeout: 300

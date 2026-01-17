@@ -1,0 +1,236 @@
+name: "podcast-agent-evals"
+description: "Comprehensive evaluation suite for podcast agent capabilities"
+agent_type: "podcast"
+version: "1.0.0"
+
+tasks:
+  # === Episode Introductions ===
+  - id: "podcast-intro-001"
+    description: "Generate a podcast episode introduction"
+    agent_type: "podcast"
+    tags: ["intro", "script"]
+    input:
+      prompt: "Write a 2-minute podcast intro (approximately 300 words) for a tech podcast episode about AI agents in software development. Hook the listener, introduce the topic, and preview what they'll learn."
+    graders:
+      - type: "llm_rubric"
+        required: true
+        weight: 2.0
+        config:
+          rubric: |
+            Podcast Intro Evaluation:
+            1. Hook: Opens with engaging hook that grabs attention
+            2. Context: Clearly sets up the episode topic
+            3. Preview: Teases what listeners will learn
+            4. Tone: Conversational and engaging, not robotic
+            5. Length: Appropriate for 2 minutes (~300 words)
+            6. Flow: Natural transitions between sections
+      - type: "regex"
+        assertions:
+          - "[Ww]elcome|[Hh]ello|[Hh]ey"
+
+  - id: "podcast-intro-002"
+    description: "Generate intro for interview episode"
+    agent_type: "podcast"
+    tags: ["intro", "interview"]
+    input:
+      prompt: "Write a podcast intro for an interview episode with a guest who is a senior engineer at a major tech company. The episode will discuss their journey into tech and advice for junior developers."
+    graders:
+      - type: "llm_rubric"
+        required: true
+        config:
+          assertions:
+            - "Introduces the guest appropriately"
+            - "Teases the interview topics"
+            - "Creates curiosity about the conversation"
+            - "Welcomes the audience"
+
+  # === Interview Questions ===
+  - id: "podcast-interview-001"
+    description: "Generate interview questions for a tech leader"
+    agent_type: "podcast"
+    tags: ["interview", "questions"]
+    input:
+      prompt: "Generate 10 interview questions for a podcast interview with a VP of Engineering. Mix technical leadership questions with personal journey questions. Questions should encourage storytelling."
+    graders:
+      - type: "llm_rubric"
+        required: true
+        weight: 2.0
+        config:
+          assertions:
+            - "Questions are open-ended (not yes/no)"
+            - "Questions build on each other logically"
+            - "Mix of technical and personal questions"
+            - "Questions encourage storytelling"
+            - "Includes follow-up prompts or sub-questions"
+      - type: "regex"
+        assertions:
+          - "\\?"
+          - "\\d\\.|\\d\\)"
+
+  - id: "podcast-interview-002"
+    description: "Generate questions for a startup founder"
+    agent_type: "podcast"
+    tags: ["interview", "startup"]
+    input:
+      prompt: "Create 8 interview questions for a podcast episode with a developer tools startup founder. Focus on the startup journey, technical decisions, and lessons learned."
+    graders:
+      - type: "llm_rubric"
+        required: true
+        config:
+          assertions:
+            - "Covers startup origin story"
+            - "Asks about technical architecture decisions"
+            - "Explores challenges and failures"
+            - "Includes questions about growth and scaling"
+
+  # === Show Notes ===
+  - id: "podcast-shownotes-001"
+    description: "Generate show notes from transcript"
+    agent_type: "podcast"
+    tags: ["shownotes", "transcript"]
+    input:
+      prompt: |
+        Write show notes for this podcast episode transcript excerpt:
+
+        Host: "Welcome back to TechTalk! Today we're diving into Kubernetes with our guest, Sarah Chen, who's been running K8s clusters at scale for the past 5 years at CloudCorp."
+
+        Sarah: "Thanks for having me! Yeah, we went from managing a handful of clusters to over 200 across multiple regions."
+
+        Host: "That's impressive. What was the biggest challenge in that scaling journey?"
+
+        Sarah: "Honestly, it was observability. When you have that many clusters, you need to know what's happening everywhere. We built custom tooling using Prometheus and Grafana."
+
+        Host: "Can you tell us more about that custom tooling?"
+
+        [Continue to cover monitoring, cost optimization, and team structure]
+      context:
+        topics: ["Kubernetes at scale", "Observability", "Custom tooling", "Team structure"]
+    graders:
+      - type: "markdown_lint"
+        required: true
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Includes episode summary"
+            - "Lists key topics discussed"
+            - "Has timestamps or section markers"
+            - "Includes guest bio"
+            - "Has links or resources mentioned"
+
+  - id: "podcast-shownotes-002"
+    description: "Generate show notes with timestamps"
+    agent_type: "podcast"
+    tags: ["shownotes", "timestamps"]
+    input:
+      prompt: "Write show notes with timestamps for a 45-minute podcast episode about machine learning in production. Topics covered: intro, ML pipelines, feature stores, model serving, monitoring, and wrap-up."
+    graders:
+      - type: "markdown_lint"
+        required: true
+      - type: "regex"
+        assertions:
+          - "\\d{1,2}:\\d{2}|\\[\\d+:\\d+\\]"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Includes reasonable timestamps"
+            - "Covers all mentioned topics"
+            - "Has episode summary"
+            - "Easy to navigate"
+
+  # === Episode Scripts ===
+  - id: "podcast-script-001"
+    description: "Generate a solo episode script"
+    agent_type: "podcast"
+    tags: ["script", "solo"]
+    input:
+      prompt: "Write a 5-minute solo podcast script about 'Why Code Review Matters'. Include an intro, 3 main points with examples, and a conclusion with call to action."
+    graders:
+      - type: "llm_rubric"
+        required: true
+        weight: 2.0
+        config:
+          assertions:
+            - "Has clear intro with hook"
+            - "Presents 3 distinct main points"
+            - "Includes examples or stories"
+            - "Has conclusion with call to action"
+            - "Conversational tone throughout"
+            - "Appropriate length for 5 minutes (~750 words)"
+
+  - id: "podcast-script-002"
+    description: "Generate an outro script"
+    agent_type: "podcast"
+    tags: ["script", "outro"]
+    input:
+      prompt: "Write a podcast outro (1 minute, ~150 words) that summarizes the episode about API security, thanks the audience, promotes the newsletter, and teases the next episode about GraphQL."
+    graders:
+      - type: "llm_rubric"
+        required: true
+        config:
+          assertions:
+            - "Summarizes episode key points"
+            - "Thanks the audience"
+            - "Includes call to action (newsletter)"
+            - "Teases next episode"
+            - "Professional but warm tone"
+
+  # === Segment Ideas ===
+  - id: "podcast-segment-001"
+    description: "Generate podcast segment ideas"
+    agent_type: "podcast"
+    tags: ["planning", "segments"]
+    input:
+      prompt: "Generate 5 recurring segment ideas for a weekly tech podcast. Each segment should have a name, description, typical length, and format."
+    graders:
+      - type: "llm_rubric"
+        required: true
+        config:
+          assertions:
+            - "Provides 5 distinct segment ideas"
+            - "Each has a creative name"
+            - "Includes segment descriptions"
+            - "Specifies typical length"
+            - "Explains format/structure"
+
+  # === Episode Outline ===
+  - id: "podcast-outline-001"
+    description: "Generate episode outline"
+    agent_type: "podcast"
+    tags: ["planning", "outline"]
+    input:
+      prompt: "Create a detailed episode outline for a 30-minute podcast about 'Getting Started with Open Source Contributions'. Include segments, talking points, and estimated times."
+    graders:
+      - type: "markdown_lint"
+        required: true
+      - type: "llm_rubric"
+        required: true
+        config:
+          assertions:
+            - "Has clear episode structure"
+            - "Includes time estimates for segments"
+            - "Lists talking points for each section"
+            - "Total time adds up to ~30 minutes"
+            - "Logical flow of topics"
+
+  # === Social Media Clips ===
+  - id: "podcast-social-001"
+    description: "Generate social media clip scripts"
+    agent_type: "podcast"
+    tags: ["social", "clips"]
+    input:
+      prompt: "Based on an episode about 'The Future of Remote Work in Tech', write 3 short social media clip scripts (30-60 seconds each) that would work well as audio snippets or video clips for promotion."
+    graders:
+      - type: "llm_rubric"
+        required: true
+        config:
+          assertions:
+            - "Provides 3 distinct clips"
+            - "Each is standalone and compelling"
+            - "Appropriate length for social"
+            - "Shareable/quotable content"
+            - "Drives curiosity about full episode"
+
+metadata:
+  created_at: "2024-01-01"
+  author: "pedro-evals"
+  target_pass_rate: 0.7
