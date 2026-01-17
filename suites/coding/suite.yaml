@@ -1,0 +1,600 @@
+name: "coding-agent-evals"
+description: "Comprehensive evaluation suite for coding agent capabilities"
+agent_type: "coding"
+version: "1.0.0"
+
+tasks:
+  # === Code Generation Tasks ===
+  - id: "code-gen-001"
+    description: "Generate a Go function to reverse a string"
+    agent_type: "coding"
+    tags: ["generation", "basic", "go"]
+    input:
+      prompt: "Write a Go function called ReverseString that takes a string as input and returns the reversed string. Handle Unicode characters correctly."
+    graders:
+      - type: "regex"
+        required: true
+        assertions:
+          - "func\\s+ReverseString\\s*\\("
+          - "string"
+          - "return"
+      - type: "llm_rubric"
+        weight: 2.0
+        config:
+          rubric: |
+            Evaluate the code on:
+            1. Correctness: Does it reverse strings correctly?
+            2. Unicode handling: Does it handle multi-byte characters?
+            3. Idiomatic Go: Uses proper Go conventions?
+            4. Edge cases: Handles empty strings?
+
+  - id: "code-gen-002"
+    description: "Generate a function to check if a number is prime"
+    agent_type: "coding"
+    tags: ["generation", "basic", "algorithms"]
+    input:
+      prompt: "Write a function in Go called IsPrime that takes an integer and returns true if it's a prime number, false otherwise. Optimize for efficiency."
+    graders:
+      - type: "regex"
+        required: true
+        assertions:
+          - "func\\s+IsPrime"
+          - "bool"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Returns false for numbers <= 1"
+            - "Uses efficient algorithm (sqrt optimization or better)"
+            - "Handles edge cases (0, 1, 2, negative numbers)"
+
+  - id: "code-gen-003"
+    description: "Generate a binary search implementation"
+    agent_type: "coding"
+    tags: ["generation", "algorithms", "intermediate"]
+    input:
+      prompt: "Implement a binary search function in Go that searches for a target value in a sorted slice of integers. Return the index if found, -1 otherwise."
+    graders:
+      - type: "regex"
+        required: true
+        assertions:
+          - "func\\s+\\w*[Bb]inary[Ss]earch"
+          - "int"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Uses binary search algorithm (O(log n))"
+            - "Correctly handles not found case"
+            - "Handles empty slice"
+
+  - id: "code-gen-004"
+    description: "Generate a struct with methods"
+    agent_type: "coding"
+    tags: ["generation", "go", "oop"]
+    input:
+      prompt: "Create a Go struct called Stack that implements a stack data structure with Push, Pop, Peek, and IsEmpty methods. Use a slice as the underlying storage."
+    graders:
+      - type: "regex"
+        required: true
+        assertions:
+          - "type\\s+Stack\\s+struct"
+          - "func\\s*\\([^)]*Stack[^)]*\\)\\s*Push"
+          - "func\\s*\\([^)]*Stack[^)]*\\)\\s*Pop"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Implements Push method correctly"
+            - "Implements Pop method with empty check"
+            - "Implements Peek method"
+            - "Implements IsEmpty method"
+
+  - id: "code-gen-005"
+    description: "Generate HTTP handler"
+    agent_type: "coding"
+    tags: ["generation", "go", "web"]
+    input:
+      prompt: "Write a Go HTTP handler function that accepts JSON POST requests with a 'name' field and returns a JSON response with a greeting message. Include proper error handling."
+    graders:
+      - type: "regex"
+        required: true
+        assertions:
+          - "http\\.ResponseWriter"
+          - "\\*http\\.Request"
+          - "json"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Handles JSON decoding"
+            - "Returns JSON response"
+            - "Includes error handling"
+            - "Sets correct Content-Type header"
+
+  - id: "code-gen-006"
+    description: "Generate concurrent code"
+    agent_type: "coding"
+    tags: ["generation", "go", "concurrency", "advanced"]
+    input:
+      prompt: "Write a Go function that fetches URLs concurrently using goroutines and channels. It should take a slice of URLs and return a map of URL to response body (or error message)."
+    graders:
+      - type: "regex"
+        required: true
+        assertions:
+          - "go\\s+func"
+          - "chan"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Uses goroutines for concurrent fetching"
+            - "Uses channels for communication"
+            - "Handles errors gracefully"
+            - "Waits for all goroutines to complete"
+
+  - id: "code-gen-007"
+    description: "Generate unit test"
+    agent_type: "coding"
+    tags: ["generation", "testing", "go"]
+    input:
+      prompt: |
+        Write unit tests for this Go function:
+        ```go
+        func Add(a, b int) int {
+            return a + b
+        }
+        ```
+        Include table-driven tests with multiple test cases.
+    graders:
+      - type: "regex"
+        required: true
+        assertions:
+          - "func\\s+Test"
+          - "testing\\.T"
+          - "t\\.Run|t\\.Error|t\\.Fatal"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Uses table-driven test pattern"
+            - "Includes multiple test cases"
+            - "Tests edge cases (negative numbers, zero)"
+
+  - id: "code-gen-008"
+    description: "Generate interface and implementation"
+    agent_type: "coding"
+    tags: ["generation", "go", "design"]
+    input:
+      prompt: "Define a Go interface called Repository with methods: Save(item interface{}) error, Find(id string) (interface{}, error), Delete(id string) error. Then implement a MemoryRepository that stores items in a map."
+    graders:
+      - type: "regex"
+        required: true
+        assertions:
+          - "type\\s+Repository\\s+interface"
+          - "type\\s+MemoryRepository\\s+struct"
+          - "Save|Find|Delete"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Defines interface correctly"
+            - "Implements all interface methods"
+            - "Uses map for storage"
+
+  # === Bug Fixing Tasks ===
+  - id: "bugfix-001"
+    description: "Fix off-by-one error in array iteration"
+    agent_type: "coding"
+    tags: ["bugfix", "basic"]
+    input:
+      prompt: |
+        Fix the bug in this Go code:
+        ```go
+        func Sum(arr []int) int {
+            sum := 0
+            for i := 0; i <= len(arr); i++ {
+                sum += arr[i]
+            }
+            return sum
+        }
+        ```
+    graders:
+      - type: "string_match"
+        required: true
+        config:
+          expected: "< len"
+          match_type: "contains"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Identifies the off-by-one error"
+            - "Fixes the loop condition to < len(arr)"
+            - "Explains why the original causes index out of bounds"
+
+  - id: "bugfix-002"
+    description: "Fix nil pointer dereference"
+    agent_type: "coding"
+    tags: ["bugfix", "intermediate"]
+    input:
+      prompt: |
+        Fix the potential nil pointer dereference in this code:
+        ```go
+        func GetName(user *User) string {
+            return user.Name
+        }
+        ```
+    graders:
+      - type: "regex"
+        required: true
+        assertions:
+          - "nil|== nil|!= nil"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Adds nil check"
+            - "Returns appropriate value or error for nil case"
+
+  - id: "bugfix-003"
+    description: "Fix race condition"
+    agent_type: "coding"
+    tags: ["bugfix", "concurrency", "advanced"]
+    input:
+      prompt: |
+        Fix the race condition in this Go code:
+        ```go
+        var counter int
+
+        func Increment() {
+            counter++
+        }
+
+        func GetCounter() int {
+            return counter
+        }
+        ```
+    graders:
+      - type: "regex"
+        required: true
+        assertions:
+          - "sync\\.Mutex|sync\\.RWMutex|atomic"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Identifies the race condition"
+            - "Uses proper synchronization (mutex or atomic)"
+            - "Protects both read and write operations"
+
+  - id: "bugfix-004"
+    description: "Fix resource leak"
+    agent_type: "coding"
+    tags: ["bugfix", "resources"]
+    input:
+      prompt: |
+        Fix the resource leak in this code:
+        ```go
+        func ReadFile(path string) ([]byte, error) {
+            f, err := os.Open(path)
+            if err != nil {
+                return nil, err
+            }
+            return io.ReadAll(f)
+        }
+        ```
+    graders:
+      - type: "string_match"
+        required: true
+        config:
+          expected: "defer"
+          match_type: "contains"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Adds defer f.Close()"
+            - "Explains why file needs to be closed"
+
+  - id: "bugfix-005"
+    description: "Fix infinite loop"
+    agent_type: "coding"
+    tags: ["bugfix", "logic"]
+    input:
+      prompt: |
+        Fix the infinite loop in this code:
+        ```go
+        func FindElement(arr []int, target int) int {
+            i := 0
+            for i < len(arr) {
+                if arr[i] == target {
+                    return i
+                }
+            }
+            return -1
+        }
+        ```
+    graders:
+      - type: "regex"
+        required: true
+        assertions:
+          - "i\\+\\+|i \\+= 1|i = i \\+ 1"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Identifies missing increment"
+            - "Adds i++ in loop body"
+
+  # === Refactoring Tasks ===
+  - id: "refactor-001"
+    description: "Extract repeated code into function"
+    agent_type: "coding"
+    tags: ["refactor", "dry"]
+    input:
+      prompt: |
+        Refactor this code to eliminate duplication:
+        ```go
+        func ProcessUsers(users []User) {
+            for _, u := range users {
+                fmt.Printf("Name: %s\n", u.Name)
+                fmt.Printf("Email: %s\n", u.Email)
+                fmt.Printf("Age: %d\n", u.Age)
+                fmt.Println("---")
+            }
+        }
+
+        func ProcessAdmins(admins []Admin) {
+            for _, a := range admins {
+                fmt.Printf("Name: %s\n", a.Name)
+                fmt.Printf("Email: %s\n", a.Email)
+                fmt.Printf("Age: %d\n", a.Age)
+                fmt.Println("---")
+            }
+        }
+        ```
+    graders:
+      - type: "llm_rubric"
+        required: true
+        config:
+          assertions:
+            - "Extracts common printing logic into a function"
+            - "Uses interface or generics for type flexibility"
+            - "Reduces code duplication"
+
+  - id: "refactor-002"
+    description: "Simplify complex conditional"
+    agent_type: "coding"
+    tags: ["refactor", "readability"]
+    input:
+      prompt: |
+        Simplify this complex conditional:
+        ```go
+        func GetDiscount(user User) float64 {
+            if user.IsPremium {
+                if user.Years > 5 {
+                    if user.TotalSpent > 10000 {
+                        return 0.30
+                    } else {
+                        return 0.20
+                    }
+                } else {
+                    if user.TotalSpent > 5000 {
+                        return 0.15
+                    } else {
+                        return 0.10
+                    }
+                }
+            } else {
+                if user.Years > 3 {
+                    return 0.05
+                } else {
+                    return 0
+                }
+            }
+        }
+        ```
+    graders:
+      - type: "llm_rubric"
+        required: true
+        config:
+          assertions:
+            - "Reduces nesting levels"
+            - "Uses early returns or switch/case"
+            - "Maintains same behavior"
+            - "Improves readability"
+
+  - id: "refactor-003"
+    description: "Convert to functional style"
+    agent_type: "coding"
+    tags: ["refactor", "functional"]
+    input:
+      prompt: |
+        Refactor this imperative code to a more functional style:
+        ```go
+        func GetActiveUserNames(users []User) []string {
+            var names []string
+            for _, u := range users {
+                if u.Active {
+                    names = append(names, u.Name)
+                }
+            }
+            return names
+        }
+        ```
+    graders:
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Uses filter/map pattern or helper functions"
+            - "Code is more declarative"
+            - "Maintains same functionality"
+
+  # === Code Explanation Tasks ===
+  - id: "explain-001"
+    description: "Explain context usage"
+    agent_type: "coding"
+    tags: ["explanation", "go"]
+    input:
+      prompt: |
+        Explain what this Go code does and why context is used:
+        ```go
+        func FetchData(ctx context.Context, url string) ([]byte, error) {
+            req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+            if err != nil {
+                return nil, err
+            }
+            resp, err := http.DefaultClient.Do(req)
+            if err != nil {
+                return nil, err
+            }
+            defer resp.Body.Close()
+            return io.ReadAll(resp.Body)
+        }
+        ```
+    graders:
+      - type: "llm_rubric"
+        required: true
+        config:
+          assertions:
+            - "Explains context purpose (cancellation, timeout, deadline)"
+            - "Explains NewRequestWithContext usage"
+            - "Mentions proper resource cleanup with defer"
+
+  - id: "explain-002"
+    description: "Explain channel pattern"
+    agent_type: "coding"
+    tags: ["explanation", "concurrency"]
+    input:
+      prompt: |
+        Explain the fan-out/fan-in pattern in this code:
+        ```go
+        func Process(input <-chan int, numWorkers int) <-chan int {
+            workers := make([]<-chan int, numWorkers)
+            for i := 0; i < numWorkers; i++ {
+                workers[i] = worker(input)
+            }
+            return merge(workers...)
+        }
+        ```
+    graders:
+      - type: "llm_rubric"
+        required: true
+        config:
+          assertions:
+            - "Explains fan-out (distributing work to workers)"
+            - "Explains fan-in (merging results)"
+            - "Mentions concurrency benefits"
+
+  # === Error Handling Tasks ===
+  - id: "error-001"
+    description: "Add proper error handling"
+    agent_type: "coding"
+    tags: ["errors", "go"]
+    input:
+      prompt: |
+        Add proper error handling to this function:
+        ```go
+        func ProcessFile(path string) string {
+            data, _ := os.ReadFile(path)
+            var config Config
+            json.Unmarshal(data, &config)
+            return config.Name
+        }
+        ```
+    graders:
+      - type: "regex"
+        required: true
+        assertions:
+          - "err\\s*!=\\s*nil"
+          - "return.*err|return.*error"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Checks error from ReadFile"
+            - "Checks error from Unmarshal"
+            - "Returns meaningful error messages"
+
+  - id: "error-002"
+    description: "Implement custom error type"
+    agent_type: "coding"
+    tags: ["errors", "advanced"]
+    input:
+      prompt: "Create a custom error type in Go called ValidationError that includes a field name and error message. Implement the error interface and add a method to check if an error is a ValidationError."
+    graders:
+      - type: "regex"
+        required: true
+        assertions:
+          - "type\\s+ValidationError\\s+struct"
+          - "func.*Error\\(\\)\\s+string"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Defines ValidationError struct"
+            - "Implements Error() method"
+            - "Includes field name and message"
+
+  # === Security Tasks ===
+  - id: "security-001"
+    description: "Fix SQL injection vulnerability"
+    agent_type: "coding"
+    tags: ["security", "sql"]
+    input:
+      prompt: |
+        Fix the SQL injection vulnerability in this code:
+        ```go
+        func GetUser(db *sql.DB, username string) (*User, error) {
+            query := "SELECT * FROM users WHERE username = '" + username + "'"
+            row := db.QueryRow(query)
+            // ...
+        }
+        ```
+    graders:
+      - type: "regex"
+        required: true
+        assertions:
+          - "\\?|\\$1|@"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Uses parameterized queries"
+            - "Removes string concatenation"
+            - "Explains the SQL injection risk"
+
+  - id: "security-002"
+    description: "Add input validation"
+    agent_type: "coding"
+    tags: ["security", "validation"]
+    input:
+      prompt: |
+        Add input validation to this user registration function:
+        ```go
+        func RegisterUser(email, password string) error {
+            user := User{Email: email, Password: password}
+            return db.Create(&user)
+        }
+        ```
+    graders:
+      - type: "llm_rubric"
+        required: true
+        config:
+          assertions:
+            - "Validates email format"
+            - "Validates password strength"
+            - "Returns appropriate error messages"
+            - "Does not store plain text password"
+
+  # === API Design Tasks ===
+  - id: "api-001"
+    description: "Design REST API endpoint"
+    agent_type: "coding"
+    tags: ["api", "design"]
+    input:
+      prompt: "Design a RESTful API endpoint in Go for a Todo application. Include handlers for creating, reading, updating, and deleting todos. Use proper HTTP methods and status codes."
+    graders:
+      - type: "regex"
+        required: true
+        assertions:
+          - "GET|POST|PUT|DELETE|PATCH"
+          - "http\\.Status"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Uses appropriate HTTP methods (GET, POST, PUT/PATCH, DELETE)"
+            - "Returns appropriate status codes"
+            - "Follows RESTful conventions"
+            - "Includes error handling"
+
+metadata:
+  created_at: "2024-01-01"
+  author: "pedro-evals"
+  target_pass_rate: 0.7

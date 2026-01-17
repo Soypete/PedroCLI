@@ -1,0 +1,374 @@
+name: "blog-agent-evals"
+description: "Comprehensive evaluation suite for blog post agent capabilities"
+agent_type: "blog"
+version: "1.0.0"
+
+tasks:
+  # === Technical Blog Posts ===
+  - id: "blog-tech-001"
+    description: "Write a beginner-friendly blog post about Go interfaces"
+    agent_type: "blog"
+    tags: ["technical", "beginner", "go"]
+    input:
+      prompt: "Write a 500-700 word blog post explaining Go interfaces for beginners. Include practical code examples and explain why interfaces are useful."
+    graders:
+      - type: "markdown_lint"
+        required: true
+      - type: "readability"
+        config:
+          min_flesch_score: 50
+          max_flesch_score: 80
+      - type: "regex"
+        assertions:
+          - "^# "
+          - "```go"
+          - "interface"
+      - type: "llm_rubric"
+        weight: 2.0
+        config:
+          assertions:
+            - "Has clear introduction explaining what interfaces are"
+            - "Includes at least 2 practical code examples"
+            - "Explains the benefits of interfaces"
+            - "Has conclusion with key takeaways"
+            - "Appropriate for beginners"
+
+  - id: "blog-tech-002"
+    description: "Write about API design best practices"
+    agent_type: "blog"
+    tags: ["technical", "api", "intermediate"]
+    input:
+      prompt: "Write a blog post about best practices for REST API design. Cover naming conventions, HTTP methods, status codes, and error handling. Target audience: intermediate developers."
+    graders:
+      - type: "markdown_lint"
+        required: true
+      - type: "regex"
+        assertions:
+          - "^# "
+          - "GET|POST|PUT|DELETE"
+          - "status|code"
+      - type: "llm_rubric"
+        weight: 2.0
+        config:
+          assertions:
+            - "Covers naming conventions for endpoints"
+            - "Explains appropriate HTTP methods"
+            - "Discusses status codes"
+            - "Addresses error handling"
+            - "Includes practical examples"
+
+  - id: "blog-tech-003"
+    description: "Write about Docker containerization"
+    agent_type: "blog"
+    tags: ["technical", "devops", "docker"]
+    input:
+      prompt: "Write a blog post introducing Docker containerization for developers. Explain what containers are, why they're useful, and include a basic Dockerfile example."
+    graders:
+      - type: "markdown_lint"
+        required: true
+      - type: "regex"
+        assertions:
+          - "```dockerfile|```Dockerfile|Dockerfile"
+          - "container|Container"
+          - "image|Image"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Explains what containers are"
+            - "Compares containers to VMs"
+            - "Includes a Dockerfile example"
+            - "Explains basic Docker commands"
+
+  - id: "blog-tech-004"
+    description: "Write about testing strategies"
+    agent_type: "blog"
+    tags: ["technical", "testing"]
+    input:
+      prompt: "Write a blog post about different testing strategies in software development. Cover unit tests, integration tests, and end-to-end tests. Explain when to use each type."
+    graders:
+      - type: "markdown_lint"
+        required: true
+      - type: "regex"
+        assertions:
+          - "unit|Unit"
+          - "integration|Integration"
+          - "end-to-end|e2e|E2E"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Explains unit testing"
+            - "Explains integration testing"
+            - "Explains end-to-end testing"
+            - "Discusses testing pyramid or strategy"
+            - "Provides guidance on when to use each"
+
+  - id: "blog-tech-005"
+    description: "Write about database indexing"
+    agent_type: "blog"
+    tags: ["technical", "database", "performance"]
+    input:
+      prompt: "Write a blog post explaining database indexing. Cover how indexes work, when to use them, and common pitfalls. Include examples using SQL."
+    graders:
+      - type: "markdown_lint"
+        required: true
+      - type: "regex"
+        assertions:
+          - "INDEX|index|Index"
+          - "```sql|SQL"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Explains how indexes work"
+            - "Discusses B-tree or index structures"
+            - "Covers when to create indexes"
+            - "Mentions indexing pitfalls"
+            - "Includes SQL examples"
+
+  # === Tutorial Posts ===
+  - id: "blog-tutorial-001"
+    description: "Write a step-by-step tutorial for setting up a Go project"
+    agent_type: "blog"
+    tags: ["tutorial", "go", "beginner"]
+    input:
+      prompt: "Write a step-by-step tutorial for setting up a new Go project from scratch. Include project structure, go mod init, and a simple hello world example."
+    graders:
+      - type: "markdown_lint"
+        required: true
+      - type: "regex"
+        assertions:
+          - "go mod init"
+          - "```go"
+          - "Step|step|\\d\\."
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Has clear step-by-step structure"
+            - "Includes go mod init command"
+            - "Shows project structure"
+            - "Has working code example"
+            - "Easy for beginners to follow"
+
+  - id: "blog-tutorial-002"
+    description: "Write a tutorial on building a CLI tool"
+    agent_type: "blog"
+    tags: ["tutorial", "cli", "intermediate"]
+    input:
+      prompt: "Write a tutorial on building a command-line tool in Go using the cobra library. Create a simple CLI that greets users by name."
+    graders:
+      - type: "markdown_lint"
+        required: true
+      - type: "regex"
+        assertions:
+          - "cobra|Cobra"
+          - "```go"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Explains Cobra library setup"
+            - "Shows command structure"
+            - "Includes flag handling"
+            - "Has complete working example"
+
+  - id: "blog-tutorial-003"
+    description: "Write a tutorial on deploying to Kubernetes"
+    agent_type: "blog"
+    tags: ["tutorial", "kubernetes", "devops"]
+    input:
+      prompt: "Write a beginner-friendly tutorial on deploying a simple application to Kubernetes. Include deployment and service YAML examples."
+    graders:
+      - type: "markdown_lint"
+        required: true
+      - type: "regex"
+        assertions:
+          - "kubectl|Kubernetes|kubernetes"
+          - "```yaml"
+          - "Deployment|deployment"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Explains Kubernetes basics"
+            - "Includes Deployment YAML"
+            - "Includes Service YAML"
+            - "Shows kubectl commands"
+            - "Step-by-step instructions"
+
+  # === Opinion/Analysis Posts ===
+  - id: "blog-opinion-001"
+    description: "Write an opinion piece on AI in software development"
+    agent_type: "blog"
+    tags: ["opinion", "ai", "trends"]
+    input:
+      prompt: "Write an opinion piece about the impact of AI coding assistants on software development. Discuss both benefits and concerns, and provide a balanced perspective."
+    graders:
+      - type: "markdown_lint"
+        required: true
+      - type: "readability"
+        config:
+          min_flesch_score: 40
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Presents balanced viewpoint"
+            - "Discusses benefits of AI assistants"
+            - "Addresses concerns and limitations"
+            - "Has clear author perspective"
+            - "Professional tone"
+
+  - id: "blog-opinion-002"
+    description: "Compare programming languages"
+    agent_type: "blog"
+    tags: ["opinion", "comparison"]
+    input:
+      prompt: "Write a comparison blog post between Go and Rust for systems programming. Discuss their strengths, weaknesses, and ideal use cases."
+    graders:
+      - type: "markdown_lint"
+        required: true
+      - type: "regex"
+        assertions:
+          - "[Gg]o|[Gg]olang"
+          - "[Rr]ust"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Compares memory safety approaches"
+            - "Discusses performance characteristics"
+            - "Covers learning curve"
+            - "Provides use case recommendations"
+            - "Fair and balanced comparison"
+
+  # === SEO-Focused Posts ===
+  - id: "blog-seo-001"
+    description: "Write an SEO-optimized blog post"
+    agent_type: "blog"
+    tags: ["seo", "optimization"]
+    input:
+      prompt: "Write an SEO-optimized blog post about 'best practices for API design' targeting the keyword phrase. Include proper heading structure and meta description suggestion."
+    graders:
+      - type: "markdown_lint"
+        required: true
+      - type: "regex"
+        assertions:
+          - "API design|api design"
+          - "^# |^## "
+      - type: "llm_rubric"
+        weight: 2.0
+        config:
+          rubric: |
+            SEO Evaluation:
+            1. Title contains target keyword
+            2. Heading hierarchy (H1 > H2 > H3)
+            3. Keyword appears naturally in content
+            4. Meta description suggestion included
+            5. Content is comprehensive and valuable
+
+  - id: "blog-seo-002"
+    description: "Write a listicle blog post"
+    agent_type: "blog"
+    tags: ["seo", "listicle"]
+    input:
+      prompt: "Write a listicle blog post: '10 Essential Go Libraries Every Developer Should Know'. Include brief descriptions of each library and why it's useful."
+    graders:
+      - type: "markdown_lint"
+        required: true
+      - type: "regex"
+        assertions:
+          - "^# .*10|10.*Essential"
+          - "\\d\\.|^## \\d"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Lists exactly 10 libraries"
+            - "Each library has description"
+            - "Explains use cases"
+            - "Includes installation/usage hints"
+
+  # === How-To Posts ===
+  - id: "blog-howto-001"
+    description: "Write a how-to guide for error handling"
+    agent_type: "blog"
+    tags: ["howto", "go"]
+    input:
+      prompt: "Write a how-to guide on proper error handling in Go. Cover error wrapping, custom errors, and error checking patterns."
+    graders:
+      - type: "markdown_lint"
+        required: true
+      - type: "regex"
+        assertions:
+          - "```go"
+          - "error|Error"
+          - "fmt\\.Errorf|errors\\."
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Explains error wrapping"
+            - "Shows custom error types"
+            - "Demonstrates error checking"
+            - "Includes code examples"
+
+  - id: "blog-howto-002"
+    description: "Write a guide on Git workflows"
+    agent_type: "blog"
+    tags: ["howto", "git"]
+    input:
+      prompt: "Write a guide on Git branching strategies for teams. Cover Git Flow, GitHub Flow, and trunk-based development."
+    graders:
+      - type: "markdown_lint"
+        required: true
+      - type: "regex"
+        assertions:
+          - "branch|Branch"
+          - "merge|Merge|pull request|PR"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Explains Git Flow"
+            - "Explains GitHub Flow"
+            - "Discusses trunk-based development"
+            - "Provides recommendations"
+
+  # === Explainer Posts ===
+  - id: "blog-explain-001"
+    description: "Explain microservices architecture"
+    agent_type: "blog"
+    tags: ["explainer", "architecture"]
+    input:
+      prompt: "Write a blog post explaining microservices architecture. Cover what it is, benefits, challenges, and when to use it vs monoliths."
+    graders:
+      - type: "markdown_lint"
+        required: true
+      - type: "readability"
+        config:
+          min_flesch_score: 45
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Defines microservices clearly"
+            - "Lists benefits"
+            - "Discusses challenges"
+            - "Compares to monolithic architecture"
+
+  - id: "blog-explain-002"
+    description: "Explain OAuth 2.0"
+    agent_type: "blog"
+    tags: ["explainer", "security"]
+    input:
+      prompt: "Write a blog post explaining OAuth 2.0 in simple terms. Cover the main flows (authorization code, implicit, client credentials) with diagrams described in text."
+    graders:
+      - type: "markdown_lint"
+        required: true
+      - type: "regex"
+        assertions:
+          - "OAuth|oauth|authorization"
+          - "token|Token"
+      - type: "llm_rubric"
+        config:
+          assertions:
+            - "Explains OAuth 2.0 purpose"
+            - "Covers authorization code flow"
+            - "Mentions other grant types"
+            - "Describes flow steps clearly"
+
+metadata:
+  created_at: "2024-01-01"
+  author: "pedro-evals"
+  target_pass_rate: 0.7
