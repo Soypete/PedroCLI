@@ -175,8 +175,8 @@ No code changes needed - the tokenization happens at runtime based on the curren
 | Test Configuration | Search Tool Success Rate | Successful Calls | Total Calls | Job Outcome | Duration | Rounds Used |
 |-------------------|-------------------------|------------------|-------------|-------------|----------|-------------|
 | **Baseline (No Bias)** | 13% | 3 | ~23 | ❌ Failed | ~8 min | 25/25 (max) |
-| **Logit Bias 5.0** | 54% | 7 | 13 | 🔄 Testing | ~15 min | 19+/25 |
-| **Logit Bias 15.0** | TBD | TBD | TBD | 🔄 Testing | TBD | TBD/25 |
+| **Logit Bias 5.0** | 33.3% | 8 | 24 | ❌ Failed | ~15 min | 25/25 (max) |
+| **Logit Bias 15.0** | 0% | 0 | 0 | ❌ Timeout | <1 min | N/A |
 
 ### Success Rate Improvement
 
@@ -186,15 +186,16 @@ No code changes needed - the tokenization happens at runtime based on the curren
  80% ┤
  70% ┤
  60% ┤
- 54% ┤     ●────────?           ← Logit Bias 5.0 (4x improvement)
- 50% ┤     │
- 40% ┤     │
- 30% ┤     │
- 20% ┤     │
- 13% ┤●────┘                    ← No Bias (Baseline)
- 10% ┤│
-  0% ┴┴────────────────────────
-     No   5.0  15.0  20.0       Logit Bias Strength
+ 50% ┤
+ 40% ┤
+ 33% ┤     ●──────────●         ← Logit Bias 5.0 (2.5x improvement)
+ 30% ┤     │          │
+ 20% ┤     │          │
+ 13% ┤●────┘          │         ← No Bias (Baseline)
+ 10% ┤│               │
+  0% ┴┴───────────────┴──────
+     No   5.0       15.0       Logit Bias Strength
+                   (timeout)
 ```
 
 ### Detailed Results by Test
@@ -204,33 +205,54 @@ No code changes needed - the tokenization happens at runtime based on the curren
 - **Failure pattern**: Missing 'action' parameter in tool calls
 - **Job outcome**: Failed after 25 rounds (max reached)
 
-### After Logit Bias with 5.0 Strength (Same Model)
+#### Test 2: Logit Bias 5.0 - Qwen 2.5 Coder 32B (Complete Run)
 - **Pre-tokenized**: `[1311]` (single token for "action")
 - **Logit bias applied**: `{1311: 5.0}`
-- **Search tool success rate**: **54%** (7 successes out of 13 attempts in rounds 2-14)
+- **Search tool success rate**: **33.3%** (8 successes out of 24 attempts in rounds 2-25)
 
-**Detailed Results**:
+**Detailed Results (Rounds 2-25, Round 1 was navigate tool)**:
 ```
-Round 2:  ✅ search succeeded
-Round 3:  ✅ search succeeded
-Round 4:  ✅ search succeeded
-Round 5:  ✅ search succeeded
-Round 6:  ✅ search succeeded
-Round 7:  ✅ search succeeded
-Round 8:  ❌ search failed - missing 'action' parameter
-Round 9:  ✅ search succeeded
-Round 10: ❌ search failed - missing 'action' parameter
-Round 11: ❌ search failed - unknown action: find
-Round 12: ❌ search failed - unknown action: find
-Round 13: ❌ search failed - missing 'action' parameter
-Round 14: ❌ search failed - unknown action: search
+Rounds 2-7:  ✅✅✅✅✅✅ (6/6 = 100% early success)
+Round 8:     ❌ search failed - missing 'action' parameter
+Round 9:     ✅ search succeeded
+Round 10:    ❌ search failed - missing 'action' parameter
+Rounds 11-16: ❌❌❌❌❌❌ (0/6 = streak of failures)
+Round 17:    ✅ search succeeded
+Rounds 18-25: ❌❌❌❌❌❌❌❌ (0/8 = final failure streak)
 ```
 
-**Improvement**: 13% → 54% success rate (4x improvement)
+**Success Pattern**:
+- **Early rounds (2-7)**: 100% success (6/6) - logit bias highly effective
+- **Mid rounds (8-17)**: 20% success (2/10) - degrading performance
+- **Late rounds (18-25)**: 0% success (0/8) - complete failure
 
-**Analysis**: Logit bias of 5.0 provides significant improvement but doesn't guarantee compliance. The LLM still probabilistically generates output, and 5.0 may not be strong enough for this use case.
+**Improvement**: 13% → 33.3% success rate (2.5x improvement)
 
-**Next Steps**: Test higher bias values (10.0, 15.0, 20.0) to find optimal threshold.
+**Analysis**:
+- Logit bias provides **strong early improvement** (100% for first 6 rounds)
+- Performance **degrades over time** - possible context buildup or tool frustration
+- LLM appears to "give up" on correct format after repeated failures
+- 5.0 bias insufficient for sustained 80%+ compliance
+
+**Root Cause**: Tool call errors compound - each failure adds context that may confuse subsequent attempts. The LLM sees its own mistakes and appears to lose confidence in the correct format.
+
+#### Test 3: Logit Bias 15.0 - Qwen 2.5 Coder 32B
+- **Pre-tokenized**: `[1311]`
+- **Logit bias applied**: `{1311: 15.0}`
+- **Result**: ❌ **Timeout** - LLM generation became extremely slow
+- **Duration**: Less than 1 minute before timeout
+- **Analysis**: Bias value too aggressive, causing token generation to become glacially slow
+
+**Conclusion**: 15.0 is impractically high - need to find middle ground between 5.0 and 15.0
+
+---
+
+## Next Steps
+
+1. **Test intermediate bias values**: Try 7.0, 10.0, 12.0 to find sweet spot
+2. **Context clearing strategy**: Clear tool error history periodically to prevent degradation
+3. **Alternative approach**: Structured output constraints or grammar-based generation
+4. **Multi-token bias**: Apply bias to other critical parameters ("args", "pattern")
 
 ---
 
@@ -241,13 +263,15 @@ Round 14: ❌ search failed - unknown action: search
 | Metric | Blog Agent (9 phases) | Build Agent (No Bias) | Build Agent (Bias 5.0) |
 |--------|----------------------|---------------------|---------------------|
 | **Model** | Qwen 2.5 Coder 32B | Qwen 2.5 Coder 32B | Qwen 2.5 Coder 32B |
-| **Outcome** | ✅ Success | ❌ Failed | 🔄 Testing |
+| **Outcome** | ✅ Success | ❌ Failed | ❌ Failed |
 | **Duration** | ~5 minutes | ~8 minutes | ~15 minutes |
-| **Phases Completed** | 9/9 (100%) | 0/5 (0%) | TBD |
-| **Total Tokens** | 47.6k | ~25k+ (estimated) | TBD |
-| **Tool Success Rate** | N/A (content gen) | 13% (search tool) | 54% (search tool) |
-| **Output Quality** | Excellent (2545 words) | None (stuck in Analyze) | TBD |
+| **Phases Completed** | 9/9 (100%) | 0/5 (0%) | 0/5 (0%) |
+| **Total Tokens** | 47.6k | ~25k+ (estimated) | ~30k+ (estimated) |
+| **Tool Success Rate** | N/A (content gen) | 13% (search tool) | 33.3% (search tool) |
+| **Output Quality** | Excellent (2545 words) | None (stuck in Analyze) | None (stuck in Analyze) |
 | **Logit Bias** | Not needed | None | {1311: 5.0} |
+| **Early Performance** | N/A | ~13% throughout | 100% (rounds 2-7) |
+| **Late Performance** | N/A | ~13% throughout | 0% (rounds 18-25) |
 
 **Key Insight**: Blog agent succeeded because it didn't rely heavily on tools during critical phases (pure content generation). Build agent **required** reliable tool calls to explore the codebase, which exposed the parameter compliance issue.
 
