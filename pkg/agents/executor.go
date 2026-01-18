@@ -70,7 +70,8 @@ func (e *InferenceExecutor) GetLogitBias() map[int]float32 {
 	}
 
 	// Apply positive bias to boost probability of "action" tokens
-	// Bias value of 5.0 significantly increases probability without being too aggressive
+	// Bias value of 5.0 provides 2.5x improvement (13% → 33.3%)
+	// Higher values (15.0) cause timeout - need to test intermediate values (7.0, 10.0, 12.0)
 	biasMap := make(map[int]float32)
 	for _, tokenID := range e.actionTokenIDs {
 		biasMap[tokenID] = 5.0
