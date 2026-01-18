@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // Script Generation Phases
@@ -136,12 +137,50 @@ func (a *UnifiedPodcastAgent) phasePublishScript(ctx context.Context) error {
 		return fmt.Errorf("no script to publish")
 	}
 
-	// TODO: Use Notion tool to create page in Scripts database
-	// For now, just mark as published
-	a.currentContent.Data["published"] = true
-	a.currentContent.Data["publish_timestamp"] = fmt.Sprintf("%v", ctx.Value("timestamp"))
+	// Publish to Notion Scripts database if enabled
+	if a.config.Podcast.Notion.Enabled {
+		notionTool, ok := a.tools["notion"]
+		if !ok {
+			fmt.Println("   ⚠️  Notion tool not available, saving to storage only")
+		} else {
+			fmt.Println("   📝 Creating Notion page in Scripts database...")
 
-	fmt.Println("   ✅ Script published to storage")
+			// Prepare properties for Notion page
+			properties := map[string]interface{}{
+				"Episode #": a.episode,                    // Title property
+				"Title":     a.title,                      // Rich text
+				"Guests":    a.guests,                     // Rich text
+				"Status":    "Draft",                      // Status/Select property
+				"Duration":  float64(a.duration),          // Number property
+			}
+
+			// Create page in Scripts database
+			result, err := notionTool.Execute(ctx, map[string]interface{}{
+				"action":        "create_page",
+				"database_name": "scripts",
+				"properties":    properties,
+				"content":       a.script,
+			})
+
+			if err != nil {
+				fmt.Printf("   ⚠️  Failed to publish to Notion: %v\n", err)
+			} else if !result.Success {
+				fmt.Printf("   ⚠️  Notion publishing error: %s\n", result.Error)
+			} else {
+				fmt.Println("   ✅ Script published to Notion Scripts database")
+				a.currentContent.Data["notion_page_created"] = true
+				a.currentContent.Data["notion_output"] = result.Output
+			}
+		}
+	} else {
+		fmt.Println("   ℹ️  Notion integration disabled, saving to storage only")
+	}
+
+	// Mark as published in content store
+	a.currentContent.Data["published"] = true
+	a.currentContent.Data["publish_timestamp"] = fmt.Sprintf("%v", time.Now().UTC())
+
+	fmt.Println("   ✅ Script saved to storage")
 	return nil
 }
 
