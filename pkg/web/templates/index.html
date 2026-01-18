@@ -218,41 +218,95 @@
                         <div>
                             <label for="podcast-type" class="block text-sm font-medium text-gray-700 mb-2">Job Type</label>
                             <select id="podcast-type" name="type"
+                                    onchange="updatePodcastFormFields(this.value)"
                                     class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
                                 <option value="create_script">Create Script - Generate episode script</option>
                                 <option value="create_outline">Create Outline - Generate episode outline</option>
+                                <option value="schedule_episode">Schedule Episode - Create Cal.com booking link</option>
                             </select>
                         </div>
 
-                        <div>
-                            <div class="flex items-center justify-between mb-2">
-                                <label for="podcast-topic" class="block text-sm font-medium text-gray-700">Episode Topic</label>
-                                <button type="button" onclick="startVoiceInput('podcast-topic')"
-                                        class="inline-flex items-center px-3 py-1 bg-gray-800 text-white text-sm rounded-md hover:bg-gray-700">
-                                    🎤 Voice
-                                </button>
+                        <!-- Script/Outline fields (shown for create_script and create_outline) -->
+                        <div id="podcast-content-fields" class="space-y-4">
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <label for="podcast-topic" class="block text-sm font-medium text-gray-700">Episode Topic</label>
+                                    <button type="button" onclick="startVoiceInput('podcast-topic')"
+                                            class="inline-flex items-center px-3 py-1 bg-gray-800 text-white text-sm rounded-md hover:bg-gray-700">
+                                        🎤 Voice
+                                    </button>
+                                </div>
+                                <textarea id="podcast-topic" name="topic" rows="3"
+                                          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                          placeholder="What is the episode about?"></textarea>
                             </div>
-                            <textarea id="podcast-topic" name="topic" rows="3"
-                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                                      placeholder="What is the episode about?"></textarea>
+
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <label for="podcast-notes" class="block text-sm font-medium text-gray-700">Notes (optional)</label>
+                                    <button type="button" onclick="startVoiceInput('podcast-notes')"
+                                            class="inline-flex items-center px-3 py-1 bg-gray-800 text-white text-sm rounded-md hover:bg-gray-700">
+                                        🎤 Voice
+                                    </button>
+                                </div>
+                                <textarea id="podcast-notes" name="notes" rows="3"
+                                          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                          placeholder="Additional notes or context..."></textarea>
+                            </div>
                         </div>
 
-                        <div>
-                            <div class="flex items-center justify-between mb-2">
-                                <label for="podcast-notes" class="block text-sm font-medium text-gray-700">Notes (optional)</label>
-                                <button type="button" onclick="startVoiceInput('podcast-notes')"
-                                        class="inline-flex items-center px-3 py-1 bg-gray-800 text-white text-sm rounded-md hover:bg-gray-700">
-                                    🎤 Voice
-                                </button>
+                        <!-- Schedule fields (shown for schedule_episode) -->
+                        <div id="podcast-schedule-fields" class="space-y-4 hidden">
+                            <div>
+                                <label for="podcast-episode" class="block text-sm font-medium text-gray-700 mb-2">Episode Number</label>
+                                <input type="text" id="podcast-episode" name="episode"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                       placeholder="e.g., S01E03">
                             </div>
-                            <textarea id="podcast-notes" name="notes" rows="3"
-                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                                      placeholder="Additional notes or context..."></textarea>
+
+                            <div>
+                                <label for="podcast-title" class="block text-sm font-medium text-gray-700 mb-2">Episode Title</label>
+                                <input type="text" id="podcast-title" name="title"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                       placeholder="e.g., How to Choose an AI Model">
+                            </div>
+
+                            <div>
+                                <label for="podcast-guest-name" class="block text-sm font-medium text-gray-700 mb-2">Guest Name</label>
+                                <input type="text" id="podcast-guest-name" name="guest_name"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                       placeholder="e.g., Matt Chen">
+                            </div>
+
+                            <div>
+                                <label for="podcast-duration" class="block text-sm font-medium text-gray-700 mb-2">Duration (minutes)</label>
+                                <select id="podcast-duration" name="duration"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="30">30 minutes</option>
+                                    <option value="45">45 minutes</option>
+                                    <option value="60" selected>60 minutes</option>
+                                    <option value="90">90 minutes</option>
+                                </select>
+                            </div>
+
+                            <div class="flex items-center">
+                                <input type="checkbox" id="podcast-riverside" name="riverside" checked
+                                       class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                <label for="podcast-riverside" class="ml-2 block text-sm text-gray-700">
+                                    Include Riverside.fm integration
+                                </label>
+                            </div>
+
+                            <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
+                                <p class="text-xs text-blue-800">
+                                    This will create a Cal.com booking link with your episode details and return a shareable URL for guests.
+                                </p>
+                            </div>
                         </div>
 
                         <button type="submit"
                                 class="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
-                            Create Job
+                            <span id="podcast-submit-text">Create Job</span>
                         </button>
                     </form>
                 </div>
@@ -447,6 +501,23 @@ function updateFormFields(type) {
         case 'triager':
             document.getElementById('description-field').classList.remove('hidden');
             break;
+    }
+}
+
+// Podcast form field toggling
+function updatePodcastFormFields(type) {
+    const contentFields = document.getElementById('podcast-content-fields');
+    const scheduleFields = document.getElementById('podcast-schedule-fields');
+    const submitText = document.getElementById('podcast-submit-text');
+
+    if (type === 'schedule_episode') {
+        contentFields.classList.add('hidden');
+        scheduleFields.classList.remove('hidden');
+        submitText.textContent = 'Create Booking Link';
+    } else {
+        contentFields.classList.remove('hidden');
+        scheduleFields.classList.add('hidden');
+        submitText.textContent = 'Create Job';
     }
 }
 
@@ -829,18 +900,51 @@ async function submitPodcastJob(event) {
     event.preventDefault();
 
     const type = document.getElementById('podcast-type').value;
-    const topic = document.getElementById('podcast-topic').value.trim();
-    const notes = document.getElementById('podcast-notes').value.trim();
     const submitBtn = event.target.querySelector('button[type="submit"]');
 
-    if (!topic) {
-        alert('Please provide an episode topic');
-        return;
+    let payload = { type: type };
+
+    // Collect fields based on type
+    if (type === 'schedule_episode') {
+        const episode = document.getElementById('podcast-episode').value.trim();
+        const title = document.getElementById('podcast-title').value.trim();
+        const guestName = document.getElementById('podcast-guest-name').value.trim();
+        const duration = parseInt(document.getElementById('podcast-duration').value);
+        const riverside = document.getElementById('podcast-riverside').checked;
+
+        if (!episode || !title) {
+            alert('Please provide episode number and title');
+            return;
+        }
+
+        payload = {
+            type: type,
+            episode: episode,
+            title: title,
+            guest_name: guestName,
+            duration: duration,
+            riverside: riverside
+        };
+    } else {
+        const topic = document.getElementById('podcast-topic').value.trim();
+        const notes = document.getElementById('podcast-notes').value.trim();
+
+        if (!topic) {
+            alert('Please provide an episode topic');
+            return;
+        }
+
+        payload = {
+            type: type,
+            topic: topic,
+            notes: notes
+        };
     }
 
     // Disable button
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Creating...';
+    const originalText = submitBtn.querySelector('#podcast-submit-text').textContent;
+    submitBtn.querySelector('#podcast-submit-text').textContent = 'Creating...';
 
     try {
         const response = await fetch('/api/podcast', {
@@ -848,22 +952,23 @@ async function submitPodcastJob(event) {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                type: type,
-                topic: topic,
-                notes: notes
-            }),
+            body: JSON.stringify(payload),
         });
 
         const data = await response.json();
 
         if (data.success || response.ok) {
-            // Clear form
-            document.getElementById('podcast-topic').value = '';
-            document.getElementById('podcast-notes').value = '';
-
-            // Show success message
-            alert('Podcast job created! (Note: Podcast workflow is under development)');
+            // Clear form based on type
+            if (type === 'schedule_episode') {
+                document.getElementById('podcast-episode').value = '';
+                document.getElementById('podcast-title').value = '';
+                document.getElementById('podcast-guest-name').value = '';
+                alert('Booking link created successfully! Check the jobs list for the URL.');
+            } else {
+                document.getElementById('podcast-topic').value = '';
+                document.getElementById('podcast-notes').value = '';
+                alert('Podcast job created!');
+            }
         } else {
             alert('Error: ' + (data.error || 'Unknown error'));
         }
@@ -873,7 +978,7 @@ async function submitPodcastJob(event) {
     } finally {
         // Re-enable button
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Create Job';
+        submitBtn.querySelector('#podcast-submit-text').textContent = originalText;
     }
 }
 

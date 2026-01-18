@@ -1,14 +1,18 @@
 package httpbridge
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/soypete/pedrocli/pkg/agents"
 	"github.com/soypete/pedrocli/pkg/jobs"
+	"github.com/soypete/pedrocli/pkg/storage/content"
 )
 
 // CreateJobRequest represents the job creation request
@@ -490,9 +494,14 @@ func (s *Server) handleBlogReviewPage(w http.ResponseWriter, r *http.Request) {
 
 // PodcastRequest represents a podcast job creation request
 type PodcastRequest struct {
-	Type  string `json:"type"`  // create_script, create_outline
-	Topic string `json:"topic"`
-	Notes string `json:"notes"`
+	Type      string `json:"type"`       // create_script, create_outline, schedule_episode
+	Topic     string `json:"topic"`      // For script/outline
+	Notes     string `json:"notes"`      // For script/outline
+	Episode   string `json:"episode"`    // For scheduling (e.g., "S01E03")
+	Title     string `json:"title"`      // For scheduling
+	GuestName string `json:"guest_name"` // For scheduling
+	Duration  int    `json:"duration"`   // For scheduling (in minutes)
+	Riverside bool   `json:"riverside"`  // For scheduling (Riverside.fm integration)
 }
 
 // handlePodcast handles POST /api/podcast (create podcast job)
@@ -508,18 +517,88 @@ func (s *Server) handlePodcast(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Topic == "" {
-		http.Error(w, "Topic is required", http.StatusBadRequest)
+	// Validate based on type
+	if req.Type == "schedule_episode" {
+		if req.Episode == "" || req.Title == "" {
+			http.Error(w, "Episode and title are required for scheduling", http.StatusBadRequest)
+			return
+		}
+	} else {
+		if req.Topic == "" {
+			http.Error(w, "Topic is required", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Create podcast agent with appropriate workflow
+	var workflowType agents.PodcastWorkflowType
+	switch req.Type {
+	case "create_script":
+		workflowType = agents.WorkflowScript
+	case "schedule_episode":
+		workflowType = agents.WorkflowSchedule
+	case "create_outline":
+		// TODO: Add outline workflow when implemented
+		http.Error(w, "Outline workflow not yet implemented", http.StatusNotImplemented)
+		return
+	default:
+		http.Error(w, "Invalid podcast job type", http.StatusBadRequest)
 		return
 	}
 
-	// For now, return a success response
-	// TODO: Implement actual podcast workflow when agents are ready
+	// Create storage (PostgreSQL for web UI)
+	storeConfig := content.StoreConfig{
+		DB: s.appCtx.Database.DB,
+	}
+	contentStore, err := content.NewContentStore(storeConfig)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to create content store: %v", err), http.StatusInternalServerError)
+		return
+	}
+	versionStore, err := content.NewVersionStore(storeConfig)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to create version store: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Create unified podcast agent
+	agent := agents.NewUnifiedPodcastAgent(agents.UnifiedPodcastAgentConfig{
+		Backend:      s.appCtx.Backend,
+		ContentStore: contentStore,
+		VersionStore: versionStore,
+		Config:       s.config,
+		Mode:         agents.ExecutionModeAsync,
+		WorkflowType: workflowType,
+		Outline:      req.Notes, // Use notes as outline for script workflow
+		Episode:      req.Episode,
+		Title:        req.Title,
+		Guests:       req.GuestName,
+		Duration:     req.Duration,
+		Riverside:    req.Riverside,
+	})
+
+	// Execute async in background
+	go func() {
+		ctx := context.Background()
+		if err := agent.Execute(ctx); err != nil {
+			log.Printf("Podcast workflow failed: %v", err)
+			return
+		}
+		log.Printf("Podcast workflow completed successfully")
+	}()
+
+	// Return immediate response
+	var message string
+	if workflowType == agents.WorkflowSchedule {
+		message = "Creating Cal.com booking link..."
+	} else {
+		message = "Generating podcast script..."
+	}
+
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
-		"message": "Podcast job queued (workflow under development)",
+		"message": message,
 		"type":    req.Type,
-		"topic":   req.Topic,
 	})
 }
 
