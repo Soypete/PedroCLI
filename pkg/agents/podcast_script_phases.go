@@ -146,12 +146,14 @@ func (a *UnifiedPodcastAgent) phasePublishScript(ctx context.Context) error {
 			fmt.Println("   📝 Creating Notion page in Scripts database...")
 
 			// Prepare properties for Notion page
+			// Note: Property names match actual Notion database schema
 			properties := map[string]interface{}{
-				"Episode #": a.episode,                    // Title property
-				"Title":     a.title,                      // Rich text
-				"Guests":    a.guests,                     // Rich text
-				"Status":    "Draft",                      // Status/Select property
-				"Duration":  float64(a.duration),          // Number property
+				"Episode #":             a.episode, // Title property
+				"Title / Working Topic": a.title,   // Rich text
+				"Status 🎛":             "Draft",   // Text property
+				"Notes":                 fmt.Sprintf("Duration: %d minutes\nGuests: %s", a.duration, a.guests), // Text with metadata
+				// Note: "Guests" is a relation property requiring page references
+				// For now, we include guest names in Notes field
 			}
 
 			// Create page in Scripts database

@@ -81,10 +81,9 @@
       "enabled": true,
       "databases": {
         "scripts": "29da4c9f98458041afaec55980124eb7",
-        "potential_articles": "",
-        "articles_review": "",
-        "news_review": "",
-        "guests": ""
+        "guests": "29da4c9f984580cdb64ecbe316bd2028",
+        "topics": "29da4c9f984580cdaad1f2a408d1ec9f",
+        "news": "29da4c9f9845805f9cfded33ef29e98a"
       }
     }
   }
