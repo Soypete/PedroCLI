@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/soypete/pedrocli/pkg/config"
+	"github.com/soypete/pedrocli/pkg/jobs"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/storage/content"
 	"github.com/soypete/pedrocli/pkg/tools"
@@ -30,6 +31,7 @@ type UnifiedPodcastAgent struct {
 	contentStore content.ContentStore
 	versionStore content.VersionStore
 	config       *config.Config
+	jobManager   jobs.JobManager
 
 	// Workflow state
 	workflowType    PodcastWorkflowType
@@ -71,20 +73,21 @@ type UnifiedPodcastAgentConfig struct {
 	ContentStore content.ContentStore
 	VersionStore content.VersionStore
 	Config       *config.Config
+	JobManager   jobs.JobManager
 	Mode         ExecutionMode
 
 	// Workflow selection
 	WorkflowType PodcastWorkflowType
 
 	// Input data
-	Outline  string // Episode outline (markdown)
-	Episode  string // Episode number (e.g., "S01E03")
-	Title    string // Episode title
-	Guests   string // Guest names (comma-separated)
-	Duration int    // Target duration in minutes
-	Focus    string // News focus topic
-	MaxNews  int    // Maximum news items
-	Riverside bool  // Include Riverside.fm integration
+	Outline   string // Episode outline (markdown)
+	Episode   string // Episode number (e.g., "S01E03")
+	Title     string // Episode title
+	Guests    string // Guest names (comma-separated)
+	Duration  int    // Target duration in minutes
+	Focus     string // News focus topic
+	MaxNews   int    // Maximum news items
+	Riverside bool   // Include Riverside.fm integration
 }
 
 // NewUnifiedPodcastAgent creates a new podcast agent
@@ -94,6 +97,7 @@ func NewUnifiedPodcastAgent(cfg UnifiedPodcastAgentConfig) *UnifiedPodcastAgent 
 		contentStore: cfg.ContentStore,
 		versionStore: cfg.VersionStore,
 		config:       cfg.Config,
+		jobManager:   cfg.JobManager,
 		mode:         cfg.Mode,
 		workflowType: cfg.WorkflowType,
 		tools:        make(map[string]tools.Tool),
@@ -317,8 +321,50 @@ func (a *UnifiedPodcastAgent) buildFullPrepPhases() []Phase {
 	return allPhases
 }
 
-// Execute implements AgentOrchestrator.Execute
-func (a *UnifiedPodcastAgent) Execute(ctx context.Context) error {
+// Execute executes the podcast agent asynchronously and returns a job
+func (a *UnifiedPodcastAgent) Execute(ctx context.Context, input map[string]interface{}) (*jobs.Job, error) {
+	// Extract workflow type from input (or use agent's default)
+	workflowTypeStr, _ := input["workflow_type"].(string)
+	if workflowTypeStr == "" {
+		workflowTypeStr = string(a.workflowType)
+	}
+
+	// Build description for job
+	description := fmt.Sprintf("Podcast %s workflow: %s", workflowTypeStr, a.title)
+
+	// Create job
+	job, err := a.jobManager.Create(ctx, "podcast_"+workflowTypeStr, description, input)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update status to running
+	a.jobManager.Update(ctx, job.ID, jobs.StatusRunning, nil, nil)
+
+	// Run the workflow in background
+	go func() {
+		bgCtx := context.Background()
+
+		// Execute the workflow
+		if err := a.ExecuteWorkflow(bgCtx); err != nil {
+			a.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
+			return
+		}
+
+		// Success - update job with output
+		output := a.GetOutput()
+		outputMap, ok := output.(map[string]interface{})
+		if !ok {
+			outputMap = map[string]interface{}{"result": output}
+		}
+		a.jobManager.Update(bgCtx, job.ID, jobs.StatusCompleted, outputMap, nil)
+	}()
+
+	return job, nil
+}
+
+// ExecuteWorkflow executes the workflow synchronously without job management (for CLI)
+func (a *UnifiedPodcastAgent) ExecuteWorkflow(ctx context.Context) error {
 	// Create initial content record
 	if err := a.contentStore.Create(ctx, a.currentContent); err != nil {
 		return fmt.Errorf("failed to create content record: %w", err)

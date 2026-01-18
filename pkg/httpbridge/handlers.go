@@ -1,10 +1,8 @@
 package httpbridge
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -567,6 +565,7 @@ func (s *Server) handlePodcast(w http.ResponseWriter, r *http.Request) {
 		ContentStore: contentStore,
 		VersionStore: versionStore,
 		Config:       s.config,
+		JobManager:   s.appCtx.JobManager,
 		Mode:         agents.ExecutionModeAsync,
 		WorkflowType: workflowType,
 		Outline:      req.Notes, // Use notes as outline for script workflow
@@ -580,28 +579,29 @@ func (s *Server) handlePodcast(w http.ResponseWriter, r *http.Request) {
 	// Register podcast tools (web search, RSS, Notion, Cal.com)
 	registerPodcastTools(agent, s.appCtx)
 
-	// Execute async in background
-	go func() {
-		ctx := context.Background()
-		if err := agent.Execute(ctx); err != nil {
-			log.Printf("Podcast workflow failed: %v", err)
-			return
-		}
-		log.Printf("Podcast workflow completed successfully")
-	}()
-
-	// Return immediate response
-	var message string
-	if workflowType == agents.WorkflowSchedule {
-		message = "Creating Cal.com booking link..."
-	} else {
-		message = "Generating podcast script..."
+	// Build input map for Execute
+	input := map[string]interface{}{
+		"workflow_type": string(workflowType),
+		"outline":       req.Notes,
+		"episode":       req.Episode,
+		"title":         req.Title,
+		"guests":        req.GuestName,
+		"duration":      req.Duration,
+		"riverside":     req.Riverside,
 	}
 
-	respondJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
-		"message": message,
-		"type":    req.Type,
+	// Execute async and get job
+	job, err := agent.Execute(r.Context(), input)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to create podcast job: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Return response with job ID
+	respondJSON(w, http.StatusOK, JobResponse{
+		Success: true,
+		JobID:   job.ID,
+		Message: fmt.Sprintf("Job %s created successfully", job.ID),
 	})
 }
 

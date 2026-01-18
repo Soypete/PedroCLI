@@ -170,9 +170,9 @@ Flags:
 		Duration:     *duration,
 	})
 
-	// Execute agent
+	// Execute agent workflow synchronously (CLI doesn't use job management)
 	ctx := context.Background()
-	if err := agent.Execute(ctx); err != nil {
+	if err := agent.ExecuteWorkflow(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "\nError: Script generation failed: %v\n", err)
 		os.Exit(1)
 	}
