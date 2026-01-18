@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/soypete/pedrocli/pkg/agents"
 	"github.com/soypete/pedrocli/pkg/config"
+	"github.com/soypete/pedrocli/pkg/llm"
+	"github.com/soypete/pedrocli/pkg/storage/content"
 )
 
 func podcastCommand(cfg *config.Config, args []string) {
@@ -113,11 +117,6 @@ Flags:
 		outlineContent = string(data)
 	}
 
-	// TODO: Create storage (file-based for CLI)
-	// TODO: Create unified podcast agent with script workflow
-	// TODO: Execute agent
-	// TODO: Output results
-
 	fmt.Printf("⏳ Generating podcast script for episode %s...\n", *episode)
 	fmt.Printf("📝 Outline: %d characters\n", len(outlineContent))
 	if *topic != "" {
@@ -128,13 +127,80 @@ Flags:
 	}
 	fmt.Printf("⏱️  Duration: %d minutes\n", *duration)
 
-	if *output != "" {
-		fmt.Printf("💾 Output will be saved to: %s\n", *output)
+	// Create LLM backend
+	backend, err := llm.NewBackend(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to create LLM backend: %v\n", err)
+		os.Exit(1)
 	}
 
-	// TODO: Implement actual agent execution
-	fmt.Fprintln(os.Stderr, "\nError: podcast script generation not yet implemented - coming in PR #3 (UnifiedPodcastAgent)")
-	os.Exit(1)
+	// Create file-based storage for CLI
+	storeConfig := content.StoreConfig{
+		FileBaseDir: podcastContentDir(),
+	}
+	contentStore, err := content.NewContentStore(storeConfig)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to create content store: %v\n", err)
+		os.Exit(1)
+	}
+	versionStore, err := content.NewVersionStore(storeConfig)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to create version store: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Use topic as title if title not provided
+	episodeTitle := *topic
+	if episodeTitle == "" && outlineContent != "" {
+		episodeTitle = "Untitled Episode"
+	}
+
+	// Create UnifiedPodcastAgent with script workflow
+	agent := agents.NewUnifiedPodcastAgent(agents.UnifiedPodcastAgentConfig{
+		Backend:      backend,
+		ContentStore: contentStore,
+		VersionStore: versionStore,
+		Config:       cfg,
+		Mode:         agents.ExecutionModeSync,
+		WorkflowType: agents.WorkflowScript,
+		Outline:      outlineContent,
+		Episode:      *episode,
+		Title:        episodeTitle,
+		Guests:       *guests,
+		Duration:     *duration,
+	})
+
+	// Execute agent
+	ctx := context.Background()
+	if err := agent.Execute(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "\nError: Script generation failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Get output
+	result := agent.GetOutput()
+	resultMap, ok := result.(map[string]interface{})
+	if !ok {
+		fmt.Fprintln(os.Stderr, "\nError: Failed to get agent output")
+		os.Exit(1)
+	}
+
+	script, _ := resultMap["script"].(string)
+	if script == "" {
+		fmt.Fprintln(os.Stderr, "\nError: No script generated")
+		os.Exit(1)
+	}
+
+	// Output results
+	if *output != "" {
+		if err := os.WriteFile(*output, []byte(script), 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "\nError: Failed to write output file: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("\n✅ Script saved to: %s\n", *output)
+	} else {
+		fmt.Println("\n" + script)
+	}
 }
 
 func podcastNewsCmd(cfg *config.Config, args []string) {
