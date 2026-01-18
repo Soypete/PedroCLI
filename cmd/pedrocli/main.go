@@ -135,6 +135,8 @@ func main() {
 		triageCommand(cfg, subcommandArgs)
 	case "blog":
 		blogCommand(cfg, subcommandArgs)
+	case "podcast":
+		podcastCommand(cfg, subcommandArgs)
 	case "status":
 		statusCommand(cfg, subcommandArgs)
 	case "list":
@@ -160,6 +162,7 @@ Commands:
   review     Review a pull request or branch
   triage     Diagnose and triage an issue (no fix)
   blog       Create a blog post (writes to Notion)
+  podcast    Podcast episode preparation workflows
   status     Get status of a job
   list       List all jobs
   cancel     Cancel a running job
@@ -176,6 +179,7 @@ Examples:
   pedrocli review -branch feature/rate-limiting
   pedrocli triage -description "Memory leak in handler"
   pedrocli blog -title "My Post" -content "Raw thoughts here..."
+  pedrocli podcast script -outline outline.md -episode "S01E03"
   pedrocli blog -prompt "Write a 2025 recap with calendar events..." -publish
   pedrocli status job-1234567890
   pedrocli list
