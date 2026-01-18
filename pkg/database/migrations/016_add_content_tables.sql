@@ -1,3 +1,4 @@
+-- +goose Up
 -- Migration: Add content and content_versions tables for unified storage abstraction
 -- Date: 2026-01-17
 -- Related: PR #1 Unified Architecture Foundation
@@ -51,16 +52,6 @@ COMMENT ON COLUMN content_versions.phase IS 'Workflow phase name (e.g., Outline,
 COMMENT ON COLUMN content_versions.version_num IS 'Sequential version number within content';
 COMMENT ON COLUMN content_versions.snapshot IS 'Phase-specific data snapshot in JSONB';
 
--- Trigger to auto-update updated_at timestamp
-CREATE OR REPLACE FUNCTION update_content_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER content_updated_at_trigger
-    BEFORE UPDATE ON content
-    FOR EACH ROW
-    EXECUTE FUNCTION update_content_updated_at();
+-- +goose Down
+DROP TABLE IF EXISTS content_versions;
+DROP TABLE IF EXISTS content;
