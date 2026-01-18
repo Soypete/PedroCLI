@@ -42,6 +42,7 @@ type AppContext struct {
 	RSSFeedTool     tools.Tool
 	StaticLinksTool tools.Tool
 	BlogNotionTool  tools.Tool
+	WebSearchTool   tools.Tool
 
 	// Scheduling tools
 	CalComTool tools.Tool
@@ -131,6 +132,7 @@ func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, erro
 	appCtx.RSSFeedTool = tools.NewRSSFeedTool(cfg)
 	appCtx.StaticLinksTool = tools.NewStaticLinksTool(cfg)
 	appCtx.BlogNotionTool = tools.NewBlogNotionTool(cfg)
+	appCtx.WebSearchTool = tools.NewWebSearchTool()
 
 	// Initialize scheduling tools
 	if cfg.CalCom.Enabled {
@@ -181,6 +183,24 @@ func registerCodeTools(agent interface{ RegisterTool(tools.Tool) }, ctx *AppCont
 
 // registerSchedulingTools registers scheduling tools (Cal.com) with an agent
 func registerSchedulingTools(agent interface{ RegisterTool(tools.Tool) }, ctx *AppContext) {
+	if ctx.CalComTool != nil {
+		agent.RegisterTool(ctx.CalComTool)
+	}
+}
+
+// registerPodcastTools registers podcast-specific tools with an agent
+func registerPodcastTools(agent interface{ RegisterTool(tools.Tool) }, ctx *AppContext) {
+	// Research tools
+	agent.RegisterTool(ctx.WebSearchTool)
+	agent.RegisterTool(ctx.RSSFeedTool)
+	agent.RegisterTool(ctx.StaticLinksTool)
+
+	// Publishing tools
+	if ctx.BlogNotionTool != nil {
+		agent.RegisterTool(ctx.BlogNotionTool)
+	}
+
+	// Scheduling tools
 	if ctx.CalComTool != nil {
 		agent.RegisterTool(ctx.CalComTool)
 	}

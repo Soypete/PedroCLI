@@ -74,5 +74,18 @@
       "twitter": "https://twitter.com/soypete",
       "newsletter": "https://soypetetech.substack.com"
     }
+  },
+  "podcast": {
+    "enabled": true,
+    "notion": {
+      "enabled": true,
+      "databases": {
+        "scripts": "29da4c9f98458041afaec55980124eb7",
+        "potential_articles": "",
+        "articles_review": "",
+        "news_review": "",
+        "guests": ""
+      }
+    }
   }
 }

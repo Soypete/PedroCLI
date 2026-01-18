@@ -577,6 +577,9 @@ func (s *Server) handlePodcast(w http.ResponseWriter, r *http.Request) {
 		Riverside:    req.Riverside,
 	})
 
+	// Register podcast tools (web search, RSS, Notion, Cal.com)
+	registerPodcastTools(agent, s.appCtx)
+
 	// Execute async in background
 	go func() {
 		ctx := context.Background()

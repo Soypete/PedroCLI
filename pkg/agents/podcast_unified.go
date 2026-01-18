@@ -145,6 +145,11 @@ func NewUnifiedPodcastAgent(cfg UnifiedPodcastAgentConfig) *UnifiedPodcastAgent 
 	return agent
 }
 
+// RegisterTool registers a tool with the podcast agent
+func (a *UnifiedPodcastAgent) RegisterTool(tool tools.Tool) {
+	a.tools[tool.Name()] = tool
+}
+
 // initializeTools registers all tools needed for podcast workflows
 func (a *UnifiedPodcastAgent) initializeTools() {
 	// Research tools
