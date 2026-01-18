@@ -21,22 +21,62 @@ type InferenceExecutor struct {
 	maxRounds    int
 	currentRound int
 	systemPrompt string // Custom system prompt (if set)
+
+	// Cached token IDs for logit bias
+	actionTokenIDs []int
 }
 
 // NewInferenceExecutor creates a new inference executor
 func NewInferenceExecutor(agent *BaseAgent, contextMgr *llmcontext.Manager) *InferenceExecutor {
-	return &InferenceExecutor{
+	executor := &InferenceExecutor{
 		agent:        agent,
 		contextMgr:   contextMgr,
 		maxRounds:    agent.config.Limits.MaxInferenceRuns,
 		currentRound: 0,
 		systemPrompt: "", // Will use agent's default if empty
 	}
+
+	// Pre-tokenize "action" to get token IDs for logit bias
+	// This helps the LLM consistently include the required 'action' parameter
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if tokenIDs, err := agent.llm.Tokenize(ctx, "action"); err == nil {
+		executor.actionTokenIDs = tokenIDs
+
+		// Set logit bias on the agent
+		agent.SetLogitBias(executor.GetLogitBias())
+
+		if agent.config.Debug.Enabled {
+			fmt.Fprintf(os.Stderr, "📊 Pre-tokenized 'action': %v (applying logit bias: 5.0)\n", tokenIDs)
+		}
+	} else if agent.config.Debug.Enabled {
+		fmt.Fprintf(os.Stderr, "⚠️  Failed to pre-tokenize 'action': %v\n", err)
+	}
+
+	return executor
 }
 
 // SetSystemPrompt sets a custom system prompt for this executor
 func (e *InferenceExecutor) SetSystemPrompt(prompt string) {
 	e.systemPrompt = prompt
+}
+
+// GetLogitBias returns a logit bias map to boost the probability of "action" token
+// This helps the LLM consistently include required parameters in tool calls
+func (e *InferenceExecutor) GetLogitBias() map[int]float32 {
+	if len(e.actionTokenIDs) == 0 {
+		return nil
+	}
+
+	// Apply positive bias to boost probability of "action" tokens
+	// Bias value of 5.0 significantly increases probability without being too aggressive
+	biasMap := make(map[int]float32)
+	for _, tokenID := range e.actionTokenIDs {
+		biasMap[tokenID] = 5.0
+	}
+
+	return biasMap
 }
 
 // Execute runs the inference loop until completion or max rounds

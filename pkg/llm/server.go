@@ -198,6 +198,52 @@ func (c *ServerClient) GetUsableContext() int {
 	return c.usableSize
 }
 
+// Tokenize converts a string to token IDs using the /tokenize endpoint
+// This is supported by llama-server and compatible backends
+func (c *ServerClient) Tokenize(ctx context.Context, text string) ([]int, error) {
+	// Build request body for /tokenize endpoint
+	reqBody := map[string]interface{}{
+		"content": text,
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal tokenize request: %w", err)
+	}
+
+	// Create HTTP request to /tokenize endpoint
+	tokenizeURL := c.baseURL + "/tokenize"
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", tokenizeURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create tokenize request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	// Execute request
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("tokenize request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check status
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("tokenize server returned %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	// Parse response
+	var tokenResp struct {
+		Tokens []int `json:"tokens"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return nil, fmt.Errorf("failed to decode tokenize response: %w", err)
+	}
+
+	return tokenResp.Tokens, nil
+}
+
 // Close closes the HTTP client
 func (c *ServerClient) Close() error {
 	c.httpClient.CloseIdleConnections()

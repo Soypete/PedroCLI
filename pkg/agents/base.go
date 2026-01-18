@@ -37,6 +37,9 @@ type BaseAgent struct {
 	registry             *tools.ToolRegistry
 	toolPromptGen        *prompts.ToolPromptGenerator
 	compactionStatsStore storage.CompactionStatsStore // Optional stats tracking
+
+	// Logit bias for controlling token probabilities (set by executor)
+	logitBias map[int]float32
 }
 
 // NewBaseAgent creates a new base agent
@@ -76,6 +79,11 @@ func (a *BaseAgent) GetRegistry() *tools.ToolRegistry {
 // SetCompactionStatsStore sets the compaction statistics store
 func (a *BaseAgent) SetCompactionStatsStore(store storage.CompactionStatsStore) {
 	a.compactionStatsStore = store
+}
+
+// SetLogitBias sets the logit bias for controlling token probabilities
+func (a *BaseAgent) SetLogitBias(bias map[int]float32) {
+	a.logitBias = bias
 }
 
 // Name returns the agent name
@@ -274,6 +282,7 @@ func (a *BaseAgent) executeInferenceWithSystemPrompt(ctx context.Context, contex
 		UserPrompt:   fullPrompt,
 		Temperature:  a.config.Model.Temperature,
 		MaxTokens:    8192, // Reserve for response
+		LogitBias:    a.logitBias, // Apply logit bias for token control
 	}
 
 	// Add tools if native tool calling is enabled

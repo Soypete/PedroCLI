@@ -27,6 +27,12 @@ func (m *MockBackend) GetUsableContext() int {
 	return 6144
 }
 
+func (m *MockBackend) Tokenize(ctx context.Context, text string) ([]int, error) {
+	// Mock tokenization: return dummy token IDs
+	// In real tests, you can customize this per test case
+	return []int{123, 456}, nil
+}
+
 func TestGenerateTLDR(t *testing.T) {
 	mockBackend := &MockBackend{
 		response: "- First key point about the topic\n- Second important takeaway\n- Third critical insight",

@@ -14,30 +14,7 @@ import (
 	"github.com/soypete/pedrocli/pkg/tools"
 )
 
-// Phase represents a single phase in a phased workflow
-type Phase struct {
-	Name         string   // Phase identifier (e.g., "analyze", "plan", "implement")
-	Description  string   // Human-readable description
-	SystemPrompt string   // Custom system prompt for this phase
-	Tools        []string // Subset of tools available in this phase (empty = all)
-	MaxRounds    int      // Max inference rounds for this phase (0 = use default)
-	// Validator validates the phase output and returns error if invalid
-	Validator func(result *PhaseResult) error
-	// Optional: allow the phase to produce structured output
-	ExpectsJSON bool
-}
-
-// PhaseResult contains the result of executing a phase
-type PhaseResult struct {
-	PhaseName   string                 `json:"phase_name"`
-	Success     bool                   `json:"success"`
-	Output      string                 `json:"output"`
-	Data        map[string]interface{} `json:"data,omitempty"`
-	Error       string                 `json:"error,omitempty"`
-	StartedAt   time.Time              `json:"started_at"`
-	CompletedAt time.Time              `json:"completed_at"`
-	RoundsUsed  int                    `json:"rounds_used"`
-}
+// Note: Phase and PhaseResult are now defined in orchestrator.go
 
 // PhasedExecutor handles multi-phase workflow execution
 type PhasedExecutor struct {
