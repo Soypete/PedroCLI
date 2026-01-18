@@ -168,9 +168,38 @@ No code changes needed - the tokenization happens at runtime based on the curren
 
 ---
 
-## Testing Results
+## Testing Results - Success Metrics Chart
 
-### Before Logit Bias (Qwen 2.5 Coder 32B)
+### Comprehensive Test Comparison
+
+| Test Configuration | Search Tool Success Rate | Successful Calls | Total Calls | Job Outcome | Duration | Rounds Used |
+|-------------------|-------------------------|------------------|-------------|-------------|----------|-------------|
+| **Baseline (No Bias)** | 13% | 3 | ~23 | ❌ Failed | ~8 min | 25/25 (max) |
+| **Logit Bias 5.0** | 54% | 7 | 13 | 🔄 Testing | ~15 min | 19+/25 |
+| **Logit Bias 15.0** | TBD | TBD | TBD | 🔄 Testing | TBD | TBD/25 |
+
+### Success Rate Improvement
+
+```
+100% ┤
+ 90% ┤
+ 80% ┤
+ 70% ┤
+ 60% ┤
+ 54% ┤     ●────────?           ← Logit Bias 5.0 (4x improvement)
+ 50% ┤     │
+ 40% ┤     │
+ 30% ┤     │
+ 20% ┤     │
+ 13% ┤●────┘                    ← No Bias (Baseline)
+ 10% ┤│
+  0% ┴┴────────────────────────
+     No   5.0  15.0  20.0       Logit Bias Strength
+```
+
+### Detailed Results by Test
+
+#### Test 1: Baseline (No Logit Bias) - Qwen 2.5 Coder 32B
 - **Search tool success rate**: ~13% (3 successes out of ~23 attempts)
 - **Failure pattern**: Missing 'action' parameter in tool calls
 - **Job outcome**: Failed after 25 rounds (max reached)
@@ -202,6 +231,27 @@ Round 14: ❌ search failed - unknown action: search
 **Analysis**: Logit bias of 5.0 provides significant improvement but doesn't guarantee compliance. The LLM still probabilistically generates output, and 5.0 may not be strong enough for this use case.
 
 **Next Steps**: Test higher bias values (10.0, 15.0, 20.0) to find optimal threshold.
+
+---
+
+## Cross-Agent Performance Comparison
+
+### Blog Agent vs Build Agent (Same Model, Same Day)
+
+| Metric | Blog Agent (9 phases) | Build Agent (No Bias) | Build Agent (Bias 5.0) |
+|--------|----------------------|---------------------|---------------------|
+| **Model** | Qwen 2.5 Coder 32B | Qwen 2.5 Coder 32B | Qwen 2.5 Coder 32B |
+| **Outcome** | ✅ Success | ❌ Failed | 🔄 Testing |
+| **Duration** | ~5 minutes | ~8 minutes | ~15 minutes |
+| **Phases Completed** | 9/9 (100%) | 0/5 (0%) | TBD |
+| **Total Tokens** | 47.6k | ~25k+ (estimated) | TBD |
+| **Tool Success Rate** | N/A (content gen) | 13% (search tool) | 54% (search tool) |
+| **Output Quality** | Excellent (2545 words) | None (stuck in Analyze) | TBD |
+| **Logit Bias** | Not needed | None | {1311: 5.0} |
+
+**Key Insight**: Blog agent succeeded because it didn't rely heavily on tools during critical phases (pure content generation). Build agent **required** reliable tool calls to explore the codebase, which exposed the parameter compliance issue.
+
+**Implication**: Coding agents are more sensitive to tool parameter reliability than content generation agents.
 
 ---
 
