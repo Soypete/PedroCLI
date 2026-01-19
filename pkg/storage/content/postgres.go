@@ -140,7 +140,6 @@ func (s *PostgresContentStore) List(ctx context.Context, filter Filter) ([]*Cont
 	if filter.Status != nil {
 		query += fmt.Sprintf(" AND status = $%d", argNum)
 		args = append(args, *filter.Status)
-		argNum++
 	}
 
 	query += " ORDER BY created_at DESC"

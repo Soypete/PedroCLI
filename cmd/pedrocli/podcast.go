@@ -31,6 +31,8 @@ func podcastCommand(cfg *config.Config, args []string) {
 		podcastScheduleCmd(cfg, subargs)
 	case "prep":
 		podcastPrepCmd(cfg, subargs)
+	case "outline":
+		podcastOutlineCmd(cfg, subargs)
 	case "help", "-h", "--help":
 		printPodcastUsage()
 	default:
@@ -43,15 +45,20 @@ func podcastCommand(cfg *config.Config, args []string) {
 func printPodcastUsage() {
 	fmt.Println(`Usage: pedrocli podcast <subcommand> [flags]
 
-Podcast episode preparation workflows for SoypeteTech podcast.
+Podcast episode preparation workflows.
 
 Available subcommands:
+  outline  - Generate structured episode outline from topic/summary
   script   - Generate podcast episode script from outline
   news     - Review and summarize news items for episode prep
   schedule - Create Cal.com booking link for podcast recording
   prep     - Full episode prep workflow (script + news + schedule)
 
 Examples:
+  # Generate episode outline (25-minute format)
+  pedrocli podcast outline -episode "S01E03" -title "How to Choose a Local LLM"
+  pedrocli podcast outline -episode "S01E04" -title "Agents That Work" -summary "Building reliable AI agents for real tasks"
+
   # Generate script from outline
   pedrocli podcast script -outline outline.md -episode "S01E03"
 
@@ -200,6 +207,141 @@ Flags:
 		fmt.Printf("\n✅ Script saved to: %s\n", *output)
 	} else {
 		fmt.Println("\n" + script)
+	}
+}
+
+func podcastOutlineCmd(cfg *config.Config, args []string) {
+	fs := flag.NewFlagSet("podcast outline", flag.ExitOnError)
+	episode := fs.String("episode", "", "Episode number (e.g., 'S01E03') (required)")
+	title := fs.String("title", "", "Episode title/topic (required)")
+	summary := fs.String("summary", "", "2-3 sentence topic summary")
+	guests := fs.String("guests", "", "Guest names (comma-separated)")
+	duration := fs.Int("duration", 25, "Target duration in minutes (default: 25)")
+	output := fs.String("output", "", "Output file path (default: stdout)")
+
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, `Usage: pedrocli podcast outline [flags]
+
+Generate a structured episode outline for the podcast.
+
+The outline follows the standard template with:
+- Episode details table
+- Host bios
+- Segment outline with timestamps (scaled to duration)
+- News segment placeholders
+- Main conversation discussion prompts
+- Show notes template
+
+This is typically the first step before generating a full script.
+
+Examples:
+  pedrocli podcast outline -episode "S01E03" -title "How to Choose a Local LLM"
+  pedrocli podcast outline -episode "S01E04" -title "Building Reliable Agents" -summary "We discuss patterns for AI agents that work in production"
+  pedrocli podcast outline -episode "S01E05" -title "AI on a Budget" -guests "Jane Doe" -duration 45
+  pedrocli podcast outline -episode "S01E03" -title "Model Selection" -output outline.md
+
+Flags:
+`)
+		fs.PrintDefaults()
+	}
+
+	fs.Parse(args)
+
+	// Validate required flags
+	if *episode == "" {
+		fmt.Fprintln(os.Stderr, "Error: -episode must be specified")
+		fs.Usage()
+		os.Exit(1)
+	}
+	if *title == "" {
+		fmt.Fprintln(os.Stderr, "Error: -title must be specified")
+		fs.Usage()
+		os.Exit(1)
+	}
+
+	fmt.Printf("⏳ Generating episode outline...\n")
+	fmt.Printf("🎙️  Episode: %s\n", *episode)
+	fmt.Printf("📝 Title: %s\n", *title)
+	if *summary != "" {
+		fmt.Printf("📋 Summary: %s\n", *summary)
+	}
+	if *guests != "" {
+		fmt.Printf("👥 Guests: %s\n", *guests)
+	}
+	fmt.Printf("⏱️  Duration: %d minutes\n", *duration)
+
+	// Create LLM backend
+	backend, err := llm.NewBackend(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to create LLM backend: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Create file-based storage for CLI
+	storeConfig := content.StoreConfig{
+		FileBaseDir: podcastContentDir(),
+	}
+	contentStore, err := content.NewContentStore(storeConfig)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to create content store: %v\n", err)
+		os.Exit(1)
+	}
+	versionStore, err := content.NewVersionStore(storeConfig)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to create version store: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Create UnifiedPodcastAgent with outline workflow
+	agent := agents.NewUnifiedPodcastAgent(agents.UnifiedPodcastAgentConfig{
+		Backend:      backend,
+		ContentStore: contentStore,
+		VersionStore: versionStore,
+		Config:       cfg,
+		Mode:         agents.ExecutionModeSync,
+		WorkflowType: agents.WorkflowOutline,
+		Outline:      *summary, // Use summary as the input "outline" (topic summary)
+		Episode:      *episode,
+		Title:        *title,
+		Guests:       *guests,
+		Duration:     *duration,
+	})
+
+	// Execute agent workflow synchronously
+	ctx := context.Background()
+	if err := agent.ExecuteWorkflow(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "\nError: Outline generation failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Get output
+	result := agent.GetOutput()
+	resultMap, ok := result.(map[string]interface{})
+	if !ok {
+		fmt.Fprintln(os.Stderr, "\nError: Failed to get agent output")
+		os.Exit(1)
+	}
+
+	// The generated outline is stored in the "outline" field after generation
+	// but we also check "generated_outline" which is explicitly stored
+	outline := ""
+	if o, exists := resultMap["outline"]; exists {
+		outline, _ = o.(string)
+	}
+	if outline == "" {
+		fmt.Fprintln(os.Stderr, "\nError: No outline generated")
+		os.Exit(1)
+	}
+
+	// Output results
+	if *output != "" {
+		if err := os.WriteFile(*output, []byte(outline), 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "\nError: Failed to write output file: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("\n✅ Outline saved to: %s\n", *output)
+	} else {
+		fmt.Println("\n" + outline)
 	}
 }
 

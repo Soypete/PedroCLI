@@ -264,13 +264,20 @@ type PodcastMetadata struct {
 	RecordingPlatform string `json:"recording_platform,omitempty"` // e.g., "Riverside"
 	// TODO: Google Drive folder for assets
 	DriveFolder string `json:"drive_folder,omitempty"`
+
+	// Episode generation settings
+	DefaultDuration int    `json:"default_duration,omitempty"` // Default episode duration in minutes (e.g., 25)
+	SponsorInfo     string `json:"sponsor_info,omitempty"`     // Sponsor descriptions for episode outlines
+	SponsorLinks    string `json:"sponsor_links,omitempty"`    // Sponsor links for show notes
+	UpcomingEvents  string `json:"upcoming_events,omitempty"`  // Upcoming events to mention in episodes
 }
 
 // Cohost contains cohost information
 type Cohost struct {
-	Name string `json:"name,omitempty"`
-	Bio  string `json:"bio,omitempty"`
-	Role string `json:"role,omitempty"` // e.g., "host", "cohost", "producer"
+	Name        string   `json:"name,omitempty"`
+	Bio         string   `json:"bio,omitempty"`
+	Role        string   `json:"role,omitempty"`         // e.g., "host", "cohost", "producer"
+	SocialLinks []string `json:"social_links,omitempty"` // Social media links for this cohost
 }
 
 // CalComConfig contains Cal.com scheduling configuration

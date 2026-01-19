@@ -135,16 +135,68 @@ type PromptData struct {
 	NotionGuestsDB     string
 	CalendarID         string
 	RecordingPlatform  string
+
+	// Extended fields for episode outline generation
+	HostBios          string // Full bios for each host
+	HostIntros        string // Quick intro lines ("I'm X...")
+	EpisodeDuration   int    // Target episode duration in minutes
+	SponsorInfo       string // Current sponsor descriptions
+	SponsorLinks      string // Sponsor links for show notes
+	UpcomingEvents    string // Upcoming events to mention
+	HostLinks         string // Table format of where to find hosts
+	HostLinksMarkdown string // Markdown list format for show notes
 }
 
 // buildTemplateData builds template data from config
 func (m *Manager) buildTemplateData() PromptData {
 	podcast := m.config.Podcast.Metadata
 
-	// Build cohost list string
+	// Build cohost list string (simple format)
 	var cohostList []string
 	for _, cohost := range podcast.Cohosts {
-		cohostList = append(cohostList, fmt.Sprintf("- %s (%s): %s", cohost.Name, cohost.Role, cohost.Bio))
+		cohostList = append(cohostList, cohost.Name)
+	}
+
+	// Build host bios (full bio paragraphs)
+	var hostBios []string
+	for _, cohost := range podcast.Cohosts {
+		hostBios = append(hostBios, fmt.Sprintf("**%s (%s):** %s", cohost.Name, cohost.Role, cohost.Bio))
+	}
+
+	// Build host intros (quick intro lines)
+	var hostIntros []string
+	for _, cohost := range podcast.Cohosts {
+		hostIntros = append(hostIntros, fmt.Sprintf("- \"I'm %s…\"", cohost.Name))
+	}
+
+	// Build host links table format
+	var hostLinks []string
+	for _, cohost := range podcast.Cohosts {
+		links := strings.Join(cohost.SocialLinks, ", ")
+		hostLinks = append(hostLinks, fmt.Sprintf("|%s|\"Where should people follow you?\"|%s|", cohost.Name, links))
+	}
+	hostLinksTable := "|Host|Prompt|Platforms|\n|------|--------|------|\n" + strings.Join(hostLinks, "\n")
+
+	// Build host links markdown list format
+	var hostLinksMarkdown []string
+	for _, cohost := range podcast.Cohosts {
+		links := strings.Join(cohost.SocialLinks, " | ")
+		hostLinksMarkdown = append(hostLinksMarkdown, fmt.Sprintf("- **%s:** %s", cohost.Name, links))
+	}
+
+	// Build sponsor info
+	sponsorInfo := valueOrTODO(podcast.SponsorInfo, "- [Add sponsor info to config]")
+
+	// Build sponsor links
+	sponsorLinks := valueOrTODO(podcast.SponsorLinks, "- [Add sponsor links to config]")
+
+	// Build upcoming events
+	upcomingEvents := valueOrTODO(podcast.UpcomingEvents, "- [Add upcoming events to config]")
+
+	// Default episode duration
+	episodeDuration := podcast.DefaultDuration
+	if episodeDuration == 0 {
+		episodeDuration = 25 // Default to 25 minutes
 	}
 
 	return PromptData{
@@ -152,13 +204,23 @@ func (m *Manager) buildTemplateData() PromptData {
 		PodcastDescription: valueOrTODO(podcast.Description, "TODO: Add podcast description"),
 		PodcastFormat:      valueOrTODO(podcast.Format, "TODO: Add podcast format"),
 		Cohosts:            podcast.Cohosts,
-		CohostList:         strings.Join(cohostList, "\n"),
+		CohostList:         strings.Join(cohostList, ", "),
 		NotionScriptsDB:    valueOrTODO(m.config.Podcast.Notion.Databases.Scripts, "TODO: Add Notion Scripts database ID"),
 		NotionArticlesDB:   valueOrTODO(m.config.Podcast.Notion.Databases.ArticlesReview, "TODO: Add Notion Articles database ID"),
 		NotionNewsDB:       valueOrTODO(m.config.Podcast.Notion.Databases.NewsReview, "TODO: Add Notion News database ID"),
 		NotionGuestsDB:     valueOrTODO(m.config.Podcast.Notion.Databases.Guests, "TODO: Add Notion Guests database ID"),
 		CalendarID:         valueOrTODO(m.config.Podcast.Calendar.CalendarID, "TODO: Add Google Calendar ID"),
 		RecordingPlatform:  valueOrTODO(podcast.RecordingPlatform, "TODO: Add recording platform"),
+
+		// Extended fields
+		HostBios:          strings.Join(hostBios, "\n\n"),
+		HostIntros:        strings.Join(hostIntros, "\n"),
+		EpisodeDuration:   episodeDuration,
+		SponsorInfo:       sponsorInfo,
+		SponsorLinks:      sponsorLinks,
+		UpcomingEvents:    upcomingEvents,
+		HostLinks:         hostLinksTable,
+		HostLinksMarkdown: strings.Join(hostLinksMarkdown, "\n"),
 	}
 }
 
