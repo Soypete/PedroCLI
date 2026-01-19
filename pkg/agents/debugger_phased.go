@@ -188,7 +188,6 @@ func (d *DebuggerPhasedAgent) Execute(ctx context.Context, input map[string]inte
 		err = executor.Execute(bgCtx, initialPrompt)
 		if err != nil {
 			d.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
-			d.cleanupWorkspaceIfNeeded(bgCtx, job.ID)
 			return
 		}
 
@@ -202,7 +201,6 @@ func (d *DebuggerPhasedAgent) Execute(ctx context.Context, input map[string]inte
 		}
 
 		d.jobManager.Update(bgCtx, job.ID, jobs.StatusCompleted, output, nil)
-		d.cleanupWorkspaceIfNeeded(bgCtx, job.ID)
 	}()
 
 	return job, nil

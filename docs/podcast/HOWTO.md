@@ -177,14 +177,14 @@ The "Episode Planner" (aka "scripts") database should have these properties:
 
 ### Checking Job Output
 
-All agent runs create job directories at `/tmp/pedroceli-jobs/job-XXXXX-TIMESTAMP/`:
+All agent runs create job directories at `/tmp/pedrocli-jobs/job-XXXXX-TIMESTAMP/`:
 
 ```bash
 # List recent jobs
-ls -lt /tmp/pedroceli-jobs/ | head -5
+ls -lt /tmp/pedrocli-jobs/ | head -5
 
 # Check specific job output
-cat /tmp/pedroceli-jobs/job-XXXXX-TIMESTAMP/*-tool-results.json
+cat /tmp/pedrocli-jobs/job-XXXXX-TIMESTAMP/*-tool-results.json
 ```
 
 Look for:
@@ -224,6 +224,6 @@ You can chain commands together:
 
 ## Need Help?
 
-- Check `/tmp/pedroceli-jobs/` for detailed execution logs
+- Check `/tmp/pedrocli-jobs/` for detailed execution logs
 - Verify your Notion token is valid and databases are shared with the integration
 - Ensure database property names match exactly (including emojis!)
