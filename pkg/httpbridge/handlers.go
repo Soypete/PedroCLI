@@ -3,6 +3,7 @@ package httpbridge
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -112,6 +113,20 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Set up workspace isolation for HTTP Bridge jobs
+	var workspaceDir string
+	if s.appCtx.WorkspaceManager != nil && s.appCtx.WorkDir != "" {
+		// Generate a temporary job ID for workspace setup
+		tempJobID := uuid.New().String()
+		workspace, wsErr := s.appCtx.WorkspaceManager.SetupWorkspace(s.ctx, tempJobID, s.appCtx.WorkDir)
+		if wsErr != nil {
+			log.Printf("Warning: Failed to setup workspace: %v (falling back to main repo)", wsErr)
+		} else {
+			workspaceDir = workspace
+			log.Printf("Created isolated workspace: %s", workspaceDir)
+		}
+	}
+
 	// Create job using appropriate agent
 	var job *jobs.Job
 	var err error
@@ -125,13 +140,19 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		agent := s.appCtx.NewBuilderAgent()
+
 		input := map[string]interface{}{
 			"description": req.Description,
 		}
 		if req.Issue != "" {
 			input["issue"] = req.Issue
 		}
+		// Pass workspace_dir if available (agent will use it for tools)
+		if workspaceDir != "" {
+			input["workspace_dir"] = workspaceDir
+		}
+
+		agent := s.appCtx.NewBuilderAgent()
 		job, err = agent.Execute(s.ctx, input)
 
 	case "debugger":
@@ -142,13 +163,18 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		agent := s.appCtx.NewDebuggerAgent()
+
 		input := map[string]interface{}{
 			"symptoms": req.Symptoms,
 		}
 		if req.Logs != "" {
 			input["logs"] = req.Logs
 		}
+		if workspaceDir != "" {
+			input["workspace_dir"] = workspaceDir
+		}
+
+		agent := s.appCtx.NewDebuggerAgent()
 		job, err = agent.Execute(s.ctx, input)
 
 	case "reviewer":
@@ -159,10 +185,16 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		agent := s.appCtx.NewReviewerAgent()
-		job, err = agent.Execute(s.ctx, map[string]interface{}{
+
+		input := map[string]interface{}{
 			"branch": req.Branch,
-		})
+		}
+		if workspaceDir != "" {
+			input["workspace_dir"] = workspaceDir
+		}
+
+		agent := s.appCtx.NewReviewerAgent()
+		job, err = agent.Execute(s.ctx, input)
 
 	case "triager":
 		if req.Description == "" {
@@ -172,10 +204,16 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		agent := s.appCtx.NewTriagerAgent()
-		job, err = agent.Execute(s.ctx, map[string]interface{}{
+
+		input := map[string]interface{}{
 			"description": req.Description,
-		})
+		}
+		if workspaceDir != "" {
+			input["workspace_dir"] = workspaceDir
+		}
+
+		agent := s.appCtx.NewTriagerAgent()
+		job, err = agent.Execute(s.ctx, input)
 
 	default:
 		respondJSON(w, http.StatusBadRequest, JobResponse{

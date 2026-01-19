@@ -183,6 +183,7 @@ func (r *ReviewerPhasedAgent) Execute(ctx context.Context, input map[string]inte
 		err = executor.Execute(bgCtx, initialPrompt)
 		if err != nil {
 			r.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
+			r.cleanupWorkspaceIfNeeded(bgCtx, job.ID)
 			return
 		}
 
@@ -203,6 +204,7 @@ func (r *ReviewerPhasedAgent) Execute(ctx context.Context, input map[string]inte
 		}
 
 		r.jobManager.Update(bgCtx, job.ID, jobs.StatusCompleted, output, nil)
+		r.cleanupWorkspaceIfNeeded(bgCtx, job.ID)
 	}()
 
 	return job, nil

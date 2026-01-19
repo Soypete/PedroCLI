@@ -287,15 +287,19 @@ func TestSetDefaults(t *testing.T) {
 				if len(c.Tools.ForbiddenCommands) == 0 {
 					t.Error("Tools.ForbiddenCommands should have defaults")
 				}
-				// Check for a few expected forbidden commands
-				hasSed := false
+				// Check for a few expected forbidden commands (rm, sudo should always be forbidden)
+				hasRm := false
+				hasSudo := false
 				for _, cmd := range c.Tools.ForbiddenCommands {
-					if cmd == "sed" {
-						hasSed = true
+					if cmd == "rm" {
+						hasRm = true
+					}
+					if cmd == "sudo" {
+						hasSudo = true
 					}
 				}
-				if !hasSed {
-					t.Error("Tools.ForbiddenCommands should include 'sed'")
+				if !hasRm || !hasSudo {
+					t.Error("Tools.ForbiddenCommands should include 'rm' and 'sudo'")
 				}
 			},
 		},

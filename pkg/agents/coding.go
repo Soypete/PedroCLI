@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/soypete/pedrocli/pkg/config"
@@ -86,9 +87,17 @@ func (a *CodingBaseAgent) GetPromptManager() *prompts.Manager {
 }
 
 // setupWorkDirectory sets up the working directory for the job.
-// If repo info (provider, owner, repo) is provided, it uses the repo tool to ensure the repo exists.
-// Otherwise, it uses the current working directory.
+// Priority order:
+// 1. workspace_dir (HTTP Bridge isolated workspace)
+// 2. repo info (provider, owner, repo) - uses repo tool
+// 3. current working directory
 func (a *CodingBaseAgent) setupWorkDirectory(ctx context.Context, jobID string, input map[string]interface{}) (string, error) {
+	// Check for workspace_dir first (HTTP Bridge isolation)
+	if workspaceDir, ok := input["workspace_dir"].(string); ok && workspaceDir != "" {
+		log.Printf("Using isolated workspace for job %s: %s", jobID, workspaceDir)
+		return workspaceDir, nil
+	}
+
 	// Check if repo information is provided
 	provider, hasProvider := input["provider"].(string)
 	owner, hasOwner := input["owner"].(string)

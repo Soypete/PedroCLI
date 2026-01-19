@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"log"
 
 	"github.com/soypete/pedrocli/pkg/config"
 	"github.com/soypete/pedrocli/pkg/jobs"
@@ -178,6 +179,18 @@ func (b *BuilderPhasedAgent) Execute(ctx context.Context, input map[string]inter
 			return
 		}
 
+		// If workspace_dir was provided, record it on the job
+		if workspaceDir, ok := input["workspace_dir"].(string); ok && workspaceDir != "" {
+			log.Printf("Setting workspace_dir for job %s: %s", job.ID, workspaceDir)
+			if err := b.jobManager.SetWorkspaceDir(bgCtx, job.ID, workspaceDir); err != nil {
+				log.Printf("Warning: failed to set workspace_dir for job %s: %v", job.ID, err)
+			} else {
+				log.Printf("Successfully set workspace_dir for job %s", job.ID)
+			}
+		} else {
+			log.Printf("No workspace_dir in input for job %s (ok=%v, workspaceDir=%q)", job.ID, ok, workspaceDir)
+		}
+
 		// Update tool work directories
 		if githubTool, ok := b.tools["github"].(*tools.GitHubTool); ok {
 			// Re-register with correct workDir
@@ -195,6 +208,7 @@ func (b *BuilderPhasedAgent) Execute(ctx context.Context, input map[string]inter
 		err = executor.Execute(bgCtx, initialPrompt)
 		if err != nil {
 			b.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
+			b.cleanupWorkspaceIfNeeded(bgCtx, job.ID)
 			return
 		}
 
@@ -208,6 +222,7 @@ func (b *BuilderPhasedAgent) Execute(ctx context.Context, input map[string]inter
 		}
 
 		b.jobManager.Update(bgCtx, job.ID, jobs.StatusCompleted, output, nil)
+		b.cleanupWorkspaceIfNeeded(bgCtx, job.ID)
 	}()
 
 	return job, nil
