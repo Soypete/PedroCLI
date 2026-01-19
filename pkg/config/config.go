@@ -160,11 +160,11 @@ type WebConfig struct {
 
 // HTTPBridgeConfig contains HTTP bridge/API server workspace settings
 type HTTPBridgeConfig struct {
-	// WorkspacePath is where job workspaces are created (default: ~/.pedrocli/worktrees)
+	// WorkspacePath is where job workspaces are created (default: ~/.cache/pedrocli/jobs)
 	WorkspacePath string `json:"workspace_path,omitempty"`
 	// CleanupOnComplete determines whether to delete workspaces after successful PR creation
 	// Default: false (preserve for debugging). When false, workspaces accumulate.
-	// Manual cleanup: rm -rf ~/.pedrocli/worktrees/* or future 'pedrocli cache clean'
+	// Manual cleanup: rm -rf ~/.cache/pedrocli/jobs/* or future 'pedrocli cache clean'
 	CleanupOnComplete bool `json:"cleanup_on_complete"`
 }
 
@@ -531,7 +531,7 @@ func (c *Config) setDefaults() {
 		c.Git.Remote = "origin"
 	}
 	if c.Git.BranchPrefix == "" {
-		c.Git.BranchPrefix = "pedroceli/"
+		c.Git.BranchPrefix = "pedrocli/"
 	}
 
 	// Limits defaults
@@ -594,9 +594,9 @@ func (c *Config) setDefaults() {
 
 	// HTTP Bridge defaults
 	if c.HTTPBridge.WorkspacePath == "" {
-		// Default to ~/.pedrocli/worktrees for isolated git clones
+		// Use XDG Base Directory spec: ~/.cache/pedrocli/jobs
 		homeDir, _ := os.UserHomeDir()
-		c.HTTPBridge.WorkspacePath = filepath.Join(homeDir, ".pedrocli", "worktrees")
+		c.HTTPBridge.WorkspacePath = filepath.Join(homeDir, ".cache", "pedrocli", "jobs")
 	}
 	// CleanupOnComplete defaults to false (preserve workspaces for debugging)
 

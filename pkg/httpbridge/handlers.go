@@ -3,16 +3,13 @@ package httpbridge
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/soypete/pedrocli/pkg/agents"
 	"github.com/soypete/pedrocli/pkg/cli"
 	"github.com/soypete/pedrocli/pkg/jobs"
-	"github.com/soypete/pedrocli/pkg/storage/content"
 )
 
 // CreateJobRequest represents the job creation request
@@ -114,20 +111,6 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set up workspace isolation for HTTP Bridge jobs
-	var workspaceDir string
-	if s.appCtx.WorkspaceManager != nil && s.appCtx.WorkDir != "" {
-		// Generate a temporary job ID for workspace setup
-		tempJobID := uuid.New().String()
-		workspace, wsErr := s.appCtx.WorkspaceManager.SetupWorkspace(s.ctx, tempJobID, s.appCtx.WorkDir)
-		if wsErr != nil {
-			log.Printf("Warning: Failed to setup workspace: %v (falling back to main repo)", wsErr)
-		} else {
-			workspaceDir = workspace
-			log.Printf("Created isolated workspace: %s", workspaceDir)
-		}
-	}
-
 	// Create job using appropriate agent
 	var job *jobs.Job
 	var err error
@@ -141,19 +124,13 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-
+		agent := s.appCtx.NewBuilderAgent()
 		input := map[string]interface{}{
 			"description": req.Description,
 		}
 		if req.Issue != "" {
 			input["issue"] = req.Issue
 		}
-		// Pass workspace_dir if available (agent will use it for tools)
-		if workspaceDir != "" {
-			input["workspace_dir"] = workspaceDir
-		}
-
-		agent := s.appCtx.NewBuilderAgent()
 		job, err = agent.Execute(s.ctx, input)
 
 	case "debugger":
@@ -164,18 +141,13 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-
+		agent := s.appCtx.NewDebuggerAgent()
 		input := map[string]interface{}{
 			"symptoms": req.Symptoms,
 		}
 		if req.Logs != "" {
 			input["logs"] = req.Logs
 		}
-		if workspaceDir != "" {
-			input["workspace_dir"] = workspaceDir
-		}
-
-		agent := s.appCtx.NewDebuggerAgent()
 		job, err = agent.Execute(s.ctx, input)
 
 	case "reviewer":
@@ -186,16 +158,10 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-
-		input := map[string]interface{}{
-			"branch": req.Branch,
-		}
-		if workspaceDir != "" {
-			input["workspace_dir"] = workspaceDir
-		}
-
 		agent := s.appCtx.NewReviewerAgent()
-		job, err = agent.Execute(s.ctx, input)
+		job, err = agent.Execute(s.ctx, map[string]interface{}{
+			"branch": req.Branch,
+		})
 
 	case "triager":
 		if req.Description == "" {
@@ -205,16 +171,10 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-
-		input := map[string]interface{}{
-			"description": req.Description,
-		}
-		if workspaceDir != "" {
-			input["workspace_dir"] = workspaceDir
-		}
-
 		agent := s.appCtx.NewTriagerAgent()
-		job, err = agent.Execute(s.ctx, input)
+		job, err = agent.Execute(s.ctx, map[string]interface{}{
+			"description": req.Description,
+		})
 
 	default:
 		respondJSON(w, http.StatusBadRequest, JobResponse{
@@ -531,14 +491,9 @@ func (s *Server) handleBlogReviewPage(w http.ResponseWriter, r *http.Request) {
 
 // PodcastRequest represents a podcast job creation request
 type PodcastRequest struct {
-	Type      string `json:"type"`       // create_script, create_outline, schedule_episode
-	Topic     string `json:"topic"`      // For script/outline
-	Notes     string `json:"notes"`      // For script/outline
-	Episode   string `json:"episode"`    // For scheduling (e.g., "S01E03")
-	Title     string `json:"title"`      // For scheduling
-	GuestName string `json:"guest_name"` // For scheduling
-	Duration  int    `json:"duration"`   // For scheduling (in minutes)
-	Riverside bool   `json:"riverside"`  // For scheduling (Riverside.fm integration)
+	Type  string `json:"type"` // create_script, create_outline
+	Topic string `json:"topic"`
+	Notes string `json:"notes"`
 }
 
 // handlePodcast handles POST /api/podcast (create podcast job)
@@ -554,93 +509,18 @@ func (s *Server) handlePodcast(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate based on type
-	if req.Type == "schedule_episode" {
-		if req.Episode == "" || req.Title == "" {
-			http.Error(w, "Episode and title are required for scheduling", http.StatusBadRequest)
-			return
-		}
-	} else {
-		if req.Topic == "" {
-			http.Error(w, "Topic is required", http.StatusBadRequest)
-			return
-		}
-	}
-
-	// Create podcast agent with appropriate workflow
-	var workflowType agents.PodcastWorkflowType
-	switch req.Type {
-	case "create_script":
-		workflowType = agents.WorkflowScript
-	case "schedule_episode":
-		workflowType = agents.WorkflowSchedule
-	case "create_outline":
-		// TODO: Add outline workflow when implemented
-		http.Error(w, "Outline workflow not yet implemented", http.StatusNotImplemented)
-		return
-	default:
-		http.Error(w, "Invalid podcast job type", http.StatusBadRequest)
+	if req.Topic == "" {
+		http.Error(w, "Topic is required", http.StatusBadRequest)
 		return
 	}
 
-	// Create storage (PostgreSQL for web UI)
-	storeConfig := content.StoreConfig{
-		DB: s.appCtx.Database.DB,
-	}
-	contentStore, err := content.NewContentStore(storeConfig)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to create content store: %v", err), http.StatusInternalServerError)
-		return
-	}
-	versionStore, err := content.NewVersionStore(storeConfig)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to create version store: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	// Create unified podcast agent
-	agent := agents.NewUnifiedPodcastAgent(agents.UnifiedPodcastAgentConfig{
-		Backend:      s.appCtx.Backend,
-		ContentStore: contentStore,
-		VersionStore: versionStore,
-		Config:       s.config,
-		JobManager:   s.appCtx.JobManager,
-		Mode:         agents.ExecutionModeAsync,
-		WorkflowType: workflowType,
-		Outline:      req.Notes, // Use notes as outline for script workflow
-		Episode:      req.Episode,
-		Title:        req.Title,
-		Guests:       req.GuestName,
-		Duration:     req.Duration,
-		Riverside:    req.Riverside,
-	})
-
-	// Register podcast tools (web search, RSS, Notion, Cal.com)
-	registerPodcastTools(agent, s.appCtx)
-
-	// Build input map for Execute
-	input := map[string]interface{}{
-		"workflow_type": string(workflowType),
-		"outline":       req.Notes,
-		"episode":       req.Episode,
-		"title":         req.Title,
-		"guests":        req.GuestName,
-		"duration":      req.Duration,
-		"riverside":     req.Riverside,
-	}
-
-	// Execute async and get job
-	job, err := agent.Execute(r.Context(), input)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to create podcast job: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	// Return response with job ID
-	respondJSON(w, http.StatusOK, JobResponse{
-		Success: true,
-		JobID:   job.ID,
-		Message: fmt.Sprintf("Job %s created successfully", job.ID),
+	// For now, return a success response
+	// TODO: Implement actual podcast workflow when agents are ready
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "Podcast job queued (workflow under development)",
+		"type":    req.Type,
+		"topic":   req.Topic,
 	})
 }
 

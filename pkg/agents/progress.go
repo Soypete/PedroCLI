@@ -14,7 +14,6 @@ const (
 	PhaseStatusInProgress PhaseStatus = "in_progress"
 	PhaseStatusDone       PhaseStatus = "done"
 	PhaseStatusFailed     PhaseStatus = "failed"
-	PhaseStatusSkipped    PhaseStatus = "skipped" // For optional phases
 )
 
 // PhaseProgress represents the progress of a single phase

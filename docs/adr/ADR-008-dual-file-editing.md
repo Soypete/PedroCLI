@@ -61,7 +61,7 @@ We implemented a **dual file editing strategy** with mode-specific workflows and
 ```
 ┌────────────────────────────────────────────────┐
 │ Isolated Workspace                             │
-│ ~/.pedrocli/worktrees/<job-id>/workspace/     │
+│ ~/.cache/pedrocli/jobs/<job-id>/workspace/    │
 ├────────────────────────────────────────────────┤
 │ 1. Check if already cloned:                   │
 │    - Exists: git fetch && git pull            │
@@ -100,19 +100,18 @@ Deliver Phase   → git, github                 → Commit, push, PR
 ### 4. Workspace Management
 
 **HTTP Bridge Only:**
-- Base path: `~/.pedrocli/worktrees/` (organized worktrees directory)
-- Per-job isolation: Each job gets `~/.pedrocli/worktrees/<job-id>/workspace/`
+- Base path: `~/.cache/pedrocli/jobs/` (XDG Base Directory spec)
+- Per-job isolation: Each job gets `~/.cache/pedrocli/jobs/<job-id>/workspace/`
 - Workspace reuse: Check for `.git`, do `git fetch && git pull` if exists
 - SSH by default: Auto-convert HTTPS URLs to SSH format
 - Configurable cleanup: `cleanup_on_complete` flag (default: false)
-- Automatic cleanup: Workspaces cleaned up on job completion/failure (if enabled)
 
 ### 5. Configuration
 
 ```json
 {
   "http_bridge": {
-    "workspace_path": "~/.pedrocli/worktrees",
+    "workspace_path": "~/.cache/pedrocli/jobs",
     "cleanup_on_complete": false
   },
   "tools": {
@@ -265,29 +264,6 @@ Note: grep/find are allowed in `bash_explore` but forbidden in `bash_edit` to en
 
 **Decision approved by:** @soypete
 
-**Implementation status:** ✅ Complete (2026-01-19)
+**Implementation status:** ✅ Complete
 
-**Validation status:** ✅ Validated
-
-### Implementation Summary (2026-01-19)
-
-**Core Functionality:**
-- ✅ Workspace isolation fully implemented and tested
-- ✅ Database migration 017 added workspace_dir, work_dir, context_dir columns
-- ✅ WorkspaceManager creates isolated workspaces at `~/.pedrocli/worktrees/<job-id>/`
-- ✅ Automatic cleanup on job completion/failure
-- ✅ workspace_dir properly persisted and retrieved from database
-
-**Database Fix:**
-- Fixed JobStore.Update() to include workspace_dir in SQL UPDATE query
-- Fixed JobStore.Get() and List() to SELECT and scan workspace_dir field
-- All job queries now properly handle workspace isolation metadata
-
-**Testing:**
-- ✅ Issue #34: Repository link input to Code UI (workspace isolation verified)
-- ✅ Test jobs confirmed workspace creation, persistence, and isolation
-- ✅ Workspace cleanup monitoring implemented
-
-**Changes from Original Design:**
-- Workspace path changed from `~/.cache/pedrocli/jobs/` to `~/.pedrocli/worktrees/`
-- Added automatic cleanup hooks in phased agents (builder, debugger, reviewer)
+**Validation status:** ⏳ In Progress (waiting for Issue #32 and #39 tests)

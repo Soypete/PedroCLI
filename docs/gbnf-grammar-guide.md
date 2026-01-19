@@ -612,4 +612,4 @@ response2, _ := llamacppBackend.Infer(ctx, explanationPrompt)
 
 - [Builder Agent Usage](./builder-agent-usage.md) - How to use the builder with grammar-enabled inference
 - [Tool Documentation](../CLAUDE.md#package-structure) - Available tools and their schemas
-- [Context Management](./pedroceli-context-guide.md) - Managing model context windows
+- [Context Management](./pedrocli-context-guide.md) - Managing model context windows

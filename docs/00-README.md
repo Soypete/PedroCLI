@@ -40,7 +40,7 @@ Complete implementation specifications for the Pedroceli autonomous coding agent
 - [Context Management](component-context.md) - File-based context & compaction
 - [Platform Compatibility](component-platform.md) - Mac/Linux cross-platform
 - [Dependency Checking](component-init.md) - Pre-flight validation
-- [Configuration](component-config.md) - .pedroceli.json spec
+- [Configuration](component-config.md) - .pedrocli.json spec
 - [Metrics & Observability](component-metrics.md) - Prometheus metrics
 
 ### Reference
@@ -91,7 +91,7 @@ Complete implementation specifications for the Pedroceli autonomous coding agent
 ## 📦 Project Structure
 
 ```
-pedroceli/
+pedrocli/
 ├── cmd/
 │   ├── mcp-server.go      # MCP server (Phase 1)
 │   ├── cli.go             # CLI client (Phase 2)
@@ -112,7 +112,7 @@ pedroceli/
 │   ├── static/
 │   └── api/
 ├── docs/                  # THIS FOLDER (all specs)
-├── .pedroceli.json
+├── .pedrocli.json
 ├── Makefile
 └── README.md
 ```
@@ -152,7 +152,7 @@ For Claude Code implementing this:
   },
   "git": {
     "always_draft_pr": true,
-    "branch_prefix": "pedroceli/"
+    "branch_prefix": "pedrocli/"
   },
   "debug": {
     "enabled": false,
@@ -166,16 +166,16 @@ For Claude Code implementing this:
 ### CLI
 ```bash
 # Build feature
-pedroceli build --description "Add rate limiting"
+pedrocli build --description "Add rate limiting"
 
 # Debug issue
-pedroceli debug --symptoms "Bot crashes on startup"
+pedrocli debug --symptoms "Bot crashes on startup"
 
 # Review PR
-pedroceli review --branch feature/rate-limiting
+pedrocli review --branch feature/rate-limiting
 
 # Check status
-pedroceli status
+pedrocli status
 ```
 
 ### Web UI

@@ -185,7 +185,6 @@ Examples:
   pedrocli review -branch feature/rate-limiting
   pedrocli triage -description "Memory leak in handler"
   pedrocli blog -title "My Post" -content "Raw thoughts here..."
-  pedrocli podcast script -outline outline.md -episode "S01E03"
   pedrocli blog -prompt "Write a 2025 recap with calendar events..." -publish
   pedrocli run /blog-outline "Building CLI tools in Go"
   pedrocli run /test
@@ -299,8 +298,8 @@ func buildCommand(cfg *config.Config, args []string) {
 		arguments["issue"] = *issue
 	}
 
-	// Call builder agent and poll for completion
-	callAgent(cfg, "builder", arguments)
+	// Call phased builder agent (preferred over legacy builder)
+	callAgent(cfg, "builder_phased", arguments)
 }
 
 // callAgent is a helper function to call an agent and poll for completion

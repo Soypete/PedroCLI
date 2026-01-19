@@ -95,15 +95,20 @@
       "newsletter": "https://soypetetech.substack.com"
     }
   },
-  "podcast": {
+  "lsp": {
     "enabled": true,
-    "notion": {
-      "enabled": true,
-      "databases": {
-        "scripts": "29da4c9f98458041afaec55980124eb7",
-        "guests": "29da4c9f984580cdb64ecbe316bd2028",
-        "topics": "29da4c9f984580cdaad1f2a408d1ec9f",
-        "news": "29da4c9f9845805f9cfded33ef29e98a"
+    "auto_discover": true,
+    "timeout": 30,
+    "servers": {
+      "gopls": {
+        "command": "/Users/miriahpeterson/code/go/bin/gopls",
+        "args": ["serve"],
+        "languages": ["go"],
+        "enabled": true,
+        "init_options": {
+          "usePlaceholders": true,
+          "completionDocumentation": true
+        }
       }
     }
   },

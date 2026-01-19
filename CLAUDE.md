@@ -100,7 +100,7 @@ Both CLI and HTTP server embed agents directly - no subprocess communication nee
 
 ```
 cmd/pedrocli/main.go          → User-facing commands (build, debug, review, triage)
-                              → Loads .pedroceli.json config
+                              → Loads .pedrocli.json config
                               → Creates LLM backend and agents directly
                               → Executes autonomous inference loops
 
@@ -155,7 +155,7 @@ pkg/
 │   └── factory.go   # Backend factory
 │
 ├── llmcontext/      # File-based context management
-│   └── manager.go   # Manages /tmp/pedroceli-jobs/<job-id>/ files
+│   └── manager.go   # Manages /tmp/pedrocli-jobs/<job-id>/ files
 │
 ├── httpbridge/      # HTTP server and API
 │   ├── app.go       # AppContext with agent factories
@@ -164,7 +164,7 @@ pkg/
 │   └── sse.go       # Server-sent events for job updates
 │
 ├── config/          # Configuration management
-│   └── config.go    # Load/validate .pedroceli.json
+│   └── config.go    # Load/validate .pedrocli.json
 │
 ├── jobs/            # Job management
 │   └── manager.go   # Job lifecycle, status tracking
@@ -197,10 +197,10 @@ pkg/
 
 ### 2. File-Based Context (pkg/llmcontext/manager.go)
 
-Unlike in-memory systems, PedroCLI writes all context to `/tmp/pedroceli-jobs/<job-id>/`:
+Unlike in-memory systems, PedroCLI writes all context to `/tmp/pedrocli-jobs/<job-id>/`:
 
 ```
-/tmp/pedroceli-jobs/job-1234567890-20231215-143022/
+/tmp/pedrocli-jobs/job-1234567890-20231215-143022/
 ├── 001-prompt.txt         # Initial prompt
 ├── 002-response.txt       # LLM response
 ├── 003-tool-calls.json    # Parsed tool calls
@@ -220,9 +220,9 @@ Unlike in-memory systems, PedroCLI writes all context to `/tmp/pedroceli-jobs/<j
 **Critical**: Different models have different context limits. The system auto-detects for Ollama models and respects user-configured limits for llama.cpp.
 
 - **Ollama**: Auto-detected in `pkg/llm/tokens.go` (Qwen 32B = 32k, Qwen 72B = 128k, etc.)
-- **llama.cpp**: User specifies in `.pedroceli.json` (`context_size`, `usable_context`)
+- **llama.cpp**: User specifies in `.pedrocli.json` (`context_size`, `usable_context`)
 - **Rule**: Use 75% of stated context (leave room for response)
-- See `docs/pedroceli-context-guide.md` for full details
+- See `docs/pedrocli-context-guide.md` for full details
 
 Token estimation (rough): `tokens ≈ text_length / 4`
 
@@ -292,7 +292,7 @@ The **BlogContentAgent** is the recommended blog creation system with a 7-phase 
 
 See `docs/blog-workflow.md` for full documentation.
 
-### 6. Configuration (.pedroceli.json)
+### 6. Configuration (.pedrocli.json)
 
 Config structure in `pkg/config/config.go`:
 
@@ -338,8 +338,8 @@ Config structure in `pkg/config/config.go`:
 ```
 
 Config files can be in:
-1. `./.pedroceli.json` (current directory)
-2. `~/.pedroceli.json` (home directory)
+1. `./.pedrocli.json` (current directory)
+2. `~/.pedrocli.json` (home directory)
 
 ## Development Environment Setup
 
@@ -764,7 +764,7 @@ make build
 ./pedrocli build -description "Add a test function"
 ```
 
-Check job output in `/tmp/pedroceli-jobs/` to debug issues.
+Check job output in `/tmp/pedrocli-jobs/` to debug issues.
 
 ## Key Design Principles
 
@@ -793,14 +793,14 @@ Better models (Qwen 2.5 Coder 32B+) = better results.
 ## Common Gotchas
 
 ### When Tests Fail
-- Check `/tmp/pedroceli-jobs/<job-id>/` for full execution history
+- Check `/tmp/pedrocli-jobs/<job-id>/` for full execution history
 - Set `debug.keep_temp_files: true` in config to preserve job directories
 - Look at `*-tool-results.json` files to see what actually happened
 
 ### Context Window Issues
 - If agent seems confused or forgets context, check token usage
 - Larger repos may need larger models (32B+ recommended)
-- See `docs/pedroceli-context-guide.md` for strategies
+- See `docs/pedrocli-context-guide.md` for strategies
 
 ### Tool Call Parsing Failures
 - LLM must output exact JSON format: `{"tool": "name", "args": {...}}`

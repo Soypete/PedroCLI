@@ -33,7 +33,7 @@ type ServerClientConfig struct {
 	ContextSize int
 	EnableTools bool
 	APIPath     string        // Optional, defaults to "/v1/chat/completions"
-	Timeout     time.Duration // Optional, defaults to 5min
+	Timeout     time.Duration // Optional, defaults to 20min for large models
 	MaxRetries  int           // Optional, defaults to 3
 }
 
@@ -43,7 +43,7 @@ func NewServerClient(cfg ServerClientConfig) *ServerClient {
 		cfg.APIPath = "/v1/chat/completions" // OpenAI-compatible default
 	}
 	if cfg.Timeout == 0 {
-		cfg.Timeout = 5 * time.Minute
+		cfg.Timeout = 20 * time.Minute // Increased for 32B+ models
 	}
 	if cfg.MaxRetries == 0 {
 		cfg.MaxRetries = 3 // Default to 3 retries

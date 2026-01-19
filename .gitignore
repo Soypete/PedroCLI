@@ -38,5 +38,7 @@ coverage.out
 .env
 *.db
 postgres-data/
+.claude/
 eval-*
 test-blog-agent
+*.log
