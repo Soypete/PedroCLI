@@ -4,7 +4,6 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"log"
 
 	"github.com/soypete/pedrocli/pkg/config"
 	"github.com/soypete/pedrocli/pkg/jobs"
@@ -60,7 +59,7 @@ func (b *BuilderPhasedAgent) GetPhases() []Phase {
 			Name:         "analyze",
 			Description:  "Analyze the request, evaluate repo state, gather requirements",
 			SystemPrompt: builderAnalyzePrompt,
-			Tools:        []string{"search", "navigate", "file", "git", "github", "lsp"},
+			Tools:        []string{"search", "navigate", "file", "git", "github", "lsp", "bash"},
 			MaxRounds:    10,
 			ExpectsJSON:  true,
 			Validator: func(result *PhaseResult) error {
@@ -77,7 +76,7 @@ func (b *BuilderPhasedAgent) GetPhases() []Phase {
 			Name:         "plan",
 			Description:  "Create a detailed implementation plan with numbered steps",
 			SystemPrompt: builderPlanPrompt,
-			Tools:        []string{"search", "navigate", "file", "context"},
+			Tools:        []string{"search", "navigate", "file", "context", "bash"},
 			MaxRounds:    5,
 			ExpectsJSON:  true,
 			Validator: func(result *PhaseResult) error {
@@ -102,7 +101,7 @@ func (b *BuilderPhasedAgent) GetPhases() []Phase {
 			Name:         "validate",
 			Description:  "Run tests, linter, verify the implementation works",
 			SystemPrompt: builderValidatePrompt,
-			Tools:        []string{"test", "bash", "file", "code_edit", "lsp"},
+			Tools:        []string{"test", "bash", "file", "code_edit", "lsp", "search", "navigate"},
 			MaxRounds:    15, // Allow iterations to fix failing tests
 			Validator: func(result *PhaseResult) error {
 				return nil
@@ -179,18 +178,6 @@ func (b *BuilderPhasedAgent) Execute(ctx context.Context, input map[string]inter
 			return
 		}
 
-		// If workspace_dir was provided, record it on the job
-		if workspaceDir, ok := input["workspace_dir"].(string); ok && workspaceDir != "" {
-			log.Printf("Setting workspace_dir for job %s: %s", job.ID, workspaceDir)
-			if err := b.jobManager.SetWorkspaceDir(bgCtx, job.ID, workspaceDir); err != nil {
-				log.Printf("Warning: failed to set workspace_dir for job %s: %v", job.ID, err)
-			} else {
-				log.Printf("Successfully set workspace_dir for job %s", job.ID)
-			}
-		} else {
-			log.Printf("No workspace_dir in input for job %s (ok=%v, workspaceDir=%q)", job.ID, ok, workspaceDir)
-		}
-
 		// Update tool work directories
 		if githubTool, ok := b.tools["github"].(*tools.GitHubTool); ok {
 			// Re-register with correct workDir
@@ -208,7 +195,6 @@ func (b *BuilderPhasedAgent) Execute(ctx context.Context, input map[string]inter
 		err = executor.Execute(bgCtx, initialPrompt)
 		if err != nil {
 			b.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
-			b.cleanupWorkspaceIfNeeded(bgCtx, job.ID)
 			return
 		}
 
@@ -222,7 +208,6 @@ func (b *BuilderPhasedAgent) Execute(ctx context.Context, input map[string]inter
 		}
 
 		b.jobManager.Update(bgCtx, job.ID, jobs.StatusCompleted, output, nil)
-		b.cleanupWorkspaceIfNeeded(bgCtx, job.ID)
 	}()
 
 	return job, nil

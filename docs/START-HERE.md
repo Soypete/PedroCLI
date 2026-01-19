@@ -18,12 +18,12 @@ You have **10 specification files** (~204KB) that contain **everything** needed 
    - The vision: voice-driven autonomous coding
    - Key design decisions
 
-3. **[pedroceli-mcp-insight.md](pedroceli-mcp-insight.md)**
+3. **[pedrocli-mcp-insight.md](pedrocli-mcp-insight.md)**
    - Why MCP architecture
    - Pedroceli IS an MCP server
    - Multiple clients for free
 
-4. **[pedroceli-implementation-plan.md](pedroceli-implementation-plan.md)** ← **MASTER DOCUMENT**
+4. **[pedrocli-implementation-plan.md](pedrocli-implementation-plan.md)** ← **MASTER DOCUMENT**
    - Complete 6-week plan
    - All 4 phases in detail
    - Every component spec'd out
@@ -32,18 +32,18 @@ You have **10 specification files** (~204KB) that contain **everything** needed 
 
 ### Critical Support Documents
 
-5. **[pedroceli-critical-features.md](pedroceli-critical-features.md)**
+5. **[pedrocli-critical-features.md](pedrocli-critical-features.md)**
    - File-based context management
    - Initialization & dependency checks
    - Why both are essential
 
-6. **[pedroceli-context-guide.md](pedroceli-context-guide.md)**
+6. **[pedrocli-context-guide.md](pedrocli-context-guide.md)**
    - Context window management
    - Token estimation
    - Strategic file loading
    - History compaction
 
-7. **[pedroceli-platform-guide.md](pedroceli-platform-guide.md)**
+7. **[pedrocli-platform-guide.md](pedrocli-platform-guide.md)**
    - Mac/Linux cross-platform
    - What NOT to use (sed/grep/find)
    - Use Go stdlib instead
@@ -58,24 +58,24 @@ You have **10 specification files** (~204KB) that contain **everything** needed 
 
 ### Reference (Historical)
 
-9. **[pedroceli-spec.md](pedroceli-spec.md)** - Original detailed brainstorm (57KB)
+9. **[pedrocli-spec.md](pedrocli-spec.md)** - Original detailed brainstorm (57KB)
 10. **[ghostrich-spec.md](ghostrich-spec.md)** - Pre-rename version (31KB)
 
 ## 🎯 Quick Start (5 minutes)
 
 ### For Understanding the Project
 1. Read `01-overview.md` (8KB, 5 min)
-2. Read `pedroceli-mcp-insight.md` (7KB, 5 min)
+2. Read `pedrocli-mcp-insight.md` (7KB, 5 min)
 3. Skim `SPEC-INDEX.md` (11KB, 3 min)
 
 **Total: ~13 minutes to understand the vision**
 
 ### For Implementation
-1. Read `pedroceli-implementation-plan.md` Phase 1 section
+1. Read `pedrocli-implementation-plan.md` Phase 1 section
 2. Reference component guides as needed:
-   - Context questions? → `pedroceli-context-guide.md`
-   - Platform issues? → `pedroceli-platform-guide.md`
-   - Init checks? → `pedroceli-critical-features.md`
+   - Context questions? → `pedrocli-context-guide.md`
+   - Platform issues? → `pedrocli-platform-guide.md`
+   - Init checks? → `pedrocli-critical-features.md`
 
 ## 📋 Implementation Checklist
 
@@ -116,7 +116,7 @@ You have **10 specification files** (~204KB) that contain **everything** needed 
 Recommended structure:
 
 ```
-pedroceli/
+pedrocli/
 ├── docs/
 │   ├── START-HERE.md              (this file)
 │   ├── SPEC-INDEX.md              (master index)
@@ -143,7 +143,7 @@ pedroceli/
 │   ├── context/
 │   ├── init/
 │   └── ...
-├── .pedroceli.json
+├── .pedrocli.json
 ├── Makefile
 └── README.md
 ```
@@ -184,7 +184,7 @@ Everything is specified:
 - ✅ Context management (file-based, compaction)
 - ✅ Platform compatibility (Mac/Linux)
 - ✅ Dependency checking (init validation)
-- ✅ Configuration (complete .pedroceli.json)
+- ✅ Configuration (complete .pedrocli.json)
 - ✅ Testing strategy (per phase)
 - ✅ Code examples (everywhere)
 
@@ -199,7 +199,7 @@ Pedroceli **IS** an MCP server (not wrapped by one). This gives you multiple cli
 Each inference gets full context. Not conversational. Deterministic and simple.
 
 ### File-Based Context
-Write prompts/responses to `/tmp/pedroceli-jobs/`. No memory bloat. Full history. Easy debugging.
+Write prompts/responses to `/tmp/pedrocli-jobs/`. No memory bloat. Full history. Easy debugging.
 
 ### Cross-Platform
 Use Go stdlib, not shell commands. Build on Mac, run on Ubuntu. Works everywhere.
@@ -279,11 +279,11 @@ You have:
 **Minimum (30 minutes):**
 1. START-HERE.md (this file) - 5 min
 2. 01-overview.md - 10 min
-3. pedroceli-mcp-insight.md - 10 min
+3. pedrocli-mcp-insight.md - 10 min
 4. SPEC-INDEX.md - 5 min
 
 **For Implementation:**
-5. pedroceli-implementation-plan.md Phase 1 - 30 min
+5. pedrocli-implementation-plan.md Phase 1 - 30 min
 6. Reference guides as needed - varies
 
 **Total to start coding: ~60 minutes of reading**

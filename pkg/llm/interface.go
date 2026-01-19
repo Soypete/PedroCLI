@@ -15,10 +15,6 @@ type Backend interface {
 
 	// GetUsableContext returns the usable context size (75% of window)
 	GetUsableContext() int
-
-	// Tokenize converts a string to token IDs for the current model
-	// Returns token IDs that can be used with LogitBias
-	Tokenize(ctx context.Context, text string) ([]int, error)
 }
 
 // InferenceRequest represents a request for inference

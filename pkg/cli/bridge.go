@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/soypete/pedrocli/pkg/agents"
 	"github.com/soypete/pedrocli/pkg/config"
@@ -20,6 +21,7 @@ type CLIBridge struct {
 	jobManager *jobs.Manager
 	config     *config.Config
 	backend    llm.Backend
+	lspTool    *tools.LSPTool // LSP tool for cleanup
 }
 
 // CLIBridgeConfig configures the CLI bridge
@@ -84,7 +86,13 @@ func NewCLIBridge(cfg CLIBridgeConfig) (*CLIBridge, error) {
 	// Create code tools setup (registry + all tools)
 	codeTools := tools.NewCodeToolsSetup(cfg.Config, cfg.WorkDir)
 
-	// Register coding agents (using phased implementations)
+	// Create LSP tool if enabled
+	var lspTool *tools.LSPTool
+	if cfg.Config.LSP.Enabled {
+		lspTool = tools.NewLSPTool(cfg.Config, cfg.WorkDir)
+	}
+
+	// Register coding agents (use phased builder for structured workflow)
 	builderAgent := agents.NewBuilderPhasedAgent(cfg.Config, backend, jobManager)
 	codeTools.RegisterWithAgent(builderAgent)
 
@@ -94,7 +102,6 @@ func NewCLIBridge(cfg CLIBridgeConfig) (*CLIBridge, error) {
 	reviewerAgent := agents.NewReviewerPhasedAgent(cfg.Config, backend, jobManager)
 	codeTools.RegisterWithAgent(reviewerAgent)
 
-	// Note: TriagerAgent doesn't have a phased version yet
 	triagerAgent := agents.NewTriagerAgent(cfg.Config, backend, jobManager)
 	codeTools.RegisterWithAgent(triagerAgent)
 
@@ -147,6 +154,7 @@ func NewCLIBridge(cfg CLIBridgeConfig) (*CLIBridge, error) {
 		jobManager: jobManager,
 		config:     cfg.Config,
 		backend:    backend,
+		lspTool:    lspTool,
 	}, nil
 }
 
@@ -236,5 +244,11 @@ func (b *CLIBridge) ExecuteAgent(ctx context.Context, agentName string, descript
 func (b *CLIBridge) Close() {
 	if b.cancel != nil {
 		b.cancel()
+	}
+	// Shutdown LSP servers
+	if b.lspTool != nil {
+		if err := b.lspTool.Shutdown(context.Background()); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to shutdown LSP: %v\n", err)
+		}
 	}
 }

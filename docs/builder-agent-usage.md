@@ -139,7 +139,7 @@ Checking status every 5 seconds. Press Ctrl+C to stop watching (job will continu
 **Job files (for debugging):**
 ```bash
 # Find the latest job
-JOB_DIR=$(ls -td /tmp/pedroceli-jobs/*/ | head -n 1)
+JOB_DIR=$(ls -td /tmp/pedrocli-jobs/*/ | head -n 1)
 
 # View execution history
 ls -la $JOB_DIR
@@ -328,4 +328,4 @@ Track these to evaluate autonomous performance:
 
 - [Agent Architecture](../CLAUDE.md#core-architecture) - How agents work internally
 - [Tool Documentation](../CLAUDE.md#package-structure) - Available tools and capabilities
-- [Configuration Guide](../docs/pedroceli-context-guide.md) - Context window management
+- [Configuration Guide](../docs/pedrocli-context-guide.md) - Context window management

@@ -11,10 +11,34 @@ import (
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/llmcontext"
 	"github.com/soypete/pedrocli/pkg/storage"
+	"github.com/soypete/pedrocli/pkg/toolformat"
 	"github.com/soypete/pedrocli/pkg/tools"
 )
 
-// Note: Phase and PhaseResult are now defined in orchestrator.go
+// Phase represents a single phase in a phased workflow
+type Phase struct {
+	Name         string   // Phase identifier (e.g., "analyze", "plan", "implement")
+	Description  string   // Human-readable description
+	SystemPrompt string   // Custom system prompt for this phase
+	Tools        []string // Subset of tools available in this phase (empty = all)
+	MaxRounds    int      // Max inference rounds for this phase (0 = use default)
+	// Validator validates the phase output and returns error if invalid
+	Validator func(result *PhaseResult) error
+	// Optional: allow the phase to produce structured output
+	ExpectsJSON bool
+}
+
+// PhaseResult contains the result of executing a phase
+type PhaseResult struct {
+	PhaseName   string                 `json:"phase_name"`
+	Success     bool                   `json:"success"`
+	Output      string                 `json:"output"`
+	Data        map[string]interface{} `json:"data,omitempty"`
+	Error       string                 `json:"error,omitempty"`
+	StartedAt   time.Time              `json:"started_at"`
+	CompletedAt time.Time              `json:"completed_at"`
+	RoundsUsed  int                    `json:"rounds_used"`
+}
 
 // PhaseCallback is called after each phase completes
 // Return true to continue, false to stop execution
@@ -212,20 +236,235 @@ func (pe *PhasedExecutor) GetCurrentPhase() int {
 	return pe.currentPhase
 }
 
+// sanitizePhaseOutput removes context pollution from phase outputs.
+// It strips:
+// - JSON blocks (fenced with ```json or bare objects)
+// - File paths (lines containing .go, .js, .py, etc.)
+// - Tool call examples (lines with {"tool":)
+// - Code snippets (fenced code blocks)
+// Keeps:
+// - Plain text summaries
+// - High-level descriptions
+// - Phase completion markers
+func sanitizePhaseOutput(output string, phaseName string) string {
+	if output == "" {
+		return output
+	}
+
+	// Special handling for specific phases
+	switch phaseName {
+	case "plan":
+		// Plan output is pure JSON - extract summary only
+		return sanitizePlanOutput(output)
+	case "analyze":
+		// Analyze may have code snippets - remove them
+		return sanitizeAnalyzeOutput(output)
+	case "implement":
+		// Implement may have tool call examples - remove them
+		return sanitizeImplementOutput(output)
+	default:
+		// Generic sanitization for other phases
+		return sanitizeGenericOutput(output)
+	}
+}
+
+// sanitizePlanOutput extracts high-level summary from plan JSON
+func sanitizePlanOutput(output string) string {
+	// Try to extract just the title and step count
+	var summary strings.Builder
+	summary.WriteString("A detailed implementation plan was created.\n\n")
+
+	// Count steps if JSON is parseable
+	var planData map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &planData); err == nil {
+		if plan, ok := planData["plan"].(map[string]interface{}); ok {
+			if title, ok := plan["title"].(string); ok {
+				summary.WriteString(fmt.Sprintf("Title: %s\n", title))
+			}
+			// Prefer total_steps field if present, else count array
+			if totalSteps, ok := plan["total_steps"].(float64); ok {
+				summary.WriteString(fmt.Sprintf("Total steps: %d\n", int(totalSteps)))
+			} else if steps, ok := plan["steps"].([]interface{}); ok {
+				summary.WriteString(fmt.Sprintf("Total steps: %d\n", len(steps)))
+			}
+		}
+	}
+
+	summary.WriteString("\nUse the context tool to recall the full plan:\n")
+	summary.WriteString(`{"tool": "context", "args": {"action": "recall", "key": "implementation_plan"}}`)
+
+	return summary.String()
+}
+
+// sanitizeAnalyzeOutput removes code snippets but keeps findings
+func sanitizeAnalyzeOutput(output string) string {
+	lines := strings.Split(output, "\n")
+	var sanitized []string
+	inCodeBlock := false
+
+	for _, line := range lines {
+		// Toggle code block state
+		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+			inCodeBlock = !inCodeBlock
+			continue // Skip fence markers
+		}
+
+		// Skip lines inside code blocks
+		if inCodeBlock {
+			continue
+		}
+
+		// Skip lines that look like file paths
+		if isFilePath(line) {
+			continue
+		}
+
+		// Skip lines with JSON tool calls
+		if strings.Contains(line, `{"tool":`) {
+			continue
+		}
+
+		sanitized = append(sanitized, line)
+	}
+
+	return strings.Join(sanitized, "\n")
+}
+
+// sanitizeImplementOutput removes tool call examples
+func sanitizeImplementOutput(output string) string {
+	lines := strings.Split(output, "\n")
+	var sanitized []string
+	inJSONBlock := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Toggle JSON block state
+		if trimmed == "```json" || trimmed == "```" {
+			inJSONBlock = !inJSONBlock
+			continue
+		}
+
+		// Skip JSON blocks
+		if inJSONBlock {
+			continue
+		}
+
+		// Skip standalone JSON objects
+		if strings.HasPrefix(trimmed, "{") && strings.Contains(trimmed, `"tool"`) {
+			continue
+		}
+
+		// Remove inline tool calls (e.g., "Step 1: Done {"tool": "file", ...}")
+		// Look for patterns like {"tool": and remove until closing }
+		if strings.Contains(line, `{"tool"`) {
+			// Simple approach: remove from {"tool" to end of line
+			// More robust: find matching closing brace
+			idx := strings.Index(line, `{"tool"`)
+			if idx >= 0 {
+				// Find the closing brace
+				depth := 0
+				start := idx
+				foundOpen := false
+				end := len(line)
+
+				for i := start; i < len(line); i++ {
+					if line[i] == '{' {
+						depth++
+						foundOpen = true
+					} else if line[i] == '}' {
+						depth--
+						if depth == 0 && foundOpen {
+							end = i + 1
+							break
+						}
+					}
+				}
+
+				// Remove the tool call JSON from the line
+				line = line[:start] + line[end:]
+				line = strings.TrimSpace(line)
+			}
+		}
+
+		sanitized = append(sanitized, line)
+	}
+
+	return strings.Join(sanitized, "\n")
+}
+
+// sanitizeGenericOutput applies general sanitization rules
+func sanitizeGenericOutput(output string) string {
+	lines := strings.Split(output, "\n")
+	var sanitized []string
+	inCodeBlock := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Toggle code block state
+		if strings.HasPrefix(trimmed, "```") {
+			inCodeBlock = !inCodeBlock
+			continue
+		}
+
+		// Skip code blocks
+		if inCodeBlock {
+			continue
+		}
+
+		// Skip file paths
+		if isFilePath(line) {
+			continue
+		}
+
+		// Skip JSON lines
+		if strings.HasPrefix(trimmed, "{") && strings.Contains(trimmed, ":") {
+			continue
+		}
+
+		sanitized = append(sanitized, line)
+	}
+
+	return strings.Join(sanitized, "\n")
+}
+
+// isFilePath checks if a line looks like a file path
+func isFilePath(line string) bool {
+	trimmed := strings.TrimSpace(line)
+
+	// Common file extensions
+	extensions := []string{".go", ".js", ".py", ".ts", ".java", ".cpp", ".h", ".md", ".json", ".yaml", ".yml"}
+	for _, ext := range extensions {
+		if strings.Contains(trimmed, ext) {
+			return true
+		}
+	}
+
+	// Path patterns (e.g., "pkg/metrics/metrics.go")
+	if strings.Contains(trimmed, "/") && len(strings.Split(trimmed, "/")) > 1 {
+		// Check if it's likely a path (has no spaces, reasonable length)
+		if !strings.Contains(trimmed, " ") && len(trimmed) < 200 {
+			return true
+		}
+	}
+
+	return false
+}
+
 // buildNextPhaseInput builds the input for the next phase based on previous result
 func (pe *PhasedExecutor) buildNextPhaseInput(result *PhaseResult) string {
 	var sb strings.Builder
 
 	sb.WriteString(fmt.Sprintf("# Previous Phase: %s\n\n", result.PhaseName))
 	sb.WriteString("## Output\n")
-	sb.WriteString(result.Output)
 
-	if len(result.Data) > 0 {
-		sb.WriteString("\n\n## Structured Data\n```json\n")
-		data, _ := json.MarshalIndent(result.Data, "", "  ")
-		sb.WriteString(string(data))
-		sb.WriteString("\n```")
-	}
+	// Sanitize output to prevent context pollution
+	sanitized := sanitizePhaseOutput(result.Output, result.PhaseName)
+	sb.WriteString(sanitized)
+
+	// Note: We no longer include raw Structured Data to prevent pollution
+	// Agents should use context tool to recall structured data if needed
 
 	return sb.String()
 }
@@ -298,6 +537,12 @@ func (pie *phaseInferenceExecutor) execute(ctx context.Context, input string) (s
 		// Log user prompt
 		pie.logConversation(ctx, "user", currentPrompt, "", nil, nil)
 
+		// Save prompt to context files
+		fullPrompt := fmt.Sprintf("System: %s\n\nUser: %s", pie.phase.SystemPrompt, currentPrompt)
+		if err := pie.contextMgr.SavePrompt(fullPrompt); err != nil {
+			return "", pie.currentRound, fmt.Errorf("failed to save prompt: %w", err)
+		}
+
 		// Execute inference with phase-specific system prompt
 		systemPrompt := pie.phase.SystemPrompt
 		if systemPrompt == "" {
@@ -312,10 +557,38 @@ func (pie *phaseInferenceExecutor) execute(ctx context.Context, input string) (s
 		// Log assistant response
 		pie.logConversation(ctx, "assistant", response.Text, "", nil, nil)
 
+		// Save response to context files
+		if err := pie.contextMgr.SaveResponse(response.Text); err != nil {
+			return "", pie.currentRound, fmt.Errorf("failed to save response: %w", err)
+		}
+
 		// Get tool calls
 		toolCalls := response.ToolCalls
 		if toolCalls == nil {
 			toolCalls = []llm.ToolCall{}
+		}
+
+		// FALLBACK: If native tool calling didn't return any calls, try parsing from text
+		if len(toolCalls) == 0 && response.Text != "" {
+			// Get appropriate formatter for model
+			formatter := toolformat.GetFormatterForModel(pie.agent.config.Model.ModelName)
+
+			// Parse tool calls from response text
+			parsedCalls, err := formatter.ParseToolCalls(response.Text)
+			if err == nil && len(parsedCalls) > 0 {
+				// Convert toolformat.ToolCall to llm.ToolCall
+				toolCalls = make([]llm.ToolCall, len(parsedCalls))
+				for i, tc := range parsedCalls {
+					toolCalls[i] = llm.ToolCall{
+						Name: tc.Name,
+						Args: tc.Args,
+					}
+				}
+
+				if pie.agent.config.Debug.Enabled {
+					fmt.Fprintf(os.Stderr, "  📝 Parsed %d tool call(s) from response text\n", len(toolCalls))
+				}
+			}
 		}
 
 		// Debug: Log tool call status
@@ -326,8 +599,9 @@ func (pie *phaseInferenceExecutor) execute(ctx context.Context, input string) (s
 			}
 		}
 
-		// Check if phase is complete (no more tool calls and completion signal)
+		// If no tool calls, check for completion or prompt for action
 		if len(toolCalls) == 0 {
+			// Check if phase is complete
 			if pie.isPhaseComplete(response.Text) {
 				// Debug: Show what was accomplished
 				if pie.agent.config.Debug.Enabled {
@@ -337,7 +611,7 @@ func (pie *phaseInferenceExecutor) execute(ctx context.Context, input string) (s
 				return response.Text, pie.currentRound, nil
 			}
 
-			// No tool calls but not complete - prompt for action
+			// No tool calls and not complete - prompt for action
 			currentPrompt = "Please continue with the current phase. Use tools if needed, or indicate completion with PHASE_COMPLETE or TASK_COMPLETE."
 			continue
 		}
@@ -347,10 +621,43 @@ func (pie *phaseInferenceExecutor) execute(ctx context.Context, input string) (s
 			toolCalls = pie.filterToolCalls(toolCalls)
 		}
 
+		// Save tool calls to context files
+		contextCalls := make([]llmcontext.ToolCall, len(toolCalls))
+		for i, tc := range toolCalls {
+			contextCalls[i] = llmcontext.ToolCall{
+				Name: tc.Name,
+				Args: tc.Args,
+			}
+		}
+		if err := pie.contextMgr.SaveToolCalls(contextCalls); err != nil {
+			return "", pie.currentRound, fmt.Errorf("failed to save tool calls: %w", err)
+		}
+
 		// Execute tools
 		results, err := pie.executeTools(ctx, toolCalls)
 		if err != nil {
 			return "", pie.currentRound, fmt.Errorf("tool execution failed: %w", err)
+		}
+
+		// Save tool results to context files
+		contextResults := make([]llmcontext.ToolResult, len(results))
+		for i, r := range results {
+			contextResults[i] = llmcontext.ToolResult{
+				Name:          toolCalls[i].Name,
+				Success:       r.Success,
+				Output:        r.Output,
+				Error:         r.Error,
+				ModifiedFiles: r.ModifiedFiles,
+			}
+		}
+		if err := pie.contextMgr.SaveToolResults(contextResults); err != nil {
+			return "", pie.currentRound, fmt.Errorf("failed to save tool results: %w", err)
+		}
+
+		// Check for completion signal in response text (AFTER tools executed)
+		// This handles cases where agent outputs tool calls + PHASE_COMPLETE in same response
+		if pie.isPhaseComplete(response.Text) {
+			return response.Text, pie.currentRound, nil
 		}
 
 		// Build feedback prompt
@@ -387,6 +694,15 @@ func (pie *phaseInferenceExecutor) executeInference(ctx context.Context, systemP
 		Temperature:  pie.agent.config.Model.Temperature,
 		MaxTokens:    budget.Available,
 		Tools:        toolDefs,
+	}
+
+	// Apply anti-hallucination logit bias in Validate phase when processing tool results
+	// This prevents the agent from fabricating tool outputs
+	if pie.phase.Name == "validate" && strings.HasPrefix(userPrompt, "Tool results:") {
+		req.LogitBias = GetToolResultValidationBias()
+		if pie.agent.config.Debug.Enabled {
+			fmt.Fprintln(os.Stderr, "  🎯 Applied anti-hallucination logit bias")
+		}
 	}
 
 	return pie.agent.llm.Infer(ctx, req)

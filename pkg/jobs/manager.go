@@ -29,19 +29,18 @@ const (
 
 // Job represents a coding job
 type Job struct {
-	ID           string                 `json:"id"`
-	Type         string                 `json:"type"` // "build", "debug", "review", "triage"
-	Status       Status                 `json:"status"`
-	Description  string                 `json:"description"`
-	Input        map[string]interface{} `json:"input"`
-	Output       map[string]interface{} `json:"output,omitempty"`
-	Error        string                 `json:"error,omitempty"`
-	CreatedAt    time.Time              `json:"created_at"`
-	StartedAt    *time.Time             `json:"started_at,omitempty"`
-	CompletedAt  *time.Time             `json:"completed_at,omitempty"`
-	WorkDir      string                 `json:"work_dir"`
-	WorkspaceDir string                 `json:"workspace_dir,omitempty"` // Isolated workspace for HTTP Bridge jobs
-	ContextDir   string                 `json:"context_dir"`
+	ID          string                 `json:"id"`
+	Type        string                 `json:"type"` // "build", "debug", "review", "triage"
+	Status      Status                 `json:"status"`
+	Description string                 `json:"description"`
+	Input       map[string]interface{} `json:"input"`
+	Output      map[string]interface{} `json:"output,omitempty"`
+	Error       string                 `json:"error,omitempty"`
+	CreatedAt   time.Time              `json:"created_at"`
+	StartedAt   *time.Time             `json:"started_at,omitempty"`
+	CompletedAt *time.Time             `json:"completed_at,omitempty"`
+	WorkDir     string                 `json:"work_dir"`
+	ContextDir  string                 `json:"context_dir"`
 }
 
 // Manager manages jobs using file-based storage.
@@ -59,7 +58,7 @@ type Manager struct {
 // Deprecated: Use NewDBManager for production use.
 func NewManager(stateDir string) (*Manager, error) {
 	if stateDir == "" {
-		stateDir = "/tmp/pedroceli-jobs"
+		stateDir = "/tmp/pedrocli-jobs"
 	}
 
 	if err := os.MkdirAll(stateDir, 0755); err != nil {
@@ -240,20 +239,6 @@ func (m *Manager) SetWorkDir(ctx context.Context, id string, workDir string) err
 	}
 
 	job.WorkDir = workDir
-	return m.saveJob(job)
-}
-
-// SetWorkspaceDir sets the isolated workspace directory for a job (HTTP Bridge only).
-func (m *Manager) SetWorkspaceDir(ctx context.Context, id string, workspaceDir string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	job, ok := m.jobs[id]
-	if !ok {
-		return fmt.Errorf("job not found: %s", id)
-	}
-
-	job.WorkspaceDir = workspaceDir
 	return m.saveJob(job)
 }
 

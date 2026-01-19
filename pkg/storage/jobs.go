@@ -46,7 +46,6 @@ type Job struct {
 	HardwareTarget string          `json:"hardware_target,omitempty"`
 	ErrorMessage   string          `json:"error_message,omitempty"`
 	WorkDir        string          `json:"work_dir,omitempty"`
-	WorkspaceDir   string          `json:"workspace_dir,omitempty"` // Isolated workspace for HTTP Bridge jobs
 	ContextDir     string          `json:"context_dir,omitempty"`
 	StartedAt      *time.Time      `json:"started_at,omitempty"`
 	CompletedAt    *time.Time      `json:"completed_at,omitempty"`
@@ -149,14 +148,14 @@ func (s *JobStore) Create(ctx context.Context, job *Job) error {
 func (s *JobStore) Get(ctx context.Context, id string) (*Job, error) {
 	query := `
 		SELECT id, job_type, status, description, input_payload, output_payload, model_used,
-			   hardware_target, error_message, work_dir, workspace_dir, context_dir, conversation_history,
+			   hardware_target, error_message, work_dir, context_dir, conversation_history,
 			   started_at, completed_at, created_at, updated_at
 		FROM jobs WHERE id = $1
 	`
 	job := &Job{}
 	var description, inputPayload, outputPayload sql.NullString
 	var modelUsed, hardwareTarget, errorMessage sql.NullString
-	var workDir, workspaceDir, contextDir, conversationHistory sql.NullString
+	var workDir, contextDir, conversationHistory sql.NullString
 	var startedAt, completedAt sql.NullTime
 
 	err := s.db.QueryRowContext(ctx, query, id).Scan(
@@ -170,7 +169,6 @@ func (s *JobStore) Get(ctx context.Context, id string) (*Job, error) {
 		&hardwareTarget,
 		&errorMessage,
 		&workDir,
-		&workspaceDir,
 		&contextDir,
 		&conversationHistory,
 		&startedAt,
@@ -206,9 +204,6 @@ func (s *JobStore) Get(ctx context.Context, id string) (*Job, error) {
 	if workDir.Valid {
 		job.WorkDir = workDir.String
 	}
-	if workspaceDir.Valid {
-		job.WorkspaceDir = workspaceDir.String
-	}
 	if contextDir.Valid {
 		job.ContextDir = contextDir.String
 	}
@@ -238,11 +233,10 @@ func (s *JobStore) Update(ctx context.Context, job *Job) error {
 			hardware_target = $6,
 			error_message = $7,
 			work_dir = $8,
-			workspace_dir = $9,
-			context_dir = $10,
-			started_at = $11,
-			completed_at = $12,
-			updated_at = $13
+			context_dir = $9,
+			started_at = $10,
+			completed_at = $11,
+			updated_at = $12
 		WHERE id = $1
 	`
 	job.UpdatedAt = time.Now()
@@ -256,7 +250,6 @@ func (s *JobStore) Update(ctx context.Context, job *Job) error {
 		nullString(job.HardwareTarget),
 		nullString(job.ErrorMessage),
 		nullString(job.WorkDir),
-		nullString(job.WorkspaceDir),
 		nullString(job.ContextDir),
 		nullTime(job.StartedAt),
 		nullTime(job.CompletedAt),
@@ -302,7 +295,7 @@ func (s *JobStore) MarkFailed(ctx context.Context, id string, errorMsg string) e
 func (s *JobStore) List(ctx context.Context, opts ListJobsOptions) ([]*Job, error) {
 	query := `
 		SELECT id, job_type, status, description, input_payload, output_payload, model_used,
-			   hardware_target, error_message, work_dir, workspace_dir, context_dir,
+			   hardware_target, error_message, work_dir, context_dir,
 			   started_at, completed_at, created_at, updated_at
 		FROM jobs WHERE 1=1
 	`
@@ -348,7 +341,7 @@ func (s *JobStore) List(ctx context.Context, opts ListJobsOptions) ([]*Job, erro
 		job := &Job{}
 		var description, inputPayload, outputPayload sql.NullString
 		var modelUsed, hardwareTarget, errorMessage sql.NullString
-		var workDir, workspaceDir, contextDir sql.NullString
+		var workDir, contextDir sql.NullString
 		var startedAt, completedAt sql.NullTime
 
 		err := rows.Scan(
@@ -362,7 +355,6 @@ func (s *JobStore) List(ctx context.Context, opts ListJobsOptions) ([]*Job, erro
 			&hardwareTarget,
 			&errorMessage,
 			&workDir,
-			&workspaceDir,
 			&contextDir,
 			&startedAt,
 			&completedAt,
@@ -393,9 +385,6 @@ func (s *JobStore) List(ctx context.Context, opts ListJobsOptions) ([]*Job, erro
 		}
 		if workDir.Valid {
 			job.WorkDir = workDir.String
-		}
-		if workspaceDir.Valid {
-			job.WorkspaceDir = workspaceDir.String
 		}
 		if contextDir.Valid {
 			job.ContextDir = contextDir.String
