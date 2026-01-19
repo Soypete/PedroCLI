@@ -115,7 +115,7 @@ if hasKey(keys, "tool") && hasKey(keys, "args") {
 2. **`docs/gbnf-grammar-guide.md`** - Grammar system documentation
 
 ### Test Results:
-1. **Job logs**: `/tmp/pedroceli-jobs/23283e6f-1bba-41cc-b7c7-b02b360a7539-20260104-101620/`
+1. **Job logs**: `/tmp/pedrocli-jobs/23283e6f-1bba-41cc-b7c7-b02b360a7539-20260104-101620/`
 2. **Model output**: Check `002-response.txt` for malformed JSON
 
 ## Next Steps (In Order)
@@ -173,7 +173,7 @@ cat /tmp/pedrocli-grammar-debug.gbnf
 
 ### View Job Logs
 ```bash
-find /tmp/pedroceli-jobs -name "*-20260104-*" -type d | tail -1
+find /tmp/pedrocli-jobs -name "*-20260104-*" -type d | tail -1
 ```
 
 ## Context for Next Session

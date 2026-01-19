@@ -55,7 +55,7 @@ llama-server \
 - **Task**: "Implement the feature requested in issue #39"
 - **Actual Issue**: Migrate from fmt.Println to slog for structured logging
 - **Started**: 2026-01-05 20:25:51
-- **Context Directory**: `/tmp/pedroceli-jobs/job-1767669951-20260105-202551/`
+- **Context Directory**: `/tmp/pedrocli-jobs/job-1767669951-20260105-202551/`
 
 ---
 
@@ -169,7 +169,7 @@ Round 003-prompt.txt: Response text snippet...
 
 **Evidence**:
 ```bash
-$ ls /tmp/pedroceli-jobs/job-1767669951-20260105-202551/*-tool-*.json
+$ ls /tmp/pedrocli-jobs/job-1767669951-20260105-202551/*-tool-*.json
 # No files found
 
 $ git status --short
@@ -464,7 +464,7 @@ PGPASSWORD=pedrocli psql -h localhost -U pedrocli -d pedrocli \
 ### Job Context Files
 ```bash
 # Job directory structure
-/tmp/pedroceli-jobs/<job-id>-<timestamp>/
+/tmp/pedrocli-jobs/<job-id>-<timestamp>/
 ├── 001-prompt.txt          # User prompt
 ├── 002-response.txt        # LLM response
 ├── 003-tool-calls.json     # Parsed tool calls (if any)

@@ -84,7 +84,7 @@ Real-time monitoring script successfully tracked:
 **Evidence**:
 ```bash
 # No tool-calls.json files exist
-$ ls /tmp/pedroceli-jobs/job-1767673628-20260105-212708/*-tool-calls.json
+$ ls /tmp/pedrocli-jobs/job-1767673628-20260105-212708/*-tool-calls.json
 (eval):1: no matches found
 
 # Git shows no changes from the job
@@ -233,6 +233,6 @@ Fix tool execution first, then re-validate compaction with working tools.
 ## Files Referenced
 
 - Config: `configs/ollama/qwen3-30b-coder/.pedrocli.json`
-- Job directory: `/tmp/pedroceli-jobs/job-1767673628-20260105-212708/`
+- Job directory: `/tmp/pedrocli-jobs/job-1767673628-20260105-212708/`
 - Monitoring script: `/tmp/monitor_job_1767673628.sh`
 - Previous learnings: `learnings/context-compaction-testing-2026-01-05.md` (llamacpp)

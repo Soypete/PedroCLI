@@ -182,17 +182,6 @@ func (m *DBManager) SetWorkDir(ctx context.Context, id string, workDir string) e
 	return m.store.Update(ctx, dbJob)
 }
 
-// SetWorkspaceDir sets the isolated workspace directory for a job (HTTP Bridge only).
-func (m *DBManager) SetWorkspaceDir(ctx context.Context, id string, workspaceDir string) error {
-	dbJob, err := m.store.Get(ctx, id)
-	if err != nil {
-		return err
-	}
-
-	dbJob.WorkspaceDir = workspaceDir
-	return m.store.Update(ctx, dbJob)
-}
-
 // SetContextDir sets the context directory for a job.
 func (m *DBManager) SetContextDir(ctx context.Context, id string, contextDir string) error {
 	dbJob, err := m.store.Get(ctx, id)
@@ -339,17 +328,16 @@ func (m *DBManager) CleanupMigratedFiles() error {
 // convertFromDBJob converts a storage.Job to a jobs.Job.
 func convertFromDBJob(dbJob *storage.Job) *Job {
 	job := &Job{
-		ID:           dbJob.ID,
-		Type:         string(dbJob.JobType),
-		Status:       Status(dbJob.Status),
-		Description:  dbJob.Description,
-		Error:        dbJob.ErrorMessage,
-		WorkDir:      dbJob.WorkDir,
-		WorkspaceDir: dbJob.WorkspaceDir,
-		ContextDir:   dbJob.ContextDir,
-		CreatedAt:    dbJob.CreatedAt,
-		StartedAt:    dbJob.StartedAt,
-		CompletedAt:  dbJob.CompletedAt,
+		ID:          dbJob.ID,
+		Type:        string(dbJob.JobType),
+		Status:      Status(dbJob.Status),
+		Description: dbJob.Description,
+		Error:       dbJob.ErrorMessage,
+		WorkDir:     dbJob.WorkDir,
+		ContextDir:  dbJob.ContextDir,
+		CreatedAt:   dbJob.CreatedAt,
+		StartedAt:   dbJob.StartedAt,
+		CompletedAt: dbJob.CompletedAt,
 	}
 
 	// Unmarshal input payload

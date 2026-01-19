@@ -35,7 +35,7 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Println(`Manual Research Tools Test
+	fmt.Print(`Manual Research Tools Test
 
 Usage: go run test/manual/research_tools.go <command>
 
@@ -53,7 +53,7 @@ Examples:
 }
 
 func testWebSearch() {
-	fmt.Println("=== Testing Web Search ===\n")
+	fmt.Println("=== Testing Web Search ===")
 
 	searchTool := tools.NewWebSearchTool()
 
@@ -89,7 +89,7 @@ func testWebSearch() {
 }
 
 func testScrapeURL() {
-	fmt.Println("=== Testing URL Scraping ===\n")
+	fmt.Println("=== Testing URL Scraping ===")
 
 	scraperTool := tools.NewWebScraperTool()
 
@@ -117,7 +117,7 @@ func testScrapeURL() {
 }
 
 func testScrapeGithub() {
-	fmt.Println("=== Testing GitHub Scraping ===\n")
+	fmt.Println("=== Testing GitHub Scraping ===")
 
 	scraperTool := tools.NewWebScraperTool()
 
@@ -147,7 +147,7 @@ func testScrapeGithub() {
 }
 
 func testScrapeLocal() {
-	fmt.Println("=== Testing Local File Scraping ===\n")
+	fmt.Println("=== Testing Local File Scraping ===")
 
 	scraperTool := tools.NewWebScraperTool()
 
@@ -176,7 +176,7 @@ func testScrapeLocal() {
 }
 
 func testSearchAndScrape() {
-	fmt.Println("=== Testing Search → Scrape Workflow ===\n")
+	fmt.Println("=== Testing Search → Scrape Workflow ===")
 
 	searchTool := tools.NewWebSearchTool()
 	scraperTool := tools.NewWebScraperTool()
@@ -200,7 +200,7 @@ func testSearchAndScrape() {
 	}
 
 	fmt.Println(searchResult.Output)
-	fmt.Println("---\n")
+	fmt.Println("---")
 
 	// Step 2: Scrape the Go official site
 	fmt.Println("Step 2: Scraping https://go.dev/doc/...")
