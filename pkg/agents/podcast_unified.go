@@ -21,6 +21,7 @@ const (
 	WorkflowNews     PodcastWorkflowType = "news"     // Review and summarize news items
 	WorkflowSchedule PodcastWorkflowType = "schedule" // Create Cal.com booking link
 	WorkflowFullPrep PodcastWorkflowType = "prep"     // Full workflow (all three)
+	WorkflowOutline  PodcastWorkflowType = "outline"  // Generate episode outline from topic/summary
 )
 
 // UnifiedPodcastAgent orchestrates podcast episode preparation workflows
@@ -34,28 +35,28 @@ type UnifiedPodcastAgent struct {
 	jobManager   jobs.JobManager
 
 	// Workflow state
-	workflowType    PodcastWorkflowType
-	currentContent  *content.Content
-	phases          []Phase
-	currentPhase    string
-	progress        *ProgressTracker
-	mode            ExecutionMode
+	workflowType   PodcastWorkflowType
+	currentContent *content.Content
+	phases         []Phase
+	currentPhase   string
+	progress       *ProgressTracker
+	mode           ExecutionMode
 
 	// Tools
 	tools map[string]tools.Tool
 
 	// Podcast-specific state
-	outline     string
-	script      string
-	newsItems   []NewsItem
-	bookingURL  string
-	episode     string
-	title       string
-	guests      string
-	duration    int
-	focus       string // News focus topic
-	maxNews     int
-	riverside   bool
+	outline    string
+	script     string
+	newsItems  []NewsItem
+	bookingURL string
+	episode    string
+	title      string
+	guests     string
+	duration   int
+	focus      string // News focus topic
+	maxNews    int
+	riverside  bool
 }
 
 // NewsItem represents a news item for podcast prep
@@ -118,11 +119,11 @@ func NewUnifiedPodcastAgent(cfg UnifiedPodcastAgentConfig) *UnifiedPodcastAgent 
 
 	// Initialize content record
 	agent.currentContent = &content.Content{
-		ID:     uuid.New(),
-		Type:   content.ContentTypePodcast,
-		Status: content.StatusDraft,
-		Title:  fmt.Sprintf("Episode %s: %s", cfg.Episode, cfg.Title),
-		Data:   make(map[string]interface{}),
+		ID:        uuid.New(),
+		Type:      content.ContentTypePodcast,
+		Status:    content.StatusDraft,
+		Title:     fmt.Sprintf("Episode %s: %s", cfg.Episode, cfg.Title),
+		Data:      make(map[string]interface{}),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -187,6 +188,8 @@ func (a *UnifiedPodcastAgent) buildPhases() []Phase {
 		return a.buildSchedulePhases()
 	case WorkflowFullPrep:
 		return a.buildFullPrepPhases()
+	case WorkflowOutline:
+		return a.buildOutlinePhases()
 	default:
 		return a.buildScriptPhases()
 	}
@@ -319,6 +322,42 @@ func (a *UnifiedPodcastAgent) buildFullPrepPhases() []Phase {
 	allPhases = append(allPhases, schedulePhases...)
 
 	return allPhases
+}
+
+// buildOutlinePhases builds the 5-phase episode outline generation workflow
+func (a *UnifiedPodcastAgent) buildOutlinePhases() []Phase {
+	return []Phase{
+		{
+			Name:        "Gather Context",
+			Description: "Collect episode metadata, topic summary, and any provided news items",
+			Execute:     a.phaseGatherOutlineContext,
+			Required:    true,
+		},
+		{
+			Name:        "Research News",
+			Description: "Search for recent AI/tech news relevant to the episode topic",
+			Execute:     a.phaseResearchNews,
+			Required:    false, // Skip if news items already provided
+		},
+		{
+			Name:        "Generate Outline",
+			Description: "Generate structured episode outline using the template",
+			Execute:     a.phaseGenerateOutline,
+			Required:    true,
+		},
+		{
+			Name:        "Review Outline",
+			Description: "Review outline for completeness and timing accuracy",
+			Execute:     a.phaseReviewOutline,
+			Required:    true,
+		},
+		{
+			Name:        "Save Outline",
+			Description: "Save outline to Notion Episode Planner database",
+			Execute:     a.phaseSaveOutline,
+			Required:    false, // Optional if Notion enabled
+		},
+	}
 }
 
 // Execute executes the podcast agent asynchronously and returns a job
@@ -474,6 +513,7 @@ func (a *UnifiedPodcastAgent) GetOutput() interface{} {
 		"content_id":  a.currentContent.ID,
 		"episode":     a.episode,
 		"title":       a.title,
+		"outline":     a.outline,
 		"script":      a.script,
 		"news_items":  a.newsItems,
 		"booking_url": a.bookingURL,

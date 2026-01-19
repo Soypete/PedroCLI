@@ -28,16 +28,16 @@ type AgentOrchestrator interface {
 // Phase represents a single step in an agent workflow.
 // This combines the phased executor pattern with the unified orchestrator pattern.
 type Phase struct {
-	Name         string                  // Phase identifier (e.g., "analyze", "plan", "implement")
-	Description  string                  // Human-readable description
-	Execute      func(context.Context) error // Direct execution function (for unified agents)
-	Required     bool                    // Can this phase be skipped?
+	Name        string                      // Phase identifier (e.g., "analyze", "plan", "implement")
+	Description string                      // Human-readable description
+	Execute     func(context.Context) error // Direct execution function (for unified agents)
+	Required    bool                        // Can this phase be skipped?
 
 	// Fields for phased executor compatibility
-	SystemPrompt string                  // Custom system prompt for this phase
-	Tools        []string                // Subset of tools available in this phase (empty = all)
-	MaxRounds    int                     // Max inference rounds for this phase (0 = use default)
-	ExpectsJSON  bool                    // Allow the phase to produce structured output
+	SystemPrompt string                          // Custom system prompt for this phase
+	Tools        []string                        // Subset of tools available in this phase (empty = all)
+	MaxRounds    int                             // Max inference rounds for this phase (0 = use default)
+	ExpectsJSON  bool                            // Allow the phase to produce structured output
 	Validator    func(result *PhaseResult) error // Validates the phase output
 }
 
@@ -58,7 +58,7 @@ type ExecutionMode int
 
 const (
 	ExecutionModeSync  ExecutionMode = iota // CLI - blocking execution
-	ExecutionModeAsync                       // Web UI - background job
+	ExecutionModeAsync                      // Web UI - background job
 )
 
 func (m ExecutionMode) String() string {

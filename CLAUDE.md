@@ -480,6 +480,75 @@ Configure in `.pedrocli.json`:
 
 The web UI also supports browser-based speech recognition (Chrome/Edge) as a fallback.
 
+### Podcast Tools Setup
+
+For podcast episode preparation features (outline, script, news, scheduling):
+
+The podcast tools use the same Notion integration as blog tools (see "Blog Tools Setup" above).
+
+**Running Podcast Commands with Notion Integration**:
+
+```bash
+# Use op run to inject NOTION_TOKEN from .env
+op run --env-file=.env -- ./pedrocli podcast outline \
+  -episode "S01E03" \
+  -title "How to Choose a Local LLM" \
+  -duration 25 \
+  -output outline.md
+
+# Generate script from outline
+op run --env-file=.env -- ./pedrocli podcast script \
+  -outline outline.md \
+  -episode "S01E03"
+
+# Create Cal.com booking link (requires CAL_API_KEY in .env)
+op run --env-file=.env -- ./pedrocli podcast schedule \
+  -episode "S01E03" \
+  -title "How to Choose a Model" \
+  -duration 60
+```
+
+**Environment Variables Required** (in `.env`):
+```bash
+# Notion integration
+NOTION_TOKEN="op://pedro/notion_api_key/credential"
+
+# Cal.com integration (for scheduling)
+CAL_API_KEY="op://pedro/calcom_api_key/credential"
+```
+
+**Notion Database Configuration** (in `.pedrocli.json`):
+```json
+{
+  "podcast": {
+    "enabled": true,
+    "notion": {
+      "enabled": true,
+      "databases": {
+        "scripts": "YOUR-SCRIPTS-DATABASE-UUID",
+        "guests": "YOUR-GUESTS-DATABASE-UUID",
+        "topics": "YOUR-TOPICS-DATABASE-UUID",
+        "news": "YOUR-NEWS-DATABASE-UUID"
+      }
+    }
+  }
+}
+```
+
+**Available Podcast Commands**:
+- `podcast outline` - Generate structured episode outline from topic/summary
+- `podcast script` - Generate episode script from outline
+- `podcast news` - Review and summarize AI/tech news for episode prep
+- `podcast schedule` - Create Cal.com booking link with Riverside.fm integration
+- `podcast prep` - Full workflow (script + news + schedule)
+
+**Without Notion**: If you don't need Notion integration, run without `op run`:
+```bash
+./pedrocli podcast outline -episode "S01E03" -title "My Topic" -output outline.md
+```
+
+The outline will be saved to the output file but not uploaded to Notion.
+
 ### Service Ports (Complete)
 
 | Service | Port | Description |

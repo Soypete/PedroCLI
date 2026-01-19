@@ -281,7 +281,7 @@ func (a *BaseAgent) executeInferenceWithSystemPrompt(ctx context.Context, contex
 		SystemPrompt: systemPrompt,
 		UserPrompt:   fullPrompt,
 		Temperature:  a.config.Model.Temperature,
-		MaxTokens:    8192, // Reserve for response
+		MaxTokens:    8192,        // Reserve for response
 		LogitBias:    a.logitBias, // Apply logit bias for token control
 	}
 

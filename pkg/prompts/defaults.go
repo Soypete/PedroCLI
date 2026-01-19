@@ -392,4 +392,185 @@ Create a calendar event for a podcast recording session.
 
 Use the calendar tool to check availability and create the event.
 `,
+
+	"generate_episode_outline": `Generate a structured episode outline for "{{.PodcastName}}".
+
+You are generating a structured episode outline for **{{.PodcastName}}**, {{.PodcastDescription}}
+
+## Input Parameters
+
+You will receive:
+- **Episode Number**: (e.g., S01E03)
+- **Episode Title**: The main topic
+- **Recording Date**: When recording is scheduled
+- **Publish Date**: Target release date
+- **Status**: Idea | Recording | Editing | Released
+- **Guest(s)**: Names and brief context (if any)
+- **Topic Summary**: 2-3 sentence description of the episode focus
+- **News Items**: List of recent AI/tech news items to discuss (with URLs if available)
+- **Sponsor Info**: Current sponsors or community shout-outs
+
+-----
+
+## Output Template
+
+Generate the following structured outline:
+
+-----
+
+# 🧾 Episode Details
+
+|Field             |Value                                       |
+|------------------|--------------------------------------------|
+|**Episode**       |{episode_number} – {episode_title}          |
+|**Hosts**         |{{.CohostList}}|
+|**Guests**        |{guests or "None"}                          |
+|**Recording Date**|{recording_date}                            |
+|**Publish Date**  |{publish_date}                              |
+|**Status**        |{status}                                    |
+
+**Episode Summary:**
+{2-3 sentence summary of what listeners will learn}
+
+-----
+
+## 👥 Host Bios
+
+{{.HostBios}}
+
+-----
+
+## ⏱ Segment Outline ({{.EpisodeDuration}} minutes total)
+
+### 00:00 – 01:00 | Intro
+
+**Host Intros:**
+{{.HostIntros}}
+
+**Show Summary:** "{{.PodcastName}} is {{.PodcastDescription}}"
+
+**Episode Promise:** {One sentence stating what listeners will know/be able to do by episode end}
+
+-----
+
+### 01:00 – 08:00 | News Segment
+
+Each host brings 1-2 articles or updates. Frame each item with:
+- What happened?
+- Why does it matter for home/local AI builders?
+- Quick takes or concerns
+
+**News Item 1: {title}**
+- Source: {url}
+- Context: {why this matters to the audience}
+- Discussion angle: {suggested framing}
+
+**News Item 2: {title}**
+- Source: {url}
+- Context: {why this matters}
+- Discussion angle: {suggested framing}
+
+**News Item 3: {title}**
+- Source: {url}
+- Context: {why this matters}
+- Discussion angle: {suggested framing}
+
+-----
+
+### 08:00 – 10:00 | Sponsor / Community Shout-out
+
+**Sponsors:**
+{{.SponsorInfo}}
+
+**Mid-roll marker:** "[MID-ROLL] Everything we've talked about so far will be in the show notes if you're curious to learn more."
+
+**Sponsorship CTA:** "Interested in sponsoring? Reach out to us—check the show notes."
+
+-----
+
+### 10:00 – 22:00 | Main Conversation
+
+**Central Topic:** {episode_title}
+
+{Generate 4-6 discussion prompts based on the topic. Each prompt should include:}
+
+**Discussion Prompt 1: {question}**
+Talking points:
+- {point 1}
+- {point 2}
+- {point 3}
+- {point 4}
+
+**Discussion Prompt 2: {question}**
+Talking points:
+- {point 1}
+- {point 2}
+- {point 3}
+
+{Continue pattern for remaining prompts…}
+
+**Clip-worthy moments to watch for:**
+- {potential quotable moment 1}
+- {potential quotable moment 2}
+
+-----
+
+### 22:00 – 25:00 | Outro
+
+**Upcoming Events:**
+{{.UpcomingEvents}}
+
+**Where to Find the Hosts:**
+{{.HostLinks}}
+
+**Sign-off line:** {generate a thematic sign-off related to the episode topic}
+
+**Outro music / end card notes:** {any production notes}
+
+-----
+
+## 📝 Show Notes Template
+
+` + "```markdown" + `
+# {Episode Number}: {Episode Title}
+
+{Episode summary - 2-3 sentences}
+
+## Timestamps
+- 00:00 Intro
+- 01:00 News Segment
+- 08:00 Sponsors
+- 10:00 Main Conversation: {topic}
+- 22:00 Outro & Where to Find Us
+
+## News Links
+- {news item 1 title}: {url}
+- {news item 2 title}: {url}
+- {news item 3 title}: {url}
+
+## Resources Mentioned
+- {resource 1}
+- {resource 2}
+
+## Sponsors
+{{.SponsorLinks}}
+
+## Find the Hosts
+{{.HostLinksMarkdown}}
+
+## Contact
+Want to sponsor or suggest a topic? Reach out: {contact method}
+` + "```" + `
+
+-----
+
+## Generation Guidelines
+
+1. **Tone:** Practical, approachable, developer-focused. Avoid hype; favor actionable advice.
+2. **Audience:** Developers interested in running AI locally—from hobbyists to production teams.
+3. **Discussion prompts:** Frame as questions the hosts would naturally explore together. Include decision heuristics where possible.
+4. **Talking points:** Specific enough to guide conversation, loose enough to allow tangents.
+5. **News framing:** Always connect back to "why this matters for someone building at home."
+6. **Time estimates:** Main conversation is ~12 minutes for a 25-minute episode. Prompts should fill that naturally without rushing.
+`,
 }

@@ -148,9 +148,9 @@ func (a *UnifiedPodcastAgent) phasePublishScript(ctx context.Context) error {
 			// Prepare properties for Notion page
 			// Note: Property names match actual Notion database schema
 			properties := map[string]interface{}{
-				"Episode #":             a.episode, // Title property
-				"Title / Working Topic": a.title,   // Rich text
-				"Status 🎛":             "Draft",   // Text property
+				"Episode #":             a.episode,                                                             // Title property
+				"Title / Working Topic": a.title,                                                               // Rich text
+				"Status 🎛":              "Draft",                                                               // Text property
 				"Notes":                 fmt.Sprintf("Duration: %d minutes\nGuests: %s", a.duration, a.guests), // Text with metadata
 				// Note: "Guests" is a relation property requiring page references
 				// For now, we include guest names in Notes field
@@ -191,7 +191,13 @@ func (a *UnifiedPodcastAgent) phasePublishScript(ctx context.Context) error {
 func (a *UnifiedPodcastAgent) generateIntroSegment() string {
 	var intro strings.Builder
 
-	intro.WriteString(fmt.Sprintf("Welcome to SoypeteTech, episode %s!\n\n", a.episode))
+	// Use podcast name from config, with fallback
+	podcastName := a.config.Podcast.Metadata.Name
+	if podcastName == "" {
+		podcastName = "the podcast"
+	}
+
+	intro.WriteString(fmt.Sprintf("Welcome to %s, episode %s!\n\n", podcastName, a.episode))
 
 	if a.guests != "" {
 		intro.WriteString(fmt.Sprintf("Today we're joined by %s.\n\n", a.guests))
@@ -229,10 +235,17 @@ func (a *UnifiedPodcastAgent) generateOutroSegment() string {
 		outro.WriteString(fmt.Sprintf("Big thanks to our guests %s for joining us today.\n\n", a.guests))
 	}
 
-	outro.WriteString("Find us at:\n")
-	outro.WriteString("- Discord: https://discord.gg/soypete\n")
-	outro.WriteString("- YouTube: https://youtube.com/@soypete\n")
-	outro.WriteString("- Twitter: https://twitter.com/soypete\n\n")
+	// Use host social links from config if available
+	outro.WriteString("Find the hosts at:\n")
+	for _, cohost := range a.config.Podcast.Metadata.Cohosts {
+		if len(cohost.SocialLinks) > 0 {
+			outro.WriteString(fmt.Sprintf("- %s: %s\n", cohost.Name, cohost.SocialLinks[0]))
+		}
+	}
+	if len(a.config.Podcast.Metadata.Cohosts) == 0 {
+		outro.WriteString("- [Add host links to config]\n")
+	}
+	outro.WriteString("\n")
 
 	outro.WriteString("See you next time!\n")
 

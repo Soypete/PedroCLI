@@ -134,7 +134,7 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Println(`Test BlogContentAgent 7-Phase Workflow
+	fmt.Print(`Test BlogContentAgent 7-Phase Workflow
 
 Usage: go run cmd/test-blog-agent/main.go <transcription-file>
 

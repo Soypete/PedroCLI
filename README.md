@@ -522,33 +522,84 @@ Unlike in-memory systems, PedroCLI writes all context to `/tmp/pedroceli-jobs/`:
 
 ## Podcast Tools Mode
 
-PedroCLI includes a **Podcast Tools Mode** for managing podcast content. This mode integrates with Notion and Google Calendar via MCP servers.
+PedroCLI includes a **Podcast Tools Mode** for managing podcast content. This mode integrates with Notion for episode planning and Cal.com for scheduling.
 
-### Podcast Job Types
+### Podcast Commands
 
-- **Create Script**: Generate episode scripts from topics and notes
-- **Add Link**: Add articles/news links to Notion for review
-- **Add Guest**: Add guest information to your guests database
-- **Create Outline**: Generate episode structure and outlines
-- **Review News**: Summarize news items for episode prep
+- `podcast outline` - Generate structured episode outline from topic/summary
+- `podcast script` - Generate episode script from outline
+- `podcast news` - Review and summarize AI/tech news for episode prep
+- `podcast schedule` - Create Cal.com booking link with Riverside.fm integration
+- `podcast prep` - Full workflow (script + news + schedule)
 
 ### Setup
 
-1. Copy the podcast config template:
+1. **Create Notion Integration**:
+   - Go to https://www.notion.so/my-integrations
+   - Create a new integration (e.g., "PedroCLI Podcast Tools")
+   - Copy the "Internal Integration Secret"
+   - Share your Notion databases with the integration
+
+2. **Store credentials in 1Password** (recommended):
+   Create a `.env` file with 1Password references:
+   ```bash
+   # .env file
+   NOTION_TOKEN="op://pedro/notion_api_key/credential"
+   CAL_API_KEY="op://pedro/calcom_api_key/credential"
+   ```
+
+3. **Configure `.pedrocli.json`**:
+   ```json
+   {
+     "podcast": {
+       "enabled": true,
+       "notion": {
+         "enabled": true,
+         "databases": {
+           "scripts": "YOUR-SCRIPTS-DATABASE-UUID",
+           "guests": "YOUR-GUESTS-DATABASE-UUID",
+           "topics": "YOUR-TOPICS-DATABASE-UUID",
+           "news": "YOUR-NEWS-DATABASE-UUID"
+         }
+       }
+     },
+     "calcom": {
+       "enabled": true,
+       "api_key": "",
+       "base_url": "https://api.cal.com/v1"
+     }
+   }
+   ```
+
+### Running Podcast Commands
+
+**With Notion Integration** (uses 1Password):
 ```bash
-cp .pedroceli.example.podcast.json ~/.pedroceli.json
+# Generate episode outline
+op run --env-file=.env -- ./pedrocli podcast outline \
+  -episode "S01E03" \
+  -title "How to Choose a Local LLM" \
+  -duration 25 \
+  -output outline.md
+
+# Generate script from outline
+op run --env-file=.env -- ./pedrocli podcast script \
+  -outline outline.md \
+  -episode "S01E03"
+
+# Create Cal.com booking link
+op run --env-file=.env -- ./pedrocli podcast schedule \
+  -episode "S01E03" \
+  -title "How to Choose a Model" \
+  -duration 60
 ```
 
-2. Fill in the TODO placeholders:
-   - Notion API key from https://www.notion.so/my-integrations
-   - Notion database IDs for scripts, articles, news, and guests
-   - Google Calendar credentials
-   - Podcast metadata (name, description, cohosts)
-
-3. Install the MCP servers (first run will install automatically):
+**Without Notion** (saves to file only):
 ```bash
-npx -y @notionhq/notion-mcp-server  # Notion
-npx -y @anthropic/google-calendar-mcp  # Google Calendar
+./pedrocli podcast outline \
+  -episode "S01E03" \
+  -title "My Topic" \
+  -output outline.md
 ```
 
 ### Model Profiles
