@@ -162,3 +162,121 @@ func (b *BashTool) Metadata() *ToolMetadata {
 		Produces: []string{"command_output"},
 	}
 }
+
+// BashExploreTool is a variant of BashTool for code exploration (Plan/Analyze phases).
+// Allows grep/find for searching but forbids file editing commands like sed/awk.
+type BashExploreTool struct {
+	*BashTool
+}
+
+// NewBashExploreTool creates a bash tool for exploration with grep/find enabled
+func NewBashExploreTool(cfg *config.Config, workDir string) *BashExploreTool {
+	// Override allowed commands for exploration
+	allowed := map[string]bool{
+		"git": true, "gh": true, "go": true, "cat": true, "ls": true,
+		"head": true, "tail": true, "wc": true, "sort": true, "uniq": true,
+		"grep": true, "find": true, // Allowed for exploration
+	}
+
+	// Override forbidden commands - no file editing
+	forbidden := map[string]bool{
+		"sed": true, "awk": true, // File editing forbidden in explore mode
+		"rm": true, "mv": true, "dd": true, "sudo": true, "xargs": true,
+	}
+
+	return &BashExploreTool{
+		BashTool: &BashTool{
+			allowedCommands:   allowed,
+			forbiddenCommands: forbidden,
+			workDir:           workDir,
+		},
+	}
+}
+
+// Name returns the tool name
+func (b *BashExploreTool) Name() string {
+	return "bash"
+}
+
+// Description returns the tool description
+func (b *BashExploreTool) Description() string {
+	return `Execute shell commands for code exploration and search.
+
+Args:
+- command (string): The shell command to execute
+
+This variant is for EXPLORATION/SEARCH operations (Plan/Analyze phases):
+- grep/find: ALLOWED for searching code
+- sed/awk: FORBIDDEN (use file/code_edit tools in Implement phase)
+
+ALLOWED commands: git, gh, go, cat, ls, head, tail, wc, sort, uniq, grep, find
+FORBIDDEN commands: sed, awk, rm, mv, dd, sudo, xargs
+
+Examples:
+- grep -r "function.*Error" pkg/
+- find . -name "*.go" -type f
+- git log --oneline | head -10`
+}
+
+// BashEditTool is a variant of BashTool for file editing (Implement phase).
+// Allows sed/awk for file manipulation but forbids grep/find (use SearchTool instead).
+type BashEditTool struct {
+	*BashTool
+}
+
+// NewBashEditTool creates a bash tool for file editing with sed/awk enabled
+func NewBashEditTool(cfg *config.Config, workDir string) *BashEditTool {
+	// Override allowed commands for editing
+	allowed := map[string]bool{
+		"git": true, "gh": true, "go": true, "cat": true, "ls": true,
+		"head": true, "tail": true, "wc": true, "sort": true, "uniq": true,
+		"sed": true, "awk": true, "tee": true, "cut": true, "tr": true, // File editing allowed
+	}
+
+	// Override forbidden commands - no search (use SearchTool)
+	forbidden := map[string]bool{
+		"grep": true, "find": true, // Search forbidden in edit mode (use SearchTool)
+		"rm": true, "mv": true, "dd": true, "sudo": true, "xargs": true,
+	}
+
+	return &BashEditTool{
+		BashTool: &BashTool{
+			allowedCommands:   allowed,
+			forbiddenCommands: forbidden,
+			workDir:           workDir,
+		},
+	}
+}
+
+// Name returns the tool name
+func (b *BashEditTool) Name() string {
+	return "bash"
+}
+
+// Description returns the tool description
+func (b *BashEditTool) Description() string {
+	return `Execute shell commands for file editing and system operations.
+
+Args:
+- command (string): The shell command to execute
+
+This variant is for FILE EDITING operations (Implement phase):
+- sed/awk: ALLOWED for regex-based file editing
+- grep/find: FORBIDDEN (use SearchTool for searching)
+
+FILE EDITING TOOL SELECTION:
+- Use 'sed' for regex-based stream editing (complex find/replace patterns)
+- Use 'awk' for field/column-based text processing
+- Use 'file' tool for simple string replacements (cross-platform)
+- Use 'code_edit' tool for precise line-based changes (preserves indentation)
+
+ALLOWED commands: git, gh, go, cat, ls, head, tail, wc, sort, uniq, sed, awk, tee, cut, tr
+FORBIDDEN commands: grep, find, rm, mv, dd, sudo, xargs
+
+Examples:
+- sed 's/old/new/g' file.txt                    # Global text replacement
+- sed -i 's/fmt\\.Print/slog.Info/g' *.go       # Multi-file regex replace
+- awk '{print $1}' file.txt                     # Extract first column
+- go build ./...                                # Build project
+- git add . && git commit -m "message"          # Git operations`
+}

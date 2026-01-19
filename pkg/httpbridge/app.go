@@ -23,6 +23,9 @@ type AppContext struct {
 	Database   *database.DB
 	WorkDir    string
 
+	// Workspace manager for HTTP bridge jobs
+	WorkspaceManager *WorkspaceManager
+
 	// Stores
 	CompactionStatsStore storage.CompactionStatsStore
 	BlogStore            *blog.PostStore
@@ -102,6 +105,9 @@ func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, erro
 		workDir, _ = os.Getwd()
 	}
 
+	// Create workspace manager for HTTP bridge jobs
+	workspaceManager := NewWorkspaceManager(cfg.HTTPBridge.WorkspacePath)
+
 	// Create tools
 	appCtx := &AppContext{
 		Config:               cfg,
@@ -109,6 +115,7 @@ func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, erro
 		JobManager:           jobManager,
 		Database:             db,
 		WorkDir:              workDir,
+		WorkspaceManager:     workspaceManager,
 		CompactionStatsStore: compactionStatsStore,
 		BlogStore:            blogStore,
 		VersionStore:         versionStore,
@@ -166,6 +173,57 @@ func (ctx *AppContext) Close() error {
 	return nil
 }
 
+// WorkspaceTools holds tools configured for a specific workspace directory
+type WorkspaceTools struct {
+	FileTool        *tools.FileTool
+	CodeEditTool    *tools.CodeEditTool
+	SearchTool      *tools.SearchTool
+	NavigateTool    *tools.NavigateTool
+	GitTool         *tools.GitTool
+	BashTool        *tools.BashTool
+	BashExploreTool *tools.BashExploreTool
+	BashEditTool    *tools.BashEditTool
+	TestTool        *tools.TestTool
+	LSPTool         *tools.LSPTool
+}
+
+// CreateWorkspaceTools creates a new set of tools configured for a workspace directory.
+// This allows job-specific tools that operate in isolated workspaces instead of the main repo.
+func (ctx *AppContext) CreateWorkspaceTools(workspaceDir string) *WorkspaceTools {
+	wt := &WorkspaceTools{
+		FileTool:        tools.NewFileTool(),
+		CodeEditTool:    tools.NewCodeEditTool(),
+		SearchTool:      tools.NewSearchTool(workspaceDir),
+		NavigateTool:    tools.NewNavigateTool(workspaceDir),
+		GitTool:         tools.NewGitTool(workspaceDir),
+		BashTool:        tools.NewBashTool(ctx.Config, workspaceDir),
+		BashExploreTool: tools.NewBashExploreTool(ctx.Config, workspaceDir),
+		BashEditTool:    tools.NewBashEditTool(ctx.Config, workspaceDir),
+		TestTool:        tools.NewTestTool(workspaceDir),
+	}
+
+	// LSP tool if enabled
+	if ctx.Config.LSP.Enabled {
+		wt.LSPTool = tools.NewLSPTool(ctx.Config, workspaceDir)
+	}
+
+	return wt
+}
+
+// registerWorkspaceTools registers workspace-specific tools with an agent
+func registerWorkspaceTools(agent interface{ RegisterTool(tools.Tool) }, wt *WorkspaceTools) {
+	agent.RegisterTool(wt.FileTool)
+	agent.RegisterTool(wt.CodeEditTool)
+	agent.RegisterTool(wt.SearchTool)
+	agent.RegisterTool(wt.NavigateTool)
+	agent.RegisterTool(wt.GitTool)
+	agent.RegisterTool(wt.BashExploreTool) // Exploration tools for all phases
+	agent.RegisterTool(wt.TestTool)
+	if wt.LSPTool != nil {
+		agent.RegisterTool(wt.LSPTool)
+	}
+}
+
 // registerCodeTools registers standard code tools with an agent
 func registerCodeTools(agent interface{ RegisterTool(tools.Tool) }, ctx *AppContext) {
 	agent.RegisterTool(ctx.FileTool)
@@ -210,7 +268,21 @@ func registerPodcastTools(agent interface{ RegisterTool(tools.Tool) }, ctx *AppC
 func (ctx *AppContext) NewBuilderAgent() *agents.BuilderPhasedAgent {
 	agent := agents.NewBuilderPhasedAgent(ctx.Config, ctx.Backend, ctx.JobManager)
 	agent.SetCompactionStatsStore(ctx.CompactionStatsStore)
+	agent.SetWorkspaceManager(ctx.WorkspaceManager)
 	registerCodeTools(agent, ctx)
+	return agent
+}
+
+// NewBuilderAgentWithWorkspace creates a builder agent with workspace-specific tools
+func (ctx *AppContext) NewBuilderAgentWithWorkspace(workspaceDir string) *agents.BuilderPhasedAgent {
+	agent := agents.NewBuilderPhasedAgent(ctx.Config, ctx.Backend, ctx.JobManager)
+	agent.SetCompactionStatsStore(ctx.CompactionStatsStore)
+	agent.SetWorkspaceManager(ctx.WorkspaceManager)
+
+	// Create and register workspace-specific tools
+	wt := ctx.CreateWorkspaceTools(workspaceDir)
+	registerWorkspaceTools(agent, wt)
+
 	return agent
 }
 
@@ -218,6 +290,7 @@ func (ctx *AppContext) NewBuilderAgent() *agents.BuilderPhasedAgent {
 func (ctx *AppContext) NewDebuggerAgent() *agents.DebuggerPhasedAgent {
 	agent := agents.NewDebuggerPhasedAgent(ctx.Config, ctx.Backend, ctx.JobManager)
 	agent.SetCompactionStatsStore(ctx.CompactionStatsStore)
+	agent.SetWorkspaceManager(ctx.WorkspaceManager)
 	registerCodeTools(agent, ctx)
 	return agent
 }
@@ -226,6 +299,7 @@ func (ctx *AppContext) NewDebuggerAgent() *agents.DebuggerPhasedAgent {
 func (ctx *AppContext) NewReviewerAgent() *agents.ReviewerPhasedAgent {
 	agent := agents.NewReviewerPhasedAgent(ctx.Config, ctx.Backend, ctx.JobManager)
 	agent.SetCompactionStatsStore(ctx.CompactionStatsStore)
+	agent.SetWorkspaceManager(ctx.WorkspaceManager)
 	registerCodeTools(agent, ctx)
 	return agent
 }
@@ -234,6 +308,7 @@ func (ctx *AppContext) NewReviewerAgent() *agents.ReviewerPhasedAgent {
 func (ctx *AppContext) NewTriagerAgent() *agents.TriagerAgent {
 	agent := agents.NewTriagerAgent(ctx.Config, ctx.Backend, ctx.JobManager)
 	agent.SetCompactionStatsStore(ctx.CompactionStatsStore)
+	agent.SetWorkspaceManager(ctx.WorkspaceManager)
 	registerCodeTools(agent, ctx)
 	return agent
 }

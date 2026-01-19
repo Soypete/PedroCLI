@@ -40,6 +40,10 @@ func (m *mockJobManager) SetWorkDir(ctx context.Context, id string, workDir stri
 	return nil
 }
 
+func (m *mockJobManager) SetWorkspaceDir(ctx context.Context, id string, workspaceDir string) error {
+	return nil
+}
+
 func (m *mockJobManager) SetContextDir(ctx context.Context, id string, contextDir string) error {
 	return nil
 }

@@ -34,6 +34,9 @@ type JobManager interface {
 	// SetWorkDir sets the working directory for a job.
 	SetWorkDir(ctx context.Context, id string, workDir string) error
 
+	// SetWorkspaceDir sets the isolated workspace directory for a job (HTTP Bridge only).
+	SetWorkspaceDir(ctx context.Context, id string, workspaceDir string) error
+
 	// SetContextDir sets the context directory for a job.
 	SetContextDir(ctx context.Context, id string, contextDir string) error
 

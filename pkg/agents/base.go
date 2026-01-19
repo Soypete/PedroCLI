@@ -26,6 +26,11 @@ type Agent interface {
 	Execute(ctx context.Context, input map[string]interface{}) (*jobs.Job, error)
 }
 
+// WorkspaceManager interface for workspace cleanup
+type WorkspaceManager interface {
+	CleanupWorkspace(ctx context.Context, jobID string, config *config.HTTPBridgeConfig) error
+}
+
 // BaseAgent provides common functionality for all agents
 type BaseAgent struct {
 	name                 string
@@ -40,6 +45,8 @@ type BaseAgent struct {
 
 	// Logit bias for controlling token probabilities (set by executor)
 	logitBias map[int]float32
+
+	workspaceManager WorkspaceManager // Optional for HTTP Bridge cleanup
 }
 
 // NewBaseAgent creates a new base agent
@@ -84,6 +91,30 @@ func (a *BaseAgent) SetCompactionStatsStore(store storage.CompactionStatsStore) 
 // SetLogitBias sets the logit bias for controlling token probabilities
 func (a *BaseAgent) SetLogitBias(bias map[int]float32) {
 	a.logitBias = bias
+}
+
+// SetWorkspaceManager sets the workspace manager for HTTP Bridge cleanup
+func (a *BaseAgent) SetWorkspaceManager(mgr WorkspaceManager) {
+	a.workspaceManager = mgr
+}
+
+// cleanupWorkspaceIfNeeded cleans up the workspace for a job if workspace isolation was used
+func (a *BaseAgent) cleanupWorkspaceIfNeeded(ctx context.Context, jobID string) {
+	if a.workspaceManager == nil {
+		return // No workspace manager (CLI mode)
+	}
+
+	// Get the job to check if it has a workspace_dir
+	job, err := a.jobManager.Get(ctx, jobID)
+	if err != nil || job.WorkspaceDir == "" {
+		return // No workspace to cleanup
+	}
+
+	// Cleanup workspace (respects CleanupOnComplete config)
+	if err := a.workspaceManager.CleanupWorkspace(ctx, jobID, &a.config.HTTPBridge); err != nil {
+		// Log but don't fail the job on cleanup error
+		fmt.Fprintf(os.Stderr, "Warning: failed to cleanup workspace for job %s: %v\n", jobID, err)
+	}
 }
 
 // Name returns the agent name
