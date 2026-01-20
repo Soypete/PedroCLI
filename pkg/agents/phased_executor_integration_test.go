@@ -408,8 +408,6 @@ func TestPhasedExecutor_PhaseInputChaining(t *testing.T) {
 
 	job, _ := mockJobMgr.Create(ctx, "test", "chain test", nil)
 
-	agent := NewBaseAgent("phased-agent", "test description", cfg, mockLLM, mockJobMgr)
-
 	phases := []Phase{
 		{Name: "phase1", Description: "First", MaxRounds: 2},
 		{Name: "phase2", Description: "Second", MaxRounds: 2},
@@ -442,7 +440,7 @@ func TestPhasedExecutor_PhaseInputChaining(t *testing.T) {
 	})
 
 	// Use custom infer to capture inputs
-	agent = NewBaseAgent("phased-agent", "test description", cfg, mockLLM, mockJobMgr)
+	agent := NewBaseAgent("phased-agent", "test description", cfg, mockLLM, mockJobMgr)
 
 	contextMgr, _ := llmcontext.NewManager(job.ID, false, cfg.Model.ContextSize)
 	defer contextMgr.Cleanup()

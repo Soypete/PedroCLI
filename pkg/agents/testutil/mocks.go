@@ -303,6 +303,19 @@ func (m *MockJobManager) SetWorkDir(ctx context.Context, id string, workDir stri
 	return nil
 }
 
+// SetWorkspaceDir implements jobs.JobManager.
+func (m *MockJobManager) SetWorkspaceDir(ctx context.Context, id string, workspaceDir string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	job, ok := m.Jobs[id]
+	if !ok {
+		return fmt.Errorf("job not found: %s", id)
+	}
+	job.WorkspaceDir = workspaceDir
+	return nil
+}
+
 // SetContextDir implements jobs.JobManager.
 func (m *MockJobManager) SetContextDir(ctx context.Context, id string, contextDir string) error {
 	m.mu.Lock()
