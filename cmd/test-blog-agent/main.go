@@ -150,8 +150,7 @@ The agent will:
 6. Editor Review (grammar/coherence)
 7. Publish (save to database)
 
-Progress will be shown with a tree view like Claude Code.
-`)
+Progress will be shown with a tree view like Claude Code.`)
 }
 
 func min(a, b int) int {
