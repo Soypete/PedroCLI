@@ -48,8 +48,7 @@ Commands:
 
 Examples:
   go run test/manual/research_tools.go search
-  go run test/manual/research_tools.go workflow
-`)
+  go run test/manual/research_tools.go workflow`)
 }
 
 func testWebSearch() {
