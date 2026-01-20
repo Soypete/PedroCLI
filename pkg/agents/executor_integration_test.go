@@ -592,8 +592,8 @@ func (s *slowMockBackend) Infer(ctx context.Context, req *llm.InferenceRequest) 
 	}
 }
 
-func (s *slowMockBackend) GetContextWindow() int  { return 32768 }
-func (s *slowMockBackend) GetUsableContext() int  { return 24576 }
+func (s *slowMockBackend) GetContextWindow() int { return 32768 }
+func (s *slowMockBackend) GetUsableContext() int { return 24576 }
 func (s *slowMockBackend) Tokenize(ctx context.Context, text string) ([]int, error) {
 	return []int{1, 2, 3}, nil
 }
