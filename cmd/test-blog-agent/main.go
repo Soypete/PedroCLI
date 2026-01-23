@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log"
 	"os"
@@ -13,6 +12,7 @@ import (
 	"github.com/soypete/pedrocli/pkg/config"
 	"github.com/soypete/pedrocli/pkg/database"
 	"github.com/soypete/pedrocli/pkg/llm"
+	"github.com/soypete/pedrocli/pkg/storage/blog"
 )
 
 func main() {
@@ -53,7 +53,7 @@ func main() {
 	}
 
 	// Setup database (optional - can be nil for testing)
-	var db *sql.DB
+	var storage blog.BlogStorage
 	if cfg.Blog.Enabled && cfg.Database.Database != "" {
 		dbCfg := &database.Config{
 			Host:     cfg.Database.Host,
@@ -68,10 +68,14 @@ func main() {
 		if err != nil {
 			log.Printf("Warning: Database connection failed: %v", err)
 			log.Println("Continuing without database (versions won't be saved)")
+			storage = blog.NewMemoryStorage()
 		} else {
-			db = dbWrapper.DB
-			defer db.Close()
+			storage = blog.NewDatabaseStorage(dbWrapper.DB)
+			defer dbWrapper.DB.Close()
 		}
+	} else {
+		// Use memory storage as fallback
+		storage = blog.NewMemoryStorage()
 	}
 
 	// Extract title from first line if available
@@ -87,11 +91,12 @@ func main() {
 	// Create agent
 	agent := agents.NewBlogContentAgent(agents.BlogContentAgentConfig{
 		Backend:       backend,
-		DB:            db,
+		Storage:       storage,
 		WorkingDir:    cfg.Project.Workdir,
 		MaxIterations: 10,
 		Transcription: string(transcription),
 		Title:         title,
+		Config:        cfg,
 	})
 
 	// Execute workflow
@@ -125,10 +130,8 @@ func main() {
 
 	fmt.Println(post.EditorOutput)
 
-	if db != nil {
-		fmt.Printf("\n💾 Saved to database with ID: %s\n", post.ID)
-		fmt.Println("📚 Version history available in blog_post_versions table")
-	}
+	fmt.Printf("\n💾 Saved to storage with ID: %s\n", post.ID)
+	fmt.Println("📚 Version history available")
 
 	fmt.Println("\n✅ Workflow complete!")
 }
@@ -151,11 +154,4 @@ The agent will:
 7. Publish (save to database)
 
 Progress will be shown with a tree view like Claude Code.`)
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

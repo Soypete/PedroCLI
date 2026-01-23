@@ -28,8 +28,7 @@ type AppContext struct {
 
 	// Stores
 	CompactionStatsStore storage.CompactionStatsStore
-	BlogStore            *blog.PostStore
-	VersionStore         *blog.VersionStore
+	BlogStorage          blog.BlogStorage // Abstracted blog storage interface
 
 	// Tools (used by agents)
 	FileTool     tools.Tool
@@ -87,9 +86,8 @@ func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, erro
 	// Create compaction stats store
 	compactionStatsStore := database.NewCompactionStatsStore(db.DB)
 
-	// Create blog stores
-	blogStore := blog.NewPostStore(db.DB)
-	versionStore := blog.NewVersionStore(db.DB)
+	// Create blog storage (database-backed)
+	blogStorage := blog.NewDatabaseStorage(db.DB)
 
 	// Migrate existing file-based jobs to database
 	migrated, err := jobManager.MigrateFromFiles(ctx, "/tmp/pedrocli-jobs")
@@ -117,8 +115,7 @@ func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, erro
 		WorkDir:              workDir,
 		WorkspaceManager:     workspaceManager,
 		CompactionStatsStore: compactionStatsStore,
-		BlogStore:            blogStore,
-		VersionStore:         versionStore,
+		BlogStorage:          blogStorage,
 	}
 
 	// Initialize code tools
