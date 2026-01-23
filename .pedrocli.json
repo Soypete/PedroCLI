@@ -59,6 +59,8 @@
   "blog": {
     "enabled": true,
     "rss_feed_url": "https://soypetetech.substack.com/feed",
+    "notion_drafts_db": "18aa4c9f-9845-81d5-aad1-e53b75ab3a2b",
+    "notion_ideas_db": "18aa4c9f-9845-813f-80d3-e3c0eb66c165",
     "research": {
       "enabled": true,
       "calendar_enabled": true,
@@ -86,5 +88,10 @@
         "news": "29da4c9f9845805f9cfded33ef29e98a"
       }
     }
+  },
+  "voice": {
+    "enabled": true,
+    "whisper_url": "http://localhost:8081",
+    "language": "en"
   }
 }

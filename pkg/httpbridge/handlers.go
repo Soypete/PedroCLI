@@ -372,8 +372,8 @@ func (s *Server) handleBlog(w http.ResponseWriter, r *http.Request) {
 
 	// Execute blog creation asynchronously
 	job, err := agent.Execute(s.ctx, map[string]interface{}{
-		"title":   req.Title,
-		"content": req.Dictation,
+		"title":     req.Title,
+		"dictation": req.Dictation,
 	})
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, BlogResponse{
@@ -687,7 +687,7 @@ func (s *Server) handleBlogPosts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Query all blog posts
-	posts, err := s.appCtx.BlogStore.List("")
+	posts, err := s.appCtx.BlogStorage.ListPosts(r.Context(), "")
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to list posts: %v", err), http.StatusInternalServerError)
 		return
@@ -737,15 +737,15 @@ func (s *Server) handleBlogPostByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get post from database
-	post, err := s.appCtx.BlogStore.Get(postID)
+	// Get post from storage
+	post, err := s.appCtx.BlogStorage.GetPost(r.Context(), postID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Post not found: %v", err), http.StatusNotFound)
 		return
 	}
 
 	// Get version history
-	versions, err := s.appCtx.VersionStore.ListVersions(r.Context(), postID)
+	versions, err := s.appCtx.BlogStorage.ListVersions(r.Context(), postID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get versions: %v", err), http.StatusInternalServerError)
 		return

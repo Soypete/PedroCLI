@@ -2,7 +2,6 @@ package agents
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strings"
 	"time"
@@ -17,9 +16,7 @@ import (
 // BlogContentAgent orchestrates the 7-phase blog post creation workflow
 type BlogContentAgent struct {
 	backend       llm.Backend
-	db            *sql.DB
-	postStore     *blog.PostStore
-	versionStore  *blog.VersionStore
+	storage       blog.BlogStorage // Abstracted storage interface
 	progress      *ProgressTracker
 	currentPost   *blog.BlogPost
 	researchData  string
@@ -43,7 +40,7 @@ type SectionContent struct {
 // BlogContentAgentConfig configures the blog content agent
 type BlogContentAgentConfig struct {
 	Backend       llm.Backend
-	DB            *sql.DB
+	Storage       blog.BlogStorage // Abstracted storage interface
 	WorkingDir    string
 	MaxIterations int
 	Transcription string         // Initial voice transcription
@@ -133,9 +130,7 @@ func NewBlogContentAgent(cfg BlogContentAgentConfig) *BlogContentAgent {
 
 	agent := &BlogContentAgent{
 		backend:       cfg.Backend,
-		db:            cfg.DB,
-		postStore:     blog.NewPostStore(cfg.DB),
-		versionStore:  blog.NewVersionStore(cfg.DB),
+		storage:       cfg.Storage,
 		progress:      progress,
 		socialPosts:   make(map[string]string),
 		toolsList:     toolsList,
@@ -222,8 +217,8 @@ func (a *BlogContentAgent) phaseTranscribe(ctx context.Context) error {
 		return fmt.Errorf("no transcription provided")
 	}
 
-	// Save initial post to database
-	if err := a.postStore.Create(a.currentPost); err != nil {
+	// Save initial post to storage
+	if err := a.storage.CreatePost(ctx, a.currentPost); err != nil {
 		a.progress.UpdatePhase("Transcribe", PhaseStatusFailed, err.Error())
 		a.progress.PrintTree()
 		return fmt.Errorf("failed to save initial post: %w", err)
@@ -352,7 +347,7 @@ Summarize what research would be helpful.`, a.currentPost.RawTranscription)
 
 	// Update post with research data (store in writer_output temporarily)
 	a.currentPost.WriterOutput = fmt.Sprintf("RESEARCH:\n%s", a.researchData)
-	if err := a.postStore.Update(a.currentPost); err != nil {
+	if err := a.storage.UpdatePost(ctx, a.currentPost); err != nil {
 		return fmt.Errorf("failed to update post: %w", err)
 	}
 
@@ -427,7 +422,7 @@ Generate a clear, logical outline.`, a.currentPost.RawTranscription, a.researchD
 
 	// Update post
 	a.currentPost.WriterOutput = fmt.Sprintf("OUTLINE:\n%s\n\nRESEARCH:\n%s", a.outline, a.researchData)
-	if err := a.postStore.Update(a.currentPost); err != nil {
+	if err := a.storage.UpdatePost(ctx, a.currentPost); err != nil {
 		return fmt.Errorf("failed to update post: %w", err)
 	}
 
@@ -587,7 +582,7 @@ func (a *BlogContentAgent) phaseAssemble(ctx context.Context) error {
 	// Update post with final content
 	a.currentPost.FinalContent = finalContent.String()
 	a.currentPost.Status = blog.StatusDrafted
-	if err := a.postStore.Update(a.currentPost); err != nil {
+	if err := a.storage.UpdatePost(ctx, a.currentPost); err != nil {
 		return fmt.Errorf("failed to update post: %w", err)
 	}
 
@@ -667,7 +662,7 @@ Provide editorial feedback.`, a.currentPost.FinalContent)
 	a.currentPost.Status = blog.StatusEdited
 	a.progress.AddTokens("Editor Review", resp.TokensUsed)
 
-	if err := a.postStore.Update(a.currentPost); err != nil {
+	if err := a.storage.UpdatePost(ctx, a.currentPost); err != nil {
 		return fmt.Errorf("failed to update post: %w", err)
 	}
 
@@ -692,7 +687,7 @@ func (a *BlogContentAgent) phasePublish(ctx context.Context) error {
 	a.currentPost.UpdatedAt = time.Now()
 	a.currentPost.SocialPosts = a.socialPosts
 
-	if err := a.postStore.Update(a.currentPost); err != nil {
+	if err := a.storage.UpdatePost(ctx, a.currentPost); err != nil {
 		a.progress.UpdatePhase("Publish", PhaseStatusFailed, err.Error())
 		a.progress.PrintTree()
 		return fmt.Errorf("failed to publish post: %w", err)
@@ -878,8 +873,10 @@ func (a *BlogContentAgent) buildStayConnectedSection() string {
 }
 
 func (a *BlogContentAgent) saveVersion(phase string, versionType blog.VersionType) error {
+	ctx := context.Background()
+
 	// Get next version number
-	nextVersion, err := a.versionStore.GetNextVersionNumber(context.Background(), a.currentPost.ID)
+	nextVersion, err := a.storage.GetNextVersionNumber(ctx, a.currentPost.ID)
 	if err != nil {
 		return err
 	}
@@ -910,7 +907,7 @@ func (a *BlogContentAgent) saveVersion(phase string, versionType blog.VersionTyp
 		CreatedAt:        time.Now(),
 	}
 
-	return a.versionStore.CreateVersion(context.Background(), version)
+	return a.storage.CreateVersion(ctx, version)
 }
 
 // GetCurrentPost returns the current blog post

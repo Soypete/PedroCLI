@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"flag"
 	"fmt"
 	"os"
@@ -16,6 +15,7 @@ import (
 	"github.com/soypete/pedrocli/pkg/database"
 	depcheck "github.com/soypete/pedrocli/pkg/init"
 	"github.com/soypete/pedrocli/pkg/llm"
+	"github.com/soypete/pedrocli/pkg/storage/blog"
 )
 
 const version = "0.2.0-dev"
@@ -535,9 +535,10 @@ func runBlogContentAgent(cfg *config.Config, transcription string, title string,
 		os.Exit(1)
 	}
 
-	// Setup database (optional)
-	var db *sql.DB
+	// Setup storage backend
+	var storage blog.BlogStorage
 	if cfg.Blog.Enabled && cfg.Database.Database != "" {
+		// Use database storage if configured
 		dbCfg := &database.Config{
 			Host:     cfg.Database.Host,
 			Port:     cfg.Database.Port,
@@ -550,12 +551,28 @@ func runBlogContentAgent(cfg *config.Config, transcription string, title string,
 		dbWrapper, err := database.New(dbCfg)
 		if err != nil {
 			fmt.Printf("Warning: Database connection failed: %v\n", err)
-			fmt.Println("Continuing without database (versions won't be saved)")
+			fmt.Println("Falling back to file storage in ./blog_output/")
+			// Fallback to file storage
+			storage, err = blog.NewFileStorage("./blog_output")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: Failed to create file storage: %v\n", err)
+				os.Exit(1)
+			}
 		} else {
-			db = dbWrapper.DB
-			defer db.Close()
+			storage = blog.NewDatabaseStorage(dbWrapper.DB)
+			defer dbWrapper.DB.Close()
+		}
+	} else {
+		// Use file storage by default (no database required)
+		fmt.Println("📁 Using file storage (./blog_output/) - no database configured")
+		var err error
+		storage, err = blog.NewFileStorage("./blog_output")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: Failed to create file storage: %v\n", err)
+			os.Exit(1)
 		}
 	}
+	defer storage.Close()
 
 	// Extract title from first line if not provided
 	if title == "" {
@@ -571,7 +588,7 @@ func runBlogContentAgent(cfg *config.Config, transcription string, title string,
 	// Create and execute agent
 	agent := agents.NewBlogContentAgent(agents.BlogContentAgentConfig{
 		Backend:       backend,
-		DB:            db,
+		Storage:       storage,
 		WorkingDir:    cfg.Project.Workdir,
 		MaxIterations: 10,
 		Transcription: transcription,
@@ -608,9 +625,17 @@ func runBlogContentAgent(cfg *config.Config, transcription string, title string,
 	fmt.Println(strings.Repeat("=", 80) + "\n")
 	fmt.Println(post.EditorOutput)
 
-	if db != nil {
+	// Print storage location
+	switch storage.(type) {
+	case *blog.DatabaseStorage:
 		fmt.Printf("\n💾 Saved to database with ID: %s\n", post.ID)
 		fmt.Println("📚 Version history available in blog_post_versions table")
+	case *blog.FileStorage:
+		fmt.Printf("\n💾 Saved to file storage with ID: %s\n", post.ID)
+		fmt.Println("📁 Location: ./blog_output/posts/")
+		fmt.Printf("   - Markdown: ./blog_output/posts/%s.md\n", post.ID)
+		fmt.Printf("   - Metadata: ./blog_output/posts/%s.meta.json\n", post.ID)
+		fmt.Printf("   - Versions: ./blog_output/versions/%s/\n", post.ID)
 	}
 
 	fmt.Println("\n✅ Workflow complete!")

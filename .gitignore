@@ -37,3 +37,4 @@ coverage.out
 *.db
 postgres-data/
 eval-*
+test-blog-agent
