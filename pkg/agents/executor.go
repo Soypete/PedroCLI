@@ -14,6 +14,30 @@ import (
 	"github.com/soypete/pedrocli/pkg/tools"
 )
 
+// ProgressEventType represents the type of progress event
+type ProgressEventType string
+
+const (
+	ProgressEventRoundStart  ProgressEventType = "round_start"
+	ProgressEventRoundEnd    ProgressEventType = "round_end"
+	ProgressEventToolCall    ProgressEventType = "tool_call"
+	ProgressEventToolResult  ProgressEventType = "tool_result"
+	ProgressEventLLMResponse ProgressEventType = "llm_response"
+	ProgressEventMessage     ProgressEventType = "message"
+	ProgressEventError       ProgressEventType = "error"
+	ProgressEventComplete    ProgressEventType = "complete"
+)
+
+// ProgressEvent represents a progress event during execution
+type ProgressEvent struct {
+	Type    ProgressEventType
+	Message string
+	Data    interface{}
+}
+
+// ProgressCallback is called when progress events occur
+type ProgressCallback func(event ProgressEvent)
+
 // InferenceExecutor handles the inference loop
 type InferenceExecutor struct {
 	agent        *BaseAgent
@@ -24,6 +48,9 @@ type InferenceExecutor struct {
 
 	// Cached token IDs for logit bias
 	actionTokenIDs []int
+
+	// Progress callback for streaming updates
+	progressCallback ProgressCallback
 }
 
 // NewInferenceExecutor creates a new inference executor
@@ -62,6 +89,22 @@ func (e *InferenceExecutor) SetSystemPrompt(prompt string) {
 	e.systemPrompt = prompt
 }
 
+// SetProgressCallback sets a callback for progress events
+func (e *InferenceExecutor) SetProgressCallback(callback ProgressCallback) {
+	e.progressCallback = callback
+}
+
+// emitProgress emits a progress event if callback is set
+func (e *InferenceExecutor) emitProgress(eventType ProgressEventType, message string, data interface{}) {
+	if e.progressCallback != nil {
+		e.progressCallback(ProgressEvent{
+			Type:    eventType,
+			Message: message,
+			Data:    data,
+		})
+	}
+}
+
 // GetLogitBias returns a logit bias map to boost the probability of "action" token
 // This helps the LLM consistently include required parameters in tool calls
 func (e *InferenceExecutor) GetLogitBias() map[int]float32 {
@@ -90,14 +133,27 @@ func (e *InferenceExecutor) Execute(ctx context.Context, initialPrompt string) e
 
 		fmt.Fprintf(os.Stderr, "🔄 Inference round %d/%d\n", e.currentRound, e.maxRounds)
 
+		// Emit round start event
+		e.emitProgress(ProgressEventRoundStart, fmt.Sprintf("Round %d/%d", e.currentRound, e.maxRounds), map[string]interface{}{
+			"round":      e.currentRound,
+			"max_rounds": e.maxRounds,
+		})
+
 		// Log user prompt to conversation history
 		e.logConversation(ctx, jobID, "user", currentPrompt, "", nil, nil)
 
 		// Execute one inference round (with custom system prompt if set)
 		response, err := e.agent.executeInferenceWithSystemPrompt(ctx, e.contextMgr, currentPrompt, e.systemPrompt)
 		if err != nil {
+			e.emitProgress(ProgressEventError, "Inference failed", err)
 			return fmt.Errorf("inference failed: %w", err)
 		}
+
+		// Emit LLM response event
+		e.emitProgress(ProgressEventLLMResponse, "Received LLM response", map[string]interface{}{
+			"text_length": len(response.Text),
+			"tool_calls":  len(response.ToolCalls),
+		})
 
 		// Log assistant response to conversation history
 		e.logConversation(ctx, jobID, "assistant", response.Text, "", nil, nil)
@@ -135,6 +191,7 @@ func (e *InferenceExecutor) Execute(ctx context.Context, initialPrompt string) e
 		if len(toolCalls) == 0 {
 			if e.isDone(response.Text) {
 				fmt.Fprintln(os.Stderr, "✅ Task completed!")
+				e.emitProgress(ProgressEventComplete, "Task completed", nil)
 				return nil
 			}
 
@@ -182,10 +239,15 @@ func (e *InferenceExecutor) Execute(ctx context.Context, initialPrompt string) e
 		// Check if any tool indicated completion
 		if e.hasCompletionSignal(results) {
 			fmt.Fprintln(os.Stderr, "✅ Task completed (indicated by tool result)")
+			e.emitProgress(ProgressEventComplete, "Task completed", nil)
 			return nil
 		}
+
+		// Emit round end event
+		e.emitProgress(ProgressEventRoundEnd, fmt.Sprintf("Round %d complete", e.currentRound), nil)
 	}
 
+	e.emitProgress(ProgressEventError, "Max rounds reached", nil)
 	return fmt.Errorf("max inference rounds (%d) reached without completion", e.maxRounds)
 }
 
@@ -219,6 +281,12 @@ func (e *InferenceExecutor) executeToolsWithLogging(ctx context.Context, calls [
 	for i, call := range calls {
 		fmt.Fprintf(os.Stderr, "  🔧 Executing tool: %s\n", call.Name)
 
+		// Emit tool call event
+		e.emitProgress(ProgressEventToolCall, fmt.Sprintf("Calling tool: %s", call.Name), map[string]interface{}{
+			"tool": call.Name,
+			"args": call.Args,
+		})
+
 		// Log tool call
 		e.logConversation(ctx, jobID, "tool_call", "", call.Name, call.Args, nil)
 
@@ -231,6 +299,14 @@ func (e *InferenceExecutor) executeToolsWithLogging(ctx context.Context, calls [
 		}
 
 		results[i] = result
+
+		// Emit tool result event
+		e.emitProgress(ProgressEventToolResult, fmt.Sprintf("Tool %s result", call.Name), map[string]interface{}{
+			"tool":    call.Name,
+			"success": result.Success,
+			"output":  result.Output,
+			"error":   result.Error,
+		})
 
 		// Log tool result
 		success := result.Success
