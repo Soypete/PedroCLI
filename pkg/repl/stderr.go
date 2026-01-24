@@ -63,7 +63,9 @@ func RedirectStderrToWriter(w io.Writer) func() {
 	os.Stderr = w2
 
 	// Copy from pipe to custom writer
-	go io.Copy(w, r)
+	go func() {
+		_, _ = io.Copy(w, r) // Explicitly ignore error in goroutine
+	}()
 
 	// Return cleanup function
 	return func() {
