@@ -114,7 +114,7 @@ func (r *REPL) handleCommand(cmd *Command) error {
 func (r *REPL) handleREPLCommand(cmd *Command) error {
 	switch cmd.Name {
 	case "help", "h", "?":
-		r.output.PrintMessage(GetREPLHelp(r.session.Mode))
+		r.output.PrintMessage("%s", GetREPLHelp(r.session.Mode))
 		return nil
 
 	case "quit", "exit", "q":
