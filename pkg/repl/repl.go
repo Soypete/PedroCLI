@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/chzyer/readline"
+	"github.com/soypete/pedrocli/pkg/cli"
 )
 
 // REPL represents the interactive REPL
@@ -158,12 +159,110 @@ func (r *REPL) handleREPLCommand(cmd *Command) error {
 	}
 }
 
-// handleSlashCommand handles slash commands (future PR #60 integration)
+// handleSlashCommand handles slash commands with template expansion
 func (r *REPL) handleSlashCommand(cmd *Command) error {
-	r.output.PrintWarning("Slash commands not yet implemented\n")
-	r.output.PrintMessage("Command: /%s\n", cmd.Name)
-	r.output.PrintMessage("This will be implemented when PR #60 merges\n")
-	return nil
+	// Create command runner
+	workDir := r.session.Config.Project.Workdir
+	if workDir == "" {
+		var err error
+		workDir, err = os.Getwd()
+		if err != nil {
+			workDir = "."
+		}
+	}
+
+	runner := cli.NewCommandRunner(r.session.Config, workDir)
+
+	// Build input string from command name and args
+	input := "/" + cmd.Name
+	if len(cmd.Args) > 0 {
+		args := make([]string, 0, len(cmd.Args))
+		for i := 0; ; i++ {
+			key := fmt.Sprintf("arg%d", i)
+			if val, ok := cmd.Args[key].(string); ok {
+				args = append(args, val)
+			} else {
+				break
+			}
+		}
+		if len(args) > 0 {
+			input = input + " " + strings.Join(args, " ")
+		}
+	}
+
+	// Check if command exists
+	name, _, _ := cli.ParseSlashCommand(input)
+	command, ok := runner.GetCommand(name)
+	if !ok {
+		r.output.PrintError("❌ Command not found: /%s\n", name)
+		r.output.PrintMessage("\nAvailable commands:\n")
+		for _, c := range runner.ListCommands() {
+			desc := c.Description
+			if desc == "" {
+				desc = "(no description)"
+			}
+			r.output.PrintMessage("  /%s - %s\n", c.Name, desc)
+		}
+		r.output.PrintMessage("\nType '/help' for REPL commands\n")
+		return nil
+	}
+
+	// Expand command template
+	expanded, err := runner.RunCommand(r.ctx, input)
+	if err != nil {
+		r.output.PrintError("❌ Command expansion failed: %v\n", err)
+		return nil
+	}
+
+	// Show expanded prompt
+	r.output.PrintMessage("\n📝 Expanded prompt:\n")
+	r.output.PrintMessage("─────────────────────────────────────────\n")
+	r.output.PrintMessage("%s\n", expanded)
+	r.output.PrintMessage("─────────────────────────────────────────\n\n")
+
+	// Log the expansion
+	r.session.Logger.LogInput(fmt.Sprintf("Slash command: %s", input))
+	r.session.Logger.LogOutput(fmt.Sprintf("Expanded to:\n%s", expanded))
+
+	// Check if command has an associated agent
+	if command.Agent == "" {
+		r.output.PrintMessage("ℹ️  No agent configured for this command\n")
+		r.output.PrintMessage("   Copy the expanded prompt to use manually, or type your own prompt\n")
+		return nil
+	}
+
+	// Ask for confirmation before running agent
+	r.output.PrintMessage("Run with %s agent? [y/n]: ", command.Agent)
+	line, err := r.input.ReadLine()
+	if err != nil {
+		return err
+	}
+
+	response := strings.TrimSpace(strings.ToLower(line))
+	if response != "y" && response != "yes" {
+		r.output.PrintWarning("❌ Cancelled\n")
+		return nil
+	}
+
+	// Execute with agent
+	r.output.PrintMessage("\n🤖 Running %s agent...\n", command.Agent)
+
+	// Map agent name to what the bridge expects
+	agentName := command.Agent
+	if agentName == "build" || agentName == "debug" || agentName == "review" || agentName == "triage" {
+		// Code agents
+		return r.handleBackground(agentName, expanded)
+	} else if agentName == "blog" {
+		// Blog agent
+		return r.handleBackground("blog", expanded)
+	} else if agentName == "podcast" {
+		// Podcast agent
+		return r.handleBackground("podcast", expanded)
+	} else {
+		r.output.PrintWarning("⚠️  Unknown agent: %s\n", agentName)
+		r.output.PrintMessage("   Using expanded prompt as-is\n")
+		return r.handleBackground("build", expanded)
+	}
 }
 
 // handleNaturalLanguage handles natural language prompts
