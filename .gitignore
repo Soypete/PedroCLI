@@ -6,6 +6,8 @@ coverage.out
 /pedroceli-*
 /pedrocli
 /pedrocli-*
+/pedrocode
+/pedrocode-*
 *.exe
 *.exe~
 *.dll

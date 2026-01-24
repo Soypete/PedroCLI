@@ -53,35 +53,38 @@ whisper-health: ## Check whisper-server health
 stop-whisper: ## Stop whisper-server
 	@pkill -f whisper-server || echo "No whisper-server running"
 
-# Default build for current platform (CLI, HTTP server, and calendar MCP server)
+# Default build for current platform (CLI, HTTP server, and REPL)
 build:
 	go build -o pedrocli ./cmd/pedrocli
 	go build -o pedrocli-http-server ./cmd/http-server
-	go build -o pedrocli-calendar-mcp ./cmd/calendar-mcp-server
+	go build -o pedrocode ./cmd/pedrocode
 
 # Build CLI only
 build-cli:
 	go build -o pedrocli ./cmd/pedrocli
 
+# Build REPL (pedrocode)
+build-pedrocode:
+	go build -o pedrocode ./cmd/pedrocode
+
 # Build for macOS
 build-mac:
 	GOOS=darwin GOARCH=arm64 go build -o pedrocli-mac-arm64 ./cmd/pedrocli
 	GOOS=darwin GOARCH=amd64 go build -o pedrocli-mac-amd64 ./cmd/pedrocli
+	GOOS=darwin GOARCH=arm64 go build -o pedrocode-mac-arm64 ./cmd/pedrocode
+	GOOS=darwin GOARCH=amd64 go build -o pedrocode-mac-amd64 ./cmd/pedrocode
 
 # Build for Linux (Ubuntu on Spark)
 build-linux:
 	GOOS=linux GOARCH=amd64 go build -o pedrocli-linux-amd64 ./cmd/pedrocli
+	GOOS=linux GOARCH=amd64 go build -o pedrocode-linux-amd64 ./cmd/pedrocode
 
 # Build HTTP server
 build-http:
 	go build -o pedrocli-http-server ./cmd/http-server
 
-# Build Calendar MCP server
-build-calendar:
-	go build -o pedrocli-calendar-mcp ./cmd/calendar-mcp-server
-
 # Build for both platforms
-build-all: build-mac build-linux build-calendar
+build-all: build-mac build-linux
 
 # PostgreSQL Test Infrastructure (Podman)
 test-postgres-up:
@@ -137,7 +140,7 @@ install:
 
 # Clean build artifacts
 clean:
-	rm -f pedrocli pedrocli-* coverage.out coverage.html
+	rm -f pedrocli pedrocli-* pedrocode pedrocode-* coverage.out coverage.html
 
 # Run CLI (with secrets from 1Password)
 run-cli:

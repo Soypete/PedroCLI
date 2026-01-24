@@ -14,9 +14,12 @@ import (
 
 // CLIBridge provides a unified interface for the CLI to call tools using direct execution
 type CLIBridge struct {
-	bridge toolformat.ToolBridge
-	ctx    context.Context
-	cancel context.CancelFunc
+	bridge     toolformat.ToolBridge
+	ctx        context.Context
+	cancel     context.CancelFunc
+	jobManager *jobs.Manager
+	config     *config.Config
+	backend    llm.Backend
 }
 
 // CLIBridgeConfig configures the CLI bridge
@@ -155,9 +158,12 @@ func NewCLIBridge(cfg CLIBridgeConfig) (*CLIBridge, error) {
 	ctx := context.Background()
 
 	return &CLIBridge{
-		bridge: bridge,
-		ctx:    ctx,
-		cancel: func() {},
+		bridge:     bridge,
+		ctx:        ctx,
+		cancel:     func() {},
+		jobManager: jobManager,
+		config:     cfg.Config,
+		backend:    backend,
 	}, nil
 }
 
@@ -179,6 +185,93 @@ func (b *CLIBridge) GetToolNames() []string {
 // Context returns the bridge's context
 func (b *CLIBridge) Context() context.Context {
 	return b.ctx
+}
+
+// GetJobManager returns the job manager for monitoring jobs
+func (b *CLIBridge) GetJobManager() *jobs.Manager {
+	return b.jobManager
+}
+
+// ExecuteAgent creates and executes an agent with the given name and description
+func (b *CLIBridge) ExecuteAgent(ctx context.Context, agentName string, description string) (*toolformat.ToolResult, error) {
+	// Get config and create agent based on name
+	var agent interface {
+		Execute(ctx context.Context, args map[string]interface{}) (*jobs.Job, error)
+	}
+
+	switch agentName {
+	case "build":
+		builderAgent := agents.NewBuilderPhasedAgent(b.config, b.backend, b.jobManager)
+		// Register code tools
+		builderAgent.RegisterTool(tools.NewFileTool())
+		builderAgent.RegisterTool(tools.NewCodeEditTool())
+		builderAgent.RegisterTool(tools.NewSearchTool(b.config.Project.Workdir))
+		builderAgent.RegisterTool(tools.NewNavigateTool(b.config.Project.Workdir))
+		builderAgent.RegisterTool(tools.NewGitTool(b.config.Project.Workdir))
+		builderAgent.RegisterTool(tools.NewBashTool(b.config, b.config.Project.Workdir))
+		builderAgent.RegisterTool(tools.NewTestTool(b.config.Project.Workdir))
+		agent = builderAgent
+	case "debug":
+		debuggerAgent := agents.NewDebuggerPhasedAgent(b.config, b.backend, b.jobManager)
+		// Register code tools
+		debuggerAgent.RegisterTool(tools.NewFileTool())
+		debuggerAgent.RegisterTool(tools.NewCodeEditTool())
+		debuggerAgent.RegisterTool(tools.NewSearchTool(b.config.Project.Workdir))
+		debuggerAgent.RegisterTool(tools.NewNavigateTool(b.config.Project.Workdir))
+		debuggerAgent.RegisterTool(tools.NewGitTool(b.config.Project.Workdir))
+		debuggerAgent.RegisterTool(tools.NewBashTool(b.config, b.config.Project.Workdir))
+		debuggerAgent.RegisterTool(tools.NewTestTool(b.config.Project.Workdir))
+		agent = debuggerAgent
+	case "review":
+		reviewerAgent := agents.NewReviewerPhasedAgent(b.config, b.backend, b.jobManager)
+		// Register code tools
+		reviewerAgent.RegisterTool(tools.NewFileTool())
+		reviewerAgent.RegisterTool(tools.NewCodeEditTool())
+		reviewerAgent.RegisterTool(tools.NewSearchTool(b.config.Project.Workdir))
+		reviewerAgent.RegisterTool(tools.NewNavigateTool(b.config.Project.Workdir))
+		reviewerAgent.RegisterTool(tools.NewGitTool(b.config.Project.Workdir))
+		reviewerAgent.RegisterTool(tools.NewBashTool(b.config, b.config.Project.Workdir))
+		reviewerAgent.RegisterTool(tools.NewTestTool(b.config.Project.Workdir))
+		agent = reviewerAgent
+	case "triage":
+		triagerAgent := agents.NewTriagerAgent(b.config, b.backend, b.jobManager)
+		// Register code tools
+		triagerAgent.RegisterTool(tools.NewFileTool())
+		triagerAgent.RegisterTool(tools.NewCodeEditTool())
+		triagerAgent.RegisterTool(tools.NewSearchTool(b.config.Project.Workdir))
+		triagerAgent.RegisterTool(tools.NewNavigateTool(b.config.Project.Workdir))
+		triagerAgent.RegisterTool(tools.NewGitTool(b.config.Project.Workdir))
+		triagerAgent.RegisterTool(tools.NewBashTool(b.config, b.config.Project.Workdir))
+		triagerAgent.RegisterTool(tools.NewTestTool(b.config.Project.Workdir))
+		agent = triagerAgent
+	default:
+		return &toolformat.ToolResult{
+			Success: false,
+			Error:   fmt.Sprintf("unknown agent: %s", agentName),
+		}, nil
+	}
+
+	// Prepare arguments with workspace directory
+	args := map[string]interface{}{
+		"description":   description,
+		"workspace_dir": b.config.Project.Workdir,
+	}
+
+	// Execute agent
+	job, err := agent.Execute(ctx, args)
+	if err != nil {
+		return &toolformat.ToolResult{
+			Success: false,
+			Error:   err.Error(),
+			Output:  "",
+		}, nil
+	}
+
+	// Return job result
+	return &toolformat.ToolResult{
+		Success: true,
+		Output:  fmt.Sprintf("Job %s started successfully", job.ID),
+	}, nil
 }
 
 // Close shuts down the bridge
