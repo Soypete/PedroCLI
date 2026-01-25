@@ -368,7 +368,6 @@ func (m *PermissionManager) GetAllPermissions() map[string]Permission {
 // ToolPermissionWrapper wraps a tool execution with permission checking
 type ToolPermissionWrapper struct {
 	manager *PermissionManager
-	execute func(args map[string]interface{}) error
 }
 
 // NewToolPermissionWrapper creates a new permission wrapper

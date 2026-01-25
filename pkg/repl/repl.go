@@ -140,16 +140,25 @@ func (r *REPL) handleREPLCommand(cmd *Command) error {
 		r.printLogs()
 		return nil
 
+	case "jobs":
+		r.printJobs(cmd)
+		return nil
+
+	case "cancel":
+		return r.cancelJob(cmd)
+
 	case "interactive":
 		r.session.SetInteractiveMode(true)
 		r.output.PrintSuccess("✅ Interactive mode enabled (default)\n")
-		r.output.PrintMessage("   Agent will ask for approval before writing code\n")
+		r.output.PrintMessage("   Agent will pause after EACH phase for your review\n")
+		r.output.PrintMessage("   You can continue, retry, or cancel at each step\n")
+		ShowCompletePedro(r.output.writer)
 		return nil
 
 	case "background", "auto":
 		r.session.SetInteractiveMode(false)
 		r.output.PrintWarning("⚡ Background mode enabled\n")
-		r.output.PrintMessage("   Agent will run autonomously without approval\n")
+		r.output.PrintMessage("   Jobs will run autonomously without approval\n")
 		return nil
 
 	default:
@@ -283,38 +292,27 @@ func (r *REPL) handleNaturalLanguage(cmd *Command) error {
 	return r.handleBackground(agent, cmd.Text)
 }
 
-// handleInteractive handles interactive execution with approval
+// handleInteractive handles phase-by-phase interactive execution
+// Shows results after each phase and asks for user approval
 func (r *REPL) handleInteractive(agent string, prompt string) error {
-	r.output.PrintMessage("\n🔍 Analyzing your request (interactive mode)...\n")
-	r.output.PrintMessage("   Task: %s\n\n", prompt)
-
-	// Ask for confirmation before starting
-	r.output.PrintMessage("Start this task? [y/n]: ")
-	line, err := r.input.ReadLine()
-	if err != nil {
-		return err
-	}
-
-	response := strings.TrimSpace(strings.ToLower(line))
-	if response != "y" && response != "yes" {
-		r.output.PrintWarning("❌ Task cancelled\n")
-		return nil
-	}
-
-	r.output.PrintMessage("\n🤖 Processing with %s agent...\n", agent)
-	r.output.PrintMessage("   (Running in background - full interactive workflow coming soon!)\n\n")
-
-	// For now, execute normally
-	// TODO: Add proposal → approve → apply workflow
-	return r.handleBackground(agent, prompt)
+	return r.handleInteractivePhased(agent, prompt)
 }
 
 // handleBackground handles background execution without approval
 func (r *REPL) handleBackground(agent string, prompt string) error {
-	r.output.PrintMessage("\n🤖 Processing with %s agent...\n\n", agent)
+	// Show Pedro working
+	ShowPedro(r.output.writer)
+	r.output.PrintMessage("\n")
+
+	// Start progress spinner
+	spinner := NewProgressSpinner(r.output.writer)
+	spinner.Start(fmt.Sprintf("🤖 Running %s agent", agent))
 
 	// Execute agent via bridge
 	result, err := r.session.Bridge.ExecuteAgent(r.ctx, agent, prompt)
+
+	// Stop spinner
+	spinner.Stop()
 
 	if err != nil {
 		r.session.Logger.LogError(err)

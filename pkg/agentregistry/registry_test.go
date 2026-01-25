@@ -47,12 +47,10 @@ func TestAgentRegistry_PrimaryAgentCycling(t *testing.T) {
 		t.Error("expected CycleNext to change current agent")
 	}
 
-	// Cycle back
-	for i := 0; i < len(primaryAgents); i++ {
-		registry.CyclePrev()
-	}
+	// Cycle back (go back by 1 to return to the first agent)
+	registry.CyclePrev()
 	if registry.Current().Name != first {
-		t.Error("expected full cycle to return to first agent")
+		t.Errorf("expected to return to first agent %q, got %q", first, registry.Current().Name)
 	}
 }
 
@@ -233,10 +231,10 @@ func TestAgentRegistry_Reset(t *testing.T) {
 
 func TestParseFrontmatter(t *testing.T) {
 	tests := []struct {
-		name        string
-		content     string
-		wantFM      string
-		wantBody    string
+		name     string
+		content  string
+		wantFM   string
+		wantBody string
 	}{
 		{
 			name: "with frontmatter",

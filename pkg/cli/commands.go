@@ -31,7 +31,10 @@ func NewCommandRunner(cfg *config.Config, workDir string) *CommandRunner {
 		cmdPaths = append(cmdPaths, home+"/.config/pedrocli/command")
 	}
 
-	registry.LoadMarkdownCommands(cmdPaths...)
+	if err := registry.LoadMarkdownCommands(cmdPaths...); err != nil {
+		// Log but don't fail if markdown commands can't be loaded
+		fmt.Fprintf(os.Stderr, "Warning: failed to load markdown commands: %v\n", err)
+	}
 
 	return &CommandRunner{
 		registry: registry,

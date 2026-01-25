@@ -38,24 +38,24 @@ type SkillDefinition struct {
 
 // KeybindConfig contains keybind configuration
 type KeybindConfig struct {
-	Leader             string `json:"leader,omitempty"`               // Leader key (default: ctrl+x)
-	AppExit            string `json:"app_exit,omitempty"`             // Exit application
-	SessionNew         string `json:"session_new,omitempty"`          // New session
-	SessionList        string `json:"session_list,omitempty"`         // List sessions
-	AgentCycle         string `json:"agent_cycle,omitempty"`          // Next primary agent
-	AgentCycleReverse  string `json:"agent_cycle_reverse,omitempty"`  // Previous primary agent
-	ModelList          string `json:"model_list,omitempty"`           // Select model
-	CommandList        string `json:"command_list,omitempty"`         // Command palette
-	InputSubmit        string `json:"input_submit,omitempty"`         // Send message
-	InputNewline       string `json:"input_newline,omitempty"`        // Insert newline
-	MessagesUndo       string `json:"messages_undo,omitempty"`        // Undo last change
-	MessagesRedo       string `json:"messages_redo,omitempty"`        // Redo undone change
-	InputClear         string `json:"input_clear,omitempty"`          // Clear input
-	HistoryPrev        string `json:"history_prev,omitempty"`         // Previous history item
-	HistoryNext        string `json:"history_next,omitempty"`         // Next history item
-	AutocompleteToggle string `json:"autocomplete_toggle,omitempty"`  // Toggle autocomplete
-	HelpToggle         string `json:"help_toggle,omitempty"`          // Toggle help panel
-	Custom             map[string]string `json:"custom,omitempty"`    // Custom keybinds
+	Leader             string            `json:"leader,omitempty"`              // Leader key (default: ctrl+x)
+	AppExit            string            `json:"app_exit,omitempty"`            // Exit application
+	SessionNew         string            `json:"session_new,omitempty"`         // New session
+	SessionList        string            `json:"session_list,omitempty"`        // List sessions
+	AgentCycle         string            `json:"agent_cycle,omitempty"`         // Next primary agent
+	AgentCycleReverse  string            `json:"agent_cycle_reverse,omitempty"` // Previous primary agent
+	ModelList          string            `json:"model_list,omitempty"`          // Select model
+	CommandList        string            `json:"command_list,omitempty"`        // Command palette
+	InputSubmit        string            `json:"input_submit,omitempty"`        // Send message
+	InputNewline       string            `json:"input_newline,omitempty"`       // Insert newline
+	MessagesUndo       string            `json:"messages_undo,omitempty"`       // Undo last change
+	MessagesRedo       string            `json:"messages_redo,omitempty"`       // Redo undone change
+	InputClear         string            `json:"input_clear,omitempty"`         // Clear input
+	HistoryPrev        string            `json:"history_prev,omitempty"`        // Previous history item
+	HistoryNext        string            `json:"history_next,omitempty"`        // Next history item
+	AutocompleteToggle string            `json:"autocomplete_toggle,omitempty"` // Toggle autocomplete
+	HelpToggle         string            `json:"help_toggle,omitempty"`         // Toggle help panel
+	Custom             map[string]string `json:"custom,omitempty"`              // Custom keybinds
 }
 
 // PermissionConfig contains permission configuration

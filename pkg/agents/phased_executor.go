@@ -16,6 +16,10 @@ import (
 
 // Note: Phase and PhaseResult are now defined in orchestrator.go
 
+// PhaseCallback is called after each phase completes
+// Return true to continue, false to stop execution
+type PhaseCallback func(phase Phase, result *PhaseResult) (shouldContinue bool, err error)
+
 // PhasedExecutor handles multi-phase workflow execution
 type PhasedExecutor struct {
 	agent            *BaseAgent
@@ -25,6 +29,7 @@ type PhasedExecutor struct {
 	currentPhase     int
 	jobID            string
 	defaultMaxRounds int
+	phaseCallback    PhaseCallback // Optional callback after each phase
 }
 
 // NewPhasedExecutor creates a new phased executor
@@ -37,11 +42,22 @@ func NewPhasedExecutor(agent *BaseAgent, contextMgr *llmcontext.Manager, phases 
 		currentPhase:     0,
 		jobID:            contextMgr.GetJobID(),
 		defaultMaxRounds: agent.config.Limits.MaxInferenceRuns,
+		phaseCallback:    nil,
 	}
+}
+
+// SetPhaseCallback sets a callback to be called after each phase completes
+func (pe *PhasedExecutor) SetPhaseCallback(callback PhaseCallback) {
+	pe.phaseCallback = callback
 }
 
 // Execute runs all phases sequentially
 func (pe *PhasedExecutor) Execute(ctx context.Context, initialInput string) error {
+	// Check if a phase callback is provided via context
+	if callback, ok := GetPhaseCallback(ctx); ok {
+		pe.SetPhaseCallback(callback)
+	}
+
 	currentInput := initialInput
 
 	for pe.currentPhase < len(pe.phases) {
@@ -83,6 +99,17 @@ func (pe *PhasedExecutor) Execute(ctx context.Context, initialInput string) erro
 		pe.savePhaseResults(ctx)
 
 		fmt.Fprintf(os.Stderr, "   ✅ Phase %s completed in %d rounds\n", phase.Name, result.RoundsUsed)
+
+		// Call phase callback if set (for interactive stepwise mode)
+		if pe.phaseCallback != nil {
+			shouldContinue, err := pe.phaseCallback(phase, result)
+			if err != nil {
+				return fmt.Errorf("phase callback error: %w", err)
+			}
+			if !shouldContinue {
+				return fmt.Errorf("execution stopped by user")
+			}
+		}
 
 		// Use phase output as input for next phase
 		currentInput = pe.buildNextPhaseInput(result)

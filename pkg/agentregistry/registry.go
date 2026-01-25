@@ -348,7 +348,7 @@ func (r *AgentRegistry) loadMarkdownAgent(path string) (*Agent, error) {
 
 // parseFrontmatter extracts YAML frontmatter and body from markdown content
 func parseFrontmatter(content string) (frontmatter, body string) {
-	re := regexp.MustCompile(`(?s)^---\s*\n(.*?)\n---\s*\n(.*)$`)
+	re := regexp.MustCompile(`(?s)^---\s*\n(.*?)\n---\n(.*)$`)
 	matches := re.FindStringSubmatch(content)
 	if len(matches) == 3 {
 		return matches[1], matches[2]

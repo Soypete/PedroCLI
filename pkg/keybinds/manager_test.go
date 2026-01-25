@@ -84,7 +84,7 @@ func TestKeybindManager_LeaderSequence(t *testing.T) {
 	}
 
 	// Press 'n' for session_new (<leader>n)
-	handled = manager.HandleKey("n")
+	_ = manager.HandleKey("n")
 	if !handlerCalled {
 		t.Error("expected handler to be called for leader sequence")
 	}
