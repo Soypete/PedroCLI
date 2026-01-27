@@ -16,11 +16,17 @@ func (r *REPL) handleInteractivePhased(agentName string, prompt string) error {
 
 	// Create phase callback
 	phaseCallback := func(phase agents.Phase, result *agents.PhaseResult) (bool, error) {
+		// Skip approval for analyze phase (just information gathering)
+		if phase.Name == "analyze" {
+			r.output.PrintMessage("\n✅ Analysis complete - continuing to planning phase...\n\n")
+			return true, nil
+		}
+
 		// Show phase summary
 		r.showPhaseSummary(phase, result)
 
 		// Ask user what to do next
-		action, err := r.askPhaseAction()
+		action, feedback, err := r.askPhaseAction()
 		if err != nil {
 			return false, err
 		}
@@ -30,9 +36,12 @@ func (r *REPL) handleInteractivePhased(agentName string, prompt string) error {
 			// Continue to next phase
 			return true, nil
 
-		case "r", "retry":
-			// TODO: Retry logic requires executor support
-			r.output.PrintWarning("\n⚠️  Retry not yet implemented - continuing instead\n")
+		case "f", "feedback":
+			// Retry with user feedback
+			// TODO: Need to implement retry mechanism in executor
+			r.output.PrintWarning("\n⚠️  Retry with feedback not fully implemented yet\n")
+			r.output.PrintMessage("   Your feedback: %s\n", feedback)
+			r.output.PrintMessage("   Continuing for now...\n\n")
 			return true, nil
 
 		case "x", "cancel":
@@ -74,40 +83,89 @@ func (r *REPL) showPhaseSummary(phase agents.Phase, result *agents.PhaseResult) 
 		r.output.PrintError("❌ Phase failed: %s\n\n", result.Error)
 	}
 
-	// Show output preview (first 500 chars)
-	outputPreview := result.Output
-	if len(outputPreview) > 500 {
-		outputPreview = outputPreview[:497] + "..."
+	// Show tool calls summary (especially code changes)
+	if len(result.ToolCalls) > 0 {
+		r.output.PrintMessage("🔧 Actions Taken:\n\n")
+		for _, tc := range result.ToolCalls {
+			if tc.Success {
+				r.output.PrintMessage("  ✅ %s\n", tc.ToolName)
+				if len(tc.ModifiedFiles) > 0 {
+					r.output.PrintMessage("     Modified: %v\n", tc.ModifiedFiles)
+				}
+				if tc.Output != "" {
+					// For code_edit, show the changes
+					if tc.ToolName == "code_edit" {
+						r.output.PrintMessage("     %s\n", tc.Output)
+					}
+				}
+			} else {
+				r.output.PrintMessage("  ❌ %s: %s\n", tc.ToolName, tc.Error)
+			}
+		}
+		r.output.PrintMessage("\n")
 	}
-	r.output.PrintMessage("📝 Output:\n")
-	r.output.PrintMessage("   %s\n\n", outputPreview)
 
-	// Show JSON data if available
+	// Show modified files summary
+	if len(result.ModifiedFiles) > 0 {
+		r.output.PrintMessage("📝 Files Modified: %v\n\n", result.ModifiedFiles)
+	}
+
+	// Show FULL LLM reasoning (if plan/analyze phase)
+	if phase.Name == "plan" || phase.Name == "analyze" {
+		r.output.PrintMessage("💭 LLM Plan:\n\n")
+		r.output.PrintMessage("%s\n\n", result.Output)
+	}
+
+	// Show JSON data if available (e.g., structured plan)
 	if len(result.Data) > 0 {
-		r.output.PrintMessage("📦 Data keys: %v\n\n", getKeys(result.Data))
+		r.output.PrintMessage("📦 Structured data: %v\n\n", getKeys(result.Data))
 	}
 }
 
 // askPhaseAction asks the user what to do after a phase
-func (r *REPL) askPhaseAction() (string, error) {
+// Returns: (action, feedback, error)
+// action: "c" (continue), "r" (retry), "f" (retry with feedback), "x" (cancel)
+// feedback: user's feedback/instructions for retry
+func (r *REPL) askPhaseAction() (string, string, error) {
 	r.output.PrintMessage("┌─────────────────────────────────────────┐\n")
 	r.output.PrintMessage("│ What would you like to do?              │\n")
 	r.output.PrintMessage("│  [c] Continue to next phase (default)   │\n")
-	r.output.PrintMessage("│  [r] Retry this phase (TODO)            │\n")
+	r.output.PrintMessage("│  [f] Provide feedback and retry          │\n")
 	r.output.PrintMessage("│  [x] Cancel task                        │\n")
 	r.output.PrintMessage("└─────────────────────────────────────────┘\n")
 
 	// Temporarily change prompt
-	r.input.SetPrompt("[c/r/x]> ")
+	r.input.SetPrompt("[c/f/x]> ")
 	line, err := r.input.ReadLine()
 	r.input.UpdatePrompt() // Restore normal prompt
 
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	action := strings.TrimSpace(strings.ToLower(line))
-	return action, nil
+
+	// If user wants to provide feedback, ask for it
+	if action == "f" || action == "feedback" {
+		r.output.PrintMessage("\n💬 Enter your feedback/instructions:\n")
+		r.input.SetPrompt("> ")
+		feedbackLine, err := r.input.ReadLine()
+		r.input.UpdatePrompt()
+
+		if err != nil {
+			return "", "", err
+		}
+
+		feedback := strings.TrimSpace(feedbackLine)
+		if feedback == "" {
+			r.output.PrintWarning("⚠️  No feedback provided, continuing instead\n")
+			return "c", "", nil
+		}
+
+		return "f", feedback, nil
+	}
+
+	return action, "", nil
 }
 
 // getKeys returns the keys from a map

@@ -123,9 +123,11 @@ func (pe *PhasedExecutor) Execute(ctx context.Context, initialInput string) erro
 // ExecutePhase executes a single phase and returns the result
 func (pe *PhasedExecutor) executePhase(ctx context.Context, phase Phase, input string) (*PhaseResult, error) {
 	result := &PhaseResult{
-		PhaseName: phase.Name,
-		StartedAt: time.Now(),
-		Data:      make(map[string]interface{}),
+		PhaseName:     phase.Name,
+		StartedAt:     time.Now(),
+		Data:          make(map[string]interface{}),
+		ToolCalls:     []ToolCallSummary{},
+		ModifiedFiles: []string{},
 	}
 
 	// Determine max rounds for this phase
@@ -142,6 +144,7 @@ func (pe *PhasedExecutor) executePhase(ctx context.Context, phase Phase, input s
 		maxRounds:    maxRounds,
 		currentRound: 0,
 		jobID:        pe.jobID,
+		result:       result, // Pass result so executor can track tool calls
 	}
 
 	// Execute the inference loop for this phase
@@ -252,6 +255,7 @@ type phaseInferenceExecutor struct {
 	maxRounds    int
 	currentRound int
 	jobID        string
+	result       *PhaseResult // Track tool calls in this phase
 }
 
 // execute runs the inference loop for a phase
@@ -383,6 +387,33 @@ func (pie *phaseInferenceExecutor) executeTools(ctx context.Context, calls []llm
 		}
 
 		results[i] = result
+
+		// Track tool call in phase result
+		if pie.result != nil {
+			summary := ToolCallSummary{
+				ToolName:      call.Name,
+				Success:       result.Success,
+				Output:        result.Output,
+				Error:         result.Error,
+				ModifiedFiles: result.ModifiedFiles,
+			}
+			pie.result.ToolCalls = append(pie.result.ToolCalls, summary)
+
+			// Track modified files at phase level
+			for _, file := range result.ModifiedFiles {
+				// Check if already in list
+				found := false
+				for _, existing := range pie.result.ModifiedFiles {
+					if existing == file {
+						found = true
+						break
+					}
+				}
+				if !found {
+					pie.result.ModifiedFiles = append(pie.result.ModifiedFiles, file)
+				}
+			}
+		}
 
 		// Log tool result
 		success := result.Success
