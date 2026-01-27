@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 )
 
@@ -20,6 +23,7 @@ type ServerClient struct {
 	enableTools bool
 	httpClient  *http.Client
 	apiPath     string // e.g., "/v1/chat/completions" or "/api/generate"
+	maxRetries  int    // Maximum number of retries for failed requests
 }
 
 // ServerClientConfig configures the HTTP server client
@@ -30,6 +34,7 @@ type ServerClientConfig struct {
 	EnableTools bool
 	APIPath     string        // Optional, defaults to "/v1/chat/completions"
 	Timeout     time.Duration // Optional, defaults to 5min
+	MaxRetries  int           // Optional, defaults to 3
 }
 
 // NewServerClient creates a new HTTP server client
@@ -39,6 +44,9 @@ func NewServerClient(cfg ServerClientConfig) *ServerClient {
 	}
 	if cfg.Timeout == 0 {
 		cfg.Timeout = 5 * time.Minute
+	}
+	if cfg.MaxRetries == 0 {
+		cfg.MaxRetries = 3 // Default to 3 retries
 	}
 
 	usableSize := cfg.ContextSize
@@ -54,6 +62,7 @@ func NewServerClient(cfg ServerClientConfig) *ServerClient {
 		enableTools: cfg.EnableTools,
 		apiPath:     cfg.APIPath,
 		httpClient:  &http.Client{Timeout: cfg.Timeout},
+		maxRetries:  cfg.MaxRetries,
 	}
 }
 
@@ -76,7 +85,18 @@ func (c *ServerClient) Infer(ctx context.Context, req *InferenceRequest) (*Infer
 
 	// Add tools if enabled (native tool calling)
 	if c.enableTools && len(req.Tools) > 0 {
-		reqBody["tools"] = c.formatTools(req.Tools)
+		formattedTools := c.formatTools(req.Tools)
+		reqBody["tools"] = formattedTools
+
+		// Debug: Log tool definitions being sent to LLM
+		if os.Getenv("DEBUG") != "" || strings.Contains(os.Args[0], "debug") {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Sending %d tool definitions to LLM API\n", len(req.Tools))
+		}
+	} else if c.enableTools {
+		// Debug: Tools enabled but none provided
+		if os.Getenv("DEBUG") != "" || strings.Contains(os.Args[0], "debug") {
+			fmt.Fprintf(os.Stderr, "[DEBUG] WARNING: Tool calling enabled but req.Tools is empty!\n")
+		}
 	}
 
 	// Add logit bias if provided
@@ -102,25 +122,65 @@ func (c *ServerClient) Infer(ctx context.Context, req *InferenceRequest) (*Infer
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+c.apiPath, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
+	// Execute request with retry logic
+	var resp *http.Response
+	var lastErr error
 
-	// Execute request
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
+	for attempt := 0; attempt <= c.maxRetries; attempt++ {
+		// Create HTTP request (must recreate on each retry since body is consumed)
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+c.apiPath, bytes.NewReader(bodyBytes))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+		httpReq.Header.Set("Content-Type", "application/json")
+
+		// Execute request
+		resp, err = c.httpClient.Do(httpReq)
+		if err != nil {
+			lastErr = err
+			// Check if error is retryable (network errors, timeouts)
+			if attempt < c.maxRetries && isRetryableError(err) {
+				backoff := time.Duration(1<<uint(attempt)) * time.Second // 1s, 2s, 4s
+				if os.Getenv("DEBUG") != "" {
+					fmt.Fprintf(os.Stderr, "[DEBUG] Request failed (attempt %d/%d): %v. Retrying in %v...\n",
+						attempt+1, c.maxRetries+1, err, backoff)
+				}
+				time.Sleep(backoff)
+				continue
+			}
+			return nil, fmt.Errorf("request failed: %w", err)
+		}
+
+		// Check status code
+		if resp.StatusCode == http.StatusOK {
+			// Success!
+			break
+		}
+
+		// Read error response body
+		errorBody, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		// 5xx errors are retryable, 4xx are not
+		if resp.StatusCode >= 500 && attempt < c.maxRetries {
+			lastErr = fmt.Errorf("server returned %d: %s", resp.StatusCode, string(errorBody))
+			backoff := time.Duration(1<<uint(attempt)) * time.Second // 1s, 2s, 4s
+			if os.Getenv("DEBUG") != "" {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Server error %d (attempt %d/%d). Retrying in %v...\n",
+					resp.StatusCode, attempt+1, c.maxRetries+1, backoff)
+			}
+			time.Sleep(backoff)
+			continue
+		}
+
+		// 4xx errors or final retry attempt
+		return nil, fmt.Errorf("server returned %d: %s", resp.StatusCode, string(errorBody))
+	}
+
+	if resp == nil {
+		return nil, fmt.Errorf("all retry attempts failed: %w", lastErr)
 	}
 	defer resp.Body.Close()
-
-	// Check status
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("server returned %d: %s", resp.StatusCode, string(bodyBytes))
-	}
 
 	// Parse response
 	var chatResp struct {
@@ -242,6 +302,44 @@ func (c *ServerClient) Tokenize(ctx context.Context, text string) ([]int, error)
 	}
 
 	return tokenResp.Tokens, nil
+}
+
+// isRetryableError determines if an error should trigger a retry
+func isRetryableError(err error) bool {
+	// Network errors and timeouts are retryable
+	if err == nil {
+		return false
+	}
+
+	// Check for timeout errors
+	if os.IsTimeout(err) {
+		return true
+	}
+
+	// Check for network errors (connection refused, etc.)
+	if netErr, ok := err.(net.Error); ok {
+		return netErr.Timeout()
+	}
+
+	// Check for specific error types
+	errStr := err.Error()
+	retryableMessages := []string{
+		"connection refused",
+		"connection reset",
+		"broken pipe",
+		"no such host",
+		"deadline exceeded",
+		"context deadline exceeded",
+		"i/o timeout",
+	}
+
+	for _, msg := range retryableMessages {
+		if strings.Contains(strings.ToLower(errStr), msg) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // Close closes the HTTP client
