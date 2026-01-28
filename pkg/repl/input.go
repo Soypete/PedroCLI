@@ -89,6 +89,11 @@ func (h *InputHandler) UpdatePrompt() {
 	h.rl.SetPrompt(getPrompt(h.session))
 }
 
+// SetPrompt sets a custom prompt temporarily
+func (h *InputHandler) SetPrompt(prompt string) {
+	h.rl.SetPrompt(prompt)
+}
+
 // Close closes the input handler
 func (h *InputHandler) Close() error {
 	return h.rl.Close()

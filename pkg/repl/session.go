@@ -23,6 +23,7 @@ type Session struct {
 	Logger          *Logger        // Session logger
 	DebugMode       bool           // Debug mode enabled (also keeps logs)
 	InteractiveMode bool           // Interactive mode - ask for approval before writing code
+	JobManager      *JobManager    // Background job manager
 }
 
 // NewSession creates a new REPL session
@@ -45,6 +46,7 @@ func NewSession(id string, cfg *config.Config, bridge *cli.CLIBridge, mode strin
 		Logger:          logger,
 		DebugMode:       debugMode,
 		InteractiveMode: true, // DEFAULT: Interactive mode on
+		JobManager:      NewJobManager(), // Background job manager
 	}, nil
 }
 

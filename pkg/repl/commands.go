@@ -88,6 +88,9 @@ func isREPLCommand(cmd string) bool {
 		"clear", "cls",
 		"mode",
 		"context", "info",
+		"logs",
+		"interactive",
+		"background", "auto",
 	}
 
 	for _, replCmd := range replCommands {
@@ -163,6 +166,15 @@ Usage:
 	}
 
 	help += `
+Slash Commands:
+  Custom commands that expand into prompts (loaded from .pedro/command/)
+  Examples:
+    /blog-outline Building CLIs in Go
+    /test
+    /lint
+
+  Available slash commands will be shown when you type an unknown command.
+
 Natural Language:
   Just type your request naturally - no slash needed!
   Example: "add rate limiting to the API"

@@ -119,8 +119,13 @@ test-with-postgres: test-postgres-up
 	go test -v -count=1 ./...
 	@$(MAKE) test-postgres-down
 
-# Run tests
+# Run tests (full suite with PostgreSQL)
 test: test-with-postgres
+
+# Run tests without PostgreSQL (quick iteration)
+test-quick:
+	@echo "Running tests (skipping PostgreSQL-dependent tests)..."
+	go test -short -v ./...
 
 # Run tests with coverage
 test-coverage:

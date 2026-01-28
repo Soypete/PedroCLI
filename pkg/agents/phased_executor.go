@@ -16,6 +16,10 @@ import (
 
 // Note: Phase and PhaseResult are now defined in orchestrator.go
 
+// PhaseCallback is called after each phase completes
+// Return true to continue, false to stop execution
+type PhaseCallback func(phase Phase, result *PhaseResult) (shouldContinue bool, err error)
+
 // PhasedExecutor handles multi-phase workflow execution
 type PhasedExecutor struct {
 	agent            *BaseAgent
@@ -25,6 +29,7 @@ type PhasedExecutor struct {
 	currentPhase     int
 	jobID            string
 	defaultMaxRounds int
+	phaseCallback    PhaseCallback // Optional callback after each phase
 }
 
 // NewPhasedExecutor creates a new phased executor
@@ -37,11 +42,22 @@ func NewPhasedExecutor(agent *BaseAgent, contextMgr *llmcontext.Manager, phases 
 		currentPhase:     0,
 		jobID:            contextMgr.GetJobID(),
 		defaultMaxRounds: agent.config.Limits.MaxInferenceRuns,
+		phaseCallback:    nil,
 	}
+}
+
+// SetPhaseCallback sets a callback to be called after each phase completes
+func (pe *PhasedExecutor) SetPhaseCallback(callback PhaseCallback) {
+	pe.phaseCallback = callback
 }
 
 // Execute runs all phases sequentially
 func (pe *PhasedExecutor) Execute(ctx context.Context, initialInput string) error {
+	// Check if a phase callback is provided via context
+	if callback, ok := GetPhaseCallback(ctx); ok {
+		pe.SetPhaseCallback(callback)
+	}
+
 	currentInput := initialInput
 
 	for pe.currentPhase < len(pe.phases) {
@@ -84,6 +100,17 @@ func (pe *PhasedExecutor) Execute(ctx context.Context, initialInput string) erro
 
 		fmt.Fprintf(os.Stderr, "   ✅ Phase %s completed in %d rounds\n", phase.Name, result.RoundsUsed)
 
+		// Call phase callback if set (for interactive stepwise mode)
+		if pe.phaseCallback != nil {
+			shouldContinue, err := pe.phaseCallback(phase, result)
+			if err != nil {
+				return fmt.Errorf("phase callback error: %w", err)
+			}
+			if !shouldContinue {
+				return fmt.Errorf("execution stopped by user")
+			}
+		}
+
 		// Use phase output as input for next phase
 		currentInput = pe.buildNextPhaseInput(result)
 		pe.currentPhase++
@@ -96,9 +123,11 @@ func (pe *PhasedExecutor) Execute(ctx context.Context, initialInput string) erro
 // ExecutePhase executes a single phase and returns the result
 func (pe *PhasedExecutor) executePhase(ctx context.Context, phase Phase, input string) (*PhaseResult, error) {
 	result := &PhaseResult{
-		PhaseName: phase.Name,
-		StartedAt: time.Now(),
-		Data:      make(map[string]interface{}),
+		PhaseName:     phase.Name,
+		StartedAt:     time.Now(),
+		Data:          make(map[string]interface{}),
+		ToolCalls:     []ToolCallSummary{},
+		ModifiedFiles: []string{},
 	}
 
 	// Determine max rounds for this phase
@@ -115,6 +144,7 @@ func (pe *PhasedExecutor) executePhase(ctx context.Context, phase Phase, input s
 		maxRounds:    maxRounds,
 		currentRound: 0,
 		jobID:        pe.jobID,
+		result:       result, // Pass result so executor can track tool calls
 	}
 
 	// Execute the inference loop for this phase
@@ -225,6 +255,7 @@ type phaseInferenceExecutor struct {
 	maxRounds    int
 	currentRound int
 	jobID        string
+	result       *PhaseResult // Track tool calls in this phase
 }
 
 // execute runs the inference loop for a phase
@@ -356,6 +387,33 @@ func (pie *phaseInferenceExecutor) executeTools(ctx context.Context, calls []llm
 		}
 
 		results[i] = result
+
+		// Track tool call in phase result
+		if pie.result != nil {
+			summary := ToolCallSummary{
+				ToolName:      call.Name,
+				Success:       result.Success,
+				Output:        result.Output,
+				Error:         result.Error,
+				ModifiedFiles: result.ModifiedFiles,
+			}
+			pie.result.ToolCalls = append(pie.result.ToolCalls, summary)
+
+			// Track modified files at phase level
+			for _, file := range result.ModifiedFiles {
+				// Check if already in list
+				found := false
+				for _, existing := range pie.result.ModifiedFiles {
+					if existing == file {
+						found = true
+						break
+					}
+				}
+				if !found {
+					pie.result.ModifiedFiles = append(pie.result.ModifiedFiles, file)
+				}
+			}
+		}
 
 		// Log tool result
 		success := result.Success
