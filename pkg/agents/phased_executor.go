@@ -677,11 +677,21 @@ func (pie *phaseInferenceExecutor) executeInference(ctx context.Context, systemP
 	// Note: convertToolsToDefinitions() handles both registry and tools map fallback
 	var toolDefs []llm.ToolDefinition
 	if pie.agent.config.Model.EnableTools {
-		toolDefs = pie.agent.convertToolsToDefinitions()
+		// Get all tool definitions from registry/tools map
+		allToolDefs := pie.agent.convertToolsToDefinitions()
 
-		// Debug: Show how many tools are being sent
+		// Filter to phase-allowed tools BEFORE sending to LLM
+		toolDefs = pie.filterToolDefinitions(allToolDefs)
+
+		// Debug: Show filtering results
 		if pie.agent.config.Debug.Enabled {
-			fmt.Fprintf(os.Stderr, "   [DEBUG] Converting tools for inference: %d tool definitions\n", len(toolDefs))
+			if len(pie.phase.Tools) > 0 {
+				fmt.Fprintf(os.Stderr, "   [DEBUG] Phase %s tools: %d/%d allowed (%v)\n",
+					pie.phase.Name, len(toolDefs), len(allToolDefs), pie.phase.Tools)
+			} else {
+				fmt.Fprintf(os.Stderr, "   [DEBUG] Phase %s: all %d tools available (unrestricted)\n",
+					pie.phase.Name, len(toolDefs))
+			}
 		}
 	}
 
@@ -722,6 +732,49 @@ func (pie *phaseInferenceExecutor) filterToolCalls(calls []llm.ToolCall) []llm.T
 			filtered = append(filtered, call)
 		} else {
 			fmt.Fprintf(os.Stderr, "   ⚠️ Tool %s not allowed in phase %s, skipping\n", call.Name, pie.phase.Name)
+			if pie.agent.config.Debug.Enabled {
+				fmt.Fprintf(os.Stderr, "      [DEBUG] This should not happen if tool definitions were filtered correctly\n")
+			}
+		}
+	}
+
+	return filtered
+}
+
+// filterToolDefinitions filters tool definitions to only allowed tools for this phase
+func (pie *phaseInferenceExecutor) filterToolDefinitions(defs []llm.ToolDefinition) []llm.ToolDefinition {
+	// No restrictions if Tools list is empty
+	if len(pie.phase.Tools) == 0 {
+		return defs
+	}
+
+	// Build allowed set for O(1) lookup
+	allowedSet := make(map[string]bool)
+	for _, toolName := range pie.phase.Tools {
+		allowedSet[toolName] = true
+	}
+
+	// Filter definitions
+	filtered := make([]llm.ToolDefinition, 0, len(pie.phase.Tools))
+	foundTools := make(map[string]bool)
+
+	for _, def := range defs {
+		if allowedSet[def.Name] {
+			filtered = append(filtered, def)
+			foundTools[def.Name] = true
+		}
+	}
+
+	// Debug logging
+	if pie.agent.config.Debug.Enabled {
+		fmt.Fprintf(os.Stderr, "   [DEBUG] Filtered tool definitions: %d → %d (phase: %s)\n",
+			len(defs), len(filtered), pie.phase.Name)
+
+		// Warn about tools in phase spec that don't exist
+		for _, toolName := range pie.phase.Tools {
+			if !foundTools[toolName] {
+				fmt.Fprintf(os.Stderr, "   ⚠️  Tool %q specified in phase but not registered\n", toolName)
+			}
 		}
 	}
 
