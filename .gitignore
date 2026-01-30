@@ -21,6 +21,7 @@ coverage.out
 *.swp
 *.swo
 *~
+*.log
 
 # IDE and editor files
 .vscode/
