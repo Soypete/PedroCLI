@@ -4,6 +4,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soypete/pedrocli/pkg/config"
+	"github.com/soypete/pedrocli/pkg/llm"
 )
 
 func TestPhaseStructure(t *testing.T) {
@@ -586,5 +589,73 @@ func TestBuildNextPhaseInputWithSanitization(t *testing.T) {
 		if strings.Contains(got, notWant) {
 			t.Errorf("buildNextPhaseInput() output contains forbidden text\nshould not contain: %q\ngot: %s", notWant, got)
 		}
+	}
+}
+
+func TestFilterToolDefinitions(t *testing.T) {
+	tests := []struct {
+		name       string
+		phaseTools []string
+		allTools   []llm.ToolDefinition
+		want       int
+		wantNames  []string
+	}{
+		{
+			name:       "empty phase tools returns all",
+			phaseTools: []string{},
+			allTools: []llm.ToolDefinition{
+				{Name: "file"}, {Name: "git"}, {Name: "bash"},
+			},
+			want:      3,
+			wantNames: []string{"file", "git", "bash"},
+		},
+		{
+			name:       "filters to allowed subset",
+			phaseTools: []string{"git", "github"},
+			allTools: []llm.ToolDefinition{
+				{Name: "file"}, {Name: "git"}, {Name: "bash"}, {Name: "github"},
+			},
+			want:      2,
+			wantNames: []string{"git", "github"},
+		},
+		{
+			name:       "handles missing tools gracefully",
+			phaseTools: []string{"git", "nonexistent"},
+			allTools: []llm.ToolDefinition{
+				{Name: "file"}, {Name: "git"},
+			},
+			want:      1,
+			wantNames: []string{"git"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			phase := Phase{Name: "test", Tools: tt.phaseTools}
+			cfg := &config.Config{Debug: config.DebugConfig{Enabled: false}}
+			agent := NewBaseAgent("test", "test", cfg, nil, nil)
+
+			pie := &phaseInferenceExecutor{
+				agent: agent,
+				phase: phase,
+			}
+
+			filtered := pie.filterToolDefinitions(tt.allTools)
+
+			if len(filtered) != tt.want {
+				t.Errorf("got %d tools, want %d", len(filtered), tt.want)
+			}
+
+			gotNames := make(map[string]bool)
+			for _, def := range filtered {
+				gotNames[def.Name] = true
+			}
+
+			for _, name := range tt.wantNames {
+				if !gotNames[name] {
+					t.Errorf("expected tool %q in filtered results", name)
+				}
+			}
+		})
 	}
 }
