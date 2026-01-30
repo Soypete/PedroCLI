@@ -171,11 +171,9 @@ func (pe *PhasedExecutor) Execute(ctx context.Context, initialInput string) erro
 // ExecutePhase executes a single phase and returns the result
 func (pe *PhasedExecutor) executePhase(ctx context.Context, phase Phase, input string) (*PhaseResult, error) {
 	result := &PhaseResult{
-		PhaseName:     phase.Name,
-		StartedAt:     time.Now(),
-		Data:          make(map[string]interface{}),
-		ToolCalls:     []ToolCallSummary{},
-		ModifiedFiles: []string{},
+		PhaseName: phase.Name,
+		StartedAt: time.Now(),
+		Data:      make(map[string]interface{}),
 	}
 
 	// Determine max rounds for this phase
@@ -603,10 +601,9 @@ func (pie *phaseInferenceExecutor) execute(ctx context.Context, input string) (s
 		if len(toolCalls) == 0 {
 			// Check if phase is complete
 			if pie.isPhaseComplete(response.Text) {
-				// Debug: Show what was accomplished
+				// Debug: Show completion
 				if pie.agent.config.Debug.Enabled {
-					fmt.Fprintf(os.Stderr, "   [DEBUG] Phase completing with %d tool calls made, %d files modified\n",
-						len(pie.result.ToolCalls), len(pie.result.ModifiedFiles))
+					fmt.Fprintf(os.Stderr, "   [DEBUG] Phase completing after %d rounds\n", pie.currentRound)
 				}
 				return response.Text, pie.currentRound, nil
 			}
@@ -779,33 +776,6 @@ func (pie *phaseInferenceExecutor) executeTools(ctx context.Context, calls []llm
 		// Debug: Log tool result details
 		if pie.agent.config.Debug.Enabled {
 			fmt.Fprintf(os.Stderr, "      [DEBUG] Success: %v, Modified files: %v\n", result.Success, result.ModifiedFiles)
-		}
-
-		// Track tool call in phase result
-		if pie.result != nil {
-			summary := ToolCallSummary{
-				ToolName:      call.Name,
-				Success:       result.Success,
-				Output:        result.Output,
-				Error:         result.Error,
-				ModifiedFiles: result.ModifiedFiles,
-			}
-			pie.result.ToolCalls = append(pie.result.ToolCalls, summary)
-
-			// Track modified files at phase level
-			for _, file := range result.ModifiedFiles {
-				// Check if already in list
-				found := false
-				for _, existing := range pie.result.ModifiedFiles {
-					if existing == file {
-						found = true
-						break
-					}
-				}
-				if !found {
-					pie.result.ModifiedFiles = append(pie.result.ModifiedFiles, file)
-				}
-			}
 		}
 
 		// Log tool result

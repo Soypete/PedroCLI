@@ -308,11 +308,12 @@ func (m *MockJobManager) SetWorkspaceDir(ctx context.Context, id string, workspa
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	job, ok := m.Jobs[id]
+	_, ok := m.Jobs[id]
 	if !ok {
 		return fmt.Errorf("job not found: %s", id)
 	}
-	job.WorkspaceDir = workspaceDir
+	// WorkspaceDir field was removed - no-op for mock
+	_ = workspaceDir
 	return nil
 }
 

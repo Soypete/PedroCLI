@@ -135,8 +135,6 @@ func main() {
 		triageCommand(cfg, subcommandArgs)
 	case "blog":
 		blogCommand(cfg, subcommandArgs)
-	case "podcast":
-		podcastCommand(cfg, subcommandArgs)
 	case "run":
 		runSlashCommand(cfg, subcommandArgs)
 	case "commands":
@@ -166,7 +164,6 @@ Commands:
   review     Review a pull request or branch
   triage     Diagnose and triage an issue (no fix)
   blog       Create a blog post (writes to Notion)
-  podcast    Podcast episode preparation workflows
   run        Execute a slash command (e.g., /blog-outline)
   commands   List available slash commands
   status     Get status of a job
