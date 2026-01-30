@@ -83,48 +83,8 @@ func (r *REPL) showPhaseSummary(phase agents.Phase, result *agents.PhaseResult) 
 		r.output.PrintError("❌ Phase failed: %s\n\n", result.Error)
 	}
 
-	// Show modified files FIRST (most important for implement phase)
-	if len(result.ModifiedFiles) > 0 {
-		r.output.PrintMessage("📝 Files Modified:\n")
-		for _, file := range result.ModifiedFiles {
-			r.output.PrintMessage("   • %s\n", file)
-		}
-		r.output.PrintMessage("\n")
-	}
-
-	// Show tool calls summary (especially code changes)
-	if len(result.ToolCalls) > 0 {
-		r.output.PrintMessage("🔧 Actions Taken (%d tool calls):\n", len(result.ToolCalls))
-		for _, tc := range result.ToolCalls {
-			if tc.Success {
-				// Show tool name and modified files on same line
-				if len(tc.ModifiedFiles) > 0 {
-					r.output.PrintMessage("   ✅ %s → %v\n", tc.ToolName, tc.ModifiedFiles)
-				} else {
-					r.output.PrintMessage("   ✅ %s\n", tc.ToolName)
-				}
-
-				// Show brief output for certain tools
-				if tc.Output != "" {
-					switch tc.ToolName {
-					case "code_edit", "file_write":
-						// Truncate to first 2 lines or 150 chars
-						output := tc.Output
-						if len(output) > 150 {
-							output = output[:150] + "..."
-						}
-						r.output.PrintMessage("      %s\n", output)
-					case "test":
-						// Always show test results
-						r.output.PrintMessage("      %s\n", tc.Output)
-					}
-				}
-			} else {
-				r.output.PrintMessage("   ❌ %s: %s\n", tc.ToolName, tc.Error)
-			}
-		}
-		r.output.PrintMessage("\n")
-	}
+	// Tool call tracking removed - PhaseResult no longer tracks individual tool calls
+	// The phase output and structured data contain all relevant information
 
 	// Show FULL LLM reasoning (if plan/analyze phase)
 	if phase.Name == "plan" || phase.Name == "analyze" {

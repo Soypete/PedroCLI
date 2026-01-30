@@ -8,6 +8,8 @@ coverage.out
 /pedrocli-*
 /pedrocode
 /pedrocode-*
+/http-server
+cmd/pedrocode/pedrocode
 *.exe
 *.exe~
 *.dll
