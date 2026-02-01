@@ -814,16 +814,16 @@ func (pie *phaseInferenceExecutor) performCompaction() error {
 		stats, _ := pie.contextMgr.GetCompactionStats()
 		if stats != nil {
 			compactionRecord := &storage.CompactionStats{
-				JobID:           pie.jobID,
-				InferenceRound:  pie.currentRound,
-				ModelName:       pie.agent.config.Model.ModelName,
-				ContextLimit:    stats.ContextLimit,
-				TokensBefore:    stats.LastPromptTokens,
-				TokensAfter:     stats.LastPromptTokens, // Approximation - will improve after compaction
-				RoundsCompacted: stats.CompactedRounds,
-				RoundsKept:      stats.RecentRounds,
+				JobID:            pie.jobID,
+				InferenceRound:   pie.currentRound,
+				ModelName:        pie.agent.config.Model.ModelName,
+				ContextLimit:     stats.ContextLimit,
+				TokensBefore:     stats.LastPromptTokens,
+				TokensAfter:      stats.LastPromptTokens, // Approximation - will improve after compaction
+				RoundsCompacted:  stats.CompactedRounds,
+				RoundsKept:       stats.RecentRounds,
 				CompactionTimeMs: 0, // Could measure this if needed
-				ThresholdHit:    stats.IsOverThreshold,
+				ThresholdHit:     stats.IsOverThreshold,
 			}
 			_ = pie.agent.compactionStatsStore.RecordCompaction(context.Background(), compactionRecord)
 		}

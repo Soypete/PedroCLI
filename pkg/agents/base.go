@@ -37,7 +37,7 @@ type BaseAgent struct {
 	registry             *tools.ToolRegistry
 	toolPromptGen        *prompts.ToolPromptGenerator
 	compactionStatsStore storage.CompactionStatsStore // Optional stats tracking
-	tokenIDProvider      TokenIDProvider               // For dynamic logit bias
+	tokenIDProvider      TokenIDProvider              // For dynamic logit bias
 }
 
 // NewBaseAgent creates a new base agent
