@@ -1,78 +1,134 @@
 package agents
 
+// BiasPattern represents a phrase to bias and its bias value
+type BiasPattern struct {
+	Phrase string
+	Bias   float32
+}
+
 // GetAntiHallucinationBias returns logit bias to prevent tool result fabrication
-// This uses approximate token IDs for common LLMs (Llama 3.x, Qwen 2.5)
-// Token IDs are model-specific, so this may need tuning per model
-func GetAntiHallucinationBias() map[int]float32 {
+// Uses dynamic token ID lookup instead of hardcoded values
+func GetAntiHallucinationBias(provider TokenIDProvider) map[int]float32 {
 	bias := make(map[int]float32)
 
-	// Bias against narrative/fabrication patterns
-	// These are APPROXIMATE token IDs - may vary by model
+	// Define bias patterns (phrase -> bias value)
+	patterns := []BiasPattern{
+		// Prevent starting fabricated JSON blocks
+		{"```", -50.0},   // markdown code fence - heavily penalize
+		{"json", -30.0},  // json keyword
 
-	// Prevent starting fabricated JSON blocks
-	// "```json" - heavily penalize
-	bias[13249] = -50.0 // ``` (markdown code fence)
-	bias[2285] = -30.0  // json
+		// Prevent writing fake tool results
+		{"Tool", -40.0},
+		{"Result", -40.0},
+		{"Output", -40.0},
 
-	// Prevent writing fake tool results
-	bias[7575] = -40.0 // "Tool"
-	bias[2122] = -40.0 // "Result"
-	bias[5207] = -40.0 // "Output"
+		// Prevent narrative mode phrases
+		{"Let's", -20.0},
+		{"should", -20.0},
+		{"would", -20.0},
+		{"will", -20.0},
+		{"expected", -20.0},
 
-	// Prevent narrative mode phrases
-	bias[5562] = -20.0 // "Let's"
-	bias[8005] = -20.0 // "should"
-	bias[1053] = -20.0 // "would"
-	bias[3685] = -20.0 // "will"
-	bias[3685] = -20.0 // "expected"
+		// Prevent fake success indicators
+		{"✓", -30.0},
+		{"✗", -30.0},
+		{"PASS", -30.0},
+		{"FAIL", -30.0},
 
-	// Prevent fake success indicators
-	bias[2375] = -30.0  // "✓" or "✅"
-	bias[2377] = -30.0  // "✗" or "❌"
-	bias[12950] = -30.0 // "PASS"
-	bias[8755] = -30.0  // "FAIL"
+		// Encourage reading actual results (positive bias)
+		{"returned", 10.0},
+		{"received", 10.0},
+		{"actual", 10.0},
+		{"shows", 10.0},
+		{"indicates", 10.0},
+	}
 
-	// Encourage reading actual results (positive bias)
-	bias[5263] = 10.0  // "returned"
-	bias[22217] = 10.0 // "received"
-	bias[37373] = 10.0 // "actual"
-	bias[2427] = 10.0  // "shows"
-	bias[5039] = 10.0  // "indicates"
+	// Get dynamic token IDs for all phrases
+	phrases := make([]string, len(patterns))
+	for i, p := range patterns {
+		phrases[i] = p.Phrase
+	}
+
+	tokenIDs, err := provider.GetTokenIDs(phrases)
+	if err != nil {
+		// If tokenization fails, return empty bias
+		// Empty bias is safer than wrong bias
+		return bias
+	}
+
+	// Apply bias values to token IDs
+	for _, pattern := range patterns {
+		if ids, ok := tokenIDs[pattern.Phrase]; ok {
+			for _, tokenID := range ids {
+				bias[tokenID] = pattern.Bias
+			}
+		}
+	}
 
 	return bias
 }
 
 // GetToolResultValidationBias returns bias specifically for after tool execution
 // This is applied when the agent should be reading tool results, not fabricating
-func GetToolResultValidationBias() map[int]float32 {
-	bias := GetAntiHallucinationBias()
+func GetToolResultValidationBias(provider TokenIDProvider) map[int]float32 {
+	// Start with base anti-hallucination bias
+	bias := GetAntiHallucinationBias(provider)
 
-	// Extra penalties after tool calls
-	// We REALLY don't want fabrication here
+	// Extra penalties/boosts for tool result validation
+	extraPatterns := []BiasPattern{
+		// Even stronger penalties for code blocks after tool execution
+		{"```", -80.0}, // Override base -50.0 with -80.0
 
-	// Heavily penalize starting any code blocks
-	bias[13249] = -80.0 // ``` (even stronger)
+		// Stronger penalties for modal language
+		{"should", -50.0}, // Override base -20.0
+		{"would", -50.0},  // Override base -20.0
+		{"will", -50.0},   // Override base -20.0
 
-	// Penalize modal language (should/would/will)
-	bias[8005] = -50.0 // "should"
-	bias[1053] = -50.0 // "would"
-	bias[3685] = -50.0 // "will"
+		// Encourage factual reporting
+		{"The", 20.0},
+		{"returned", 20.0}, // Boost further from base 10.0
+		{"failed", 20.0},
+		{"succeeded", 20.0},
+	}
 
-	// Encourage factual reporting
-	bias[791] = 20.0   // "The"
-	bias[2122] = 20.0  // "returned" (boost further)
-	bias[6052] = 20.0  // "failed"
-	bias[23130] = 20.0 // "succeeded"
+	// Get token IDs for extra patterns
+	phrases := make([]string, len(extraPatterns))
+	for i, p := range extraPatterns {
+		phrases[i] = p.Phrase
+	}
+
+	tokenIDs, err := provider.GetTokenIDs(phrases)
+	if err != nil {
+		// If tokenization fails, return base bias
+		return bias
+	}
+
+	// Apply extra bias values (overrides base values)
+	for _, pattern := range extraPatterns {
+		if ids, ok := tokenIDs[pattern.Phrase]; ok {
+			for _, tokenID := range ids {
+				bias[tokenID] = pattern.Bias
+			}
+		}
+	}
 
 	return bias
 }
 
-// Note on Token IDs:
-// These token IDs are approximations based on Llama 3.x vocabulary.
-// For production use, you should:
-// 1. Get actual token IDs from the model's tokenizer
-// 2. Test and tune bias values per model
-// 3. Consider using string-based bias if your LLM API supports it
+// Note on Dynamic Token IDs:
+// This implementation uses dynamic token ID lookup via the LLM backend's /tokenize endpoint.
+// Benefits:
+// - Always uses the correct token IDs for the active model
+// - No need to maintain hardcoded token maps for each model
+// - Gracefully degrades to empty bias if tokenization fails (safer than wrong bias)
+//
+// Performance:
+// - Results are cached per phrase, so tokenization only happens once per phrase
+// - Typical overhead: <1 second at startup for ~20-30 unique phrases
+//
+// Fallback:
+// - If backend doesn't support tokenization, StaticTokenIDProvider can be used
+// - See pkg/agents/token_ids.go for static token maps
 //
 // Alternative approach: Use grammar constraints to force structured output
 // See pkg/llm/interface.go Grammar field for GBNF grammar support
