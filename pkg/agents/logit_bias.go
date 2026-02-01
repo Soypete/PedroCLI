@@ -14,8 +14,8 @@ func GetAntiHallucinationBias(provider TokenIDProvider) map[int]float32 {
 	// Define bias patterns (phrase -> bias value)
 	patterns := []BiasPattern{
 		// Prevent starting fabricated JSON blocks
-		{"```", -50.0},   // markdown code fence - heavily penalize
-		{"json", -30.0},  // json keyword
+		{"```", -50.0},  // markdown code fence - heavily penalize
+		{"json", -30.0}, // json keyword
 
 		// Prevent writing fake tool results
 		{"Tool", -40.0},

@@ -74,9 +74,9 @@ func TestGetAntiHallucinationBias(t *testing.T) {
 		{"Output", 1004, -40.0},
 		{"Let's", 1005, -20.0},
 		{"should", 1006, -20.0},
-		{"returned", 1014, 10.0},  // Positive bias
-		{"received", 1015, 10.0},  // Positive bias
-		{"actual", 1016, 10.0},    // Positive bias
+		{"returned", 1014, 10.0}, // Positive bias
+		{"received", 1015, 10.0}, // Positive bias
+		{"actual", 1016, 10.0},   // Positive bias
 	}
 
 	for _, tt := range tests {
