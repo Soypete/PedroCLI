@@ -671,6 +671,13 @@ func (pie *phaseInferenceExecutor) execute(ctx context.Context, input string) (s
 
 // executeInference performs a single inference call
 func (pie *phaseInferenceExecutor) executeInference(ctx context.Context, systemPrompt, userPrompt string) (*llm.InferenceResponse, error) {
+	// Check if we need to compact history BEFORE inference
+	if pie.contextMgr.ShouldCompact() {
+		if err := pie.performCompaction(); err != nil {
+			return nil, fmt.Errorf("compaction failed: %w", err)
+		}
+	}
+
 	budget := llm.CalculateBudget(pie.agent.config, systemPrompt, userPrompt, "")
 
 	// Get tool definitions using the agent's conversion method
@@ -706,7 +713,7 @@ func (pie *phaseInferenceExecutor) executeInference(ctx context.Context, systemP
 	// Apply anti-hallucination logit bias in Validate phase when processing tool results
 	// This prevents the agent from fabricating tool outputs
 	if pie.phase.Name == "validate" && strings.HasPrefix(userPrompt, "Tool results:") {
-		req.LogitBias = GetToolResultValidationBias()
+		req.LogitBias = GetToolResultValidationBias(pie.agent.tokenIDProvider)
 		if pie.agent.config.Debug.Enabled {
 			fmt.Fprintln(os.Stderr, "  🎯 Applied anti-hallucination logit bias")
 		}
@@ -779,6 +786,50 @@ func (pie *phaseInferenceExecutor) filterToolDefinitions(defs []llm.ToolDefiniti
 	}
 
 	return filtered
+}
+
+// performCompaction compacts the context history when approaching token limit
+func (pie *phaseInferenceExecutor) performCompaction() error {
+	// Compact history, keeping last 3 rounds
+	_, err := pie.contextMgr.CompactHistory(3)
+	if err != nil {
+		return err
+	}
+
+	// Log compaction event
+	if pie.agent.config.Debug.Enabled {
+		stats, _ := pie.contextMgr.GetCompactionStats()
+		if stats != nil {
+			fmt.Fprintf(os.Stderr, "   📦 Compacted history: %d rounds → %d recent (%d/%d tokens, %.1f%%)\n",
+				stats.TotalRounds,
+				stats.RecentRounds,
+				stats.LastPromptTokens,
+				stats.ContextLimit,
+				float64(stats.LastPromptTokens)/float64(stats.ContextLimit)*100)
+		}
+	}
+
+	// Record compaction stats to database if available
+	if pie.agent.compactionStatsStore != nil {
+		stats, _ := pie.contextMgr.GetCompactionStats()
+		if stats != nil {
+			compactionRecord := &storage.CompactionStats{
+				JobID:           pie.jobID,
+				InferenceRound:  pie.currentRound,
+				ModelName:       pie.agent.config.Model.ModelName,
+				ContextLimit:    stats.ContextLimit,
+				TokensBefore:    stats.LastPromptTokens,
+				TokensAfter:     stats.LastPromptTokens, // Approximation - will improve after compaction
+				RoundsCompacted: stats.CompactedRounds,
+				RoundsKept:      stats.RecentRounds,
+				CompactionTimeMs: 0, // Could measure this if needed
+				ThresholdHit:    stats.IsOverThreshold,
+			}
+			_ = pie.agent.compactionStatsStore.RecordCompaction(context.Background(), compactionRecord)
+		}
+	}
+
+	return nil
 }
 
 // executeTools executes tool calls and logs results

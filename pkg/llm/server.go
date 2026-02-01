@@ -186,8 +186,9 @@ func (c *ServerClient) Infer(ctx context.Context, req *InferenceRequest) (*Infer
 	var chatResp struct {
 		Choices []struct {
 			Message struct {
-				Content   string `json:"content"`
-				ToolCalls []struct {
+				Content          string `json:"content"`
+				ReasoningContent string `json:"reasoning_content,omitempty"` // GLM-4 specific
+				ToolCalls        []struct {
 					Function struct {
 						Name      string `json:"name"`
 						Arguments string `json:"arguments"`
@@ -211,6 +212,13 @@ func (c *ServerClient) Infer(ctx context.Context, req *InferenceRequest) (*Infer
 	// Extract message
 	message := chatResp.Choices[0].Message
 
+	// Handle GLM-4's reasoning_content field
+	// GLM-4 often puts the actual response in reasoning_content instead of content
+	content := message.Content
+	if content == "" && message.ReasoningContent != "" {
+		content = message.ReasoningContent
+	}
+
 	// Parse tool calls from API response
 	var toolCalls []ToolCall
 	for _, tc := range message.ToolCalls {
@@ -225,7 +233,7 @@ func (c *ServerClient) Infer(ctx context.Context, req *InferenceRequest) (*Infer
 	}
 
 	return &InferenceResponse{
-		Text:       message.Content,
+		Text:       content, // Use content (handles both content and reasoning_content)
 		ToolCalls:  toolCalls,
 		NextAction: "CONTINUE",
 		TokensUsed: chatResp.Usage.TotalTokens,

@@ -67,6 +67,7 @@ const (
 	ModelFamilyHermes  ModelFamily = "hermes"  // Hermes/Nous models
 	ModelFamilyClaude  ModelFamily = "claude"  // Claude API
 	ModelFamilyOpenAI  ModelFamily = "openai"  // OpenAI-compatible APIs
+	ModelFamilyGLM4    ModelFamily = "glm4"    // GLM-4 models
 	ModelFamilyGeneric ModelFamily = "generic" // Generic JSON fallback
 )
 
@@ -91,6 +92,8 @@ func GetFormatter(family ModelFamily) ToolFormatter {
 		return NewClaudeFormatter()
 	case ModelFamilyOpenAI:
 		return NewOpenAIFormatter()
+	case ModelFamilyGLM4:
+		return NewGLM4Formatter()
 	default:
 		return NewGenericFormatter()
 	}
@@ -115,6 +118,8 @@ func DetectModelFamily(modelName string) ModelFamily {
 		return ModelFamilyClaude
 	case containsAny(name, "gpt-4", "gpt-3.5", "openai"):
 		return ModelFamilyOpenAI
+	case containsAny(name, "glm-4", "glm4", "chatglm"):
+		return ModelFamilyGLM4
 	default:
 		return ModelFamilyGeneric
 	}

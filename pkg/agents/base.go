@@ -37,19 +37,21 @@ type BaseAgent struct {
 	registry             *tools.ToolRegistry
 	toolPromptGen        *prompts.ToolPromptGenerator
 	compactionStatsStore storage.CompactionStatsStore // Optional stats tracking
+	tokenIDProvider      TokenIDProvider               // For dynamic logit bias
 }
 
 // NewBaseAgent creates a new base agent
 func NewBaseAgent(name, description string, cfg *config.Config, backend llm.Backend, jobMgr jobs.JobManager) *BaseAgent {
 	return &BaseAgent{
-		name:          name,
-		description:   description,
-		config:        cfg,
-		llm:           backend,
-		tools:         make(map[string]tools.Tool),
-		jobManager:    jobMgr,
-		registry:      nil,
-		toolPromptGen: nil,
+		name:            name,
+		description:     description,
+		config:          cfg,
+		llm:             backend,
+		tools:           make(map[string]tools.Tool),
+		jobManager:      jobMgr,
+		registry:        nil,
+		toolPromptGen:   nil,
+		tokenIDProvider: NewHTTPTokenIDProvider(backend), // Default to HTTP provider
 	}
 }
 
@@ -57,7 +59,18 @@ func NewBaseAgent(name, description string, cfg *config.Config, backend llm.Back
 func NewBaseAgentWithRegistry(name, description string, cfg *config.Config, backend llm.Backend, jobMgr jobs.JobManager, registry *tools.ToolRegistry) *BaseAgent {
 	agent := NewBaseAgent(name, description, cfg, backend, jobMgr)
 	agent.SetRegistry(registry)
+	// tokenIDProvider is already set by NewBaseAgent
 	return agent
+}
+
+// SetTokenIDProvider sets a custom token ID provider
+func (a *BaseAgent) SetTokenIDProvider(provider TokenIDProvider) {
+	a.tokenIDProvider = provider
+}
+
+// GetTokenIDProvider returns the token ID provider
+func (a *BaseAgent) GetTokenIDProvider() TokenIDProvider {
+	return a.tokenIDProvider
 }
 
 // SetRegistry sets the tool registry and initializes the prompt generator
