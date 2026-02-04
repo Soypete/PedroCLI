@@ -40,6 +40,7 @@ type ToolResult struct {
 	Output        string   `json:"output"`
 	Error         string   `json:"error,omitempty"`
 	ModifiedFiles []string `json:"modified_files,omitempty"`
+	CacheFile     string   `json:"cache_file,omitempty"` // Path to full cached result (for aggressive truncation)
 }
 
 // NewManager creates a new context manager for a job
@@ -116,6 +117,27 @@ func (m *Manager) SaveToolResults(results []ToolResult) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(m.jobDir, filename), data, 0644)
+}
+
+// CacheToolResult caches the full tool result to a file and returns the cache file path
+// This allows aggressive truncation in prompts while preserving full results for agent retrieval
+func (m *Manager) CacheToolResult(toolName string, fullOutput string) (string, error) {
+	// Create tool-cache subdirectory if it doesn't exist
+	cacheDir := filepath.Join(m.jobDir, "tool-cache")
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create tool cache directory: %w", err)
+	}
+
+	// Generate cache filename with counter and tool name
+	cacheFilename := fmt.Sprintf("%03d-%s.txt", m.counter, toolName)
+	cacheFilePath := filepath.Join(cacheDir, cacheFilename)
+
+	// Write full output to cache file
+	if err := os.WriteFile(cacheFilePath, []byte(fullOutput), 0644); err != nil {
+		return "", fmt.Errorf("failed to cache tool result: %w", err)
+	}
+
+	return cacheFilePath, nil
 }
 
 // GetHistory returns all history as a concatenated string

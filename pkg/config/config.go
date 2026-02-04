@@ -15,6 +15,7 @@ type Config struct {
 	Tools       ToolsConfig       `json:"tools"`
 	Project     ProjectConfig     `json:"project"`
 	Limits      LimitsConfig      `json:"limits"`
+	Context     ContextConfig     `json:"context"`
 	Debug       DebugConfig       `json:"debug"`
 	Platform    PlatformConfig    `json:"platform"`
 	Init        InitConfig        `json:"init"`
@@ -102,6 +103,14 @@ type ProjectConfig struct {
 type LimitsConfig struct {
 	MaxTaskDurationMinutes int `json:"max_task_duration_minutes"`
 	MaxInferenceRuns       int `json:"max_inference_runs"`
+}
+
+// ContextConfig contains context management settings
+type ContextConfig struct {
+	ToolResultLimits    map[string]int `json:"tool_result_limits,omitempty"`     // Per-tool character limits for truncation
+	CompactEveryNRounds int            `json:"compact_every_n_rounds,omitempty"` // Force compaction every N rounds (default: 3)
+	CacheToolResults    bool           `json:"cache_tool_results,omitempty"`     // Cache full tool results to files (default: true)
+	CacheDir            string         `json:"cache_dir,omitempty"`              // Directory for tool result cache (default: /tmp/pedrocli-tool-cache)
 }
 
 // DebugConfig contains debug settings
@@ -539,6 +548,31 @@ func (c *Config) setDefaults() {
 	}
 	if c.Limits.MaxInferenceRuns == 0 {
 		c.Limits.MaxInferenceRuns = 20
+	}
+
+	// Context defaults
+	if c.Context.ToolResultLimits == nil {
+		c.Context.ToolResultLimits = map[string]int{
+			"web_search":   500,  // 125 tokens
+			"web_scraper":  800,  // 200 tokens
+			"search":       600,  // 150 tokens
+			"grep":         600,  // 150 tokens
+			"file":         1200, // 300 tokens
+			"read":         1200, // 300 tokens
+			"rss":          600,  // 150 tokens
+			"static_links": 400,  // 100 tokens
+			"default":      500,  // 125 tokens
+		}
+	}
+	if c.Context.CompactEveryNRounds == 0 {
+		c.Context.CompactEveryNRounds = 3 // Force compaction every 3 rounds
+	}
+	// CacheToolResults defaults to true (zero value false, so check explicitly)
+	if !c.Context.CacheToolResults {
+		c.Context.CacheToolResults = true
+	}
+	if c.Context.CacheDir == "" {
+		c.Context.CacheDir = "/tmp/pedrocli-tool-cache"
 	}
 
 	// Debug defaults
