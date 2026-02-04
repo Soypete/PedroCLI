@@ -92,6 +92,16 @@ func (e *InferenceExecutor) Execute(ctx context.Context, initialPrompt string) e
 
 		fmt.Fprintf(os.Stderr, "🔄 Inference round %d/%d\n", e.currentRound, e.maxRounds)
 
+		// Check context budget and warn if nearing limit
+		if e.currentRound > 1 {
+			stats, err := e.contextMgr.GetCompactionStats()
+			if err == nil && stats.IsOverThreshold {
+				fmt.Fprintf(os.Stderr, "⚠️  Context near limit: %d/%d tokens (%.0f%%)\n",
+					stats.LastPromptTokens, stats.ContextLimit,
+					float64(stats.LastPromptTokens)/float64(stats.ContextLimit)*100)
+			}
+		}
+
 		// Emit round start event
 		e.emitProgress(ProgressEventRoundStart, fmt.Sprintf("Round %d/%d", e.currentRound, e.maxRounds), map[string]interface{}{
 			"round":      e.currentRound,
@@ -320,9 +330,13 @@ func (e *InferenceExecutor) buildFeedbackPrompt(calls []llm.ToolCall, results []
 
 		// Format tool result
 		if result.Success {
-			prompt.WriteString(fmt.Sprintf("✅ %s: %s\n", call.Name, result.Output))
+			// Truncate large outputs to prevent context window explosion
+			truncated := truncateOutput(result.Output, 1000)
+			prompt.WriteString(fmt.Sprintf("✅ %s: %s\n", call.Name, truncated))
 		} else {
-			prompt.WriteString(fmt.Sprintf("❌ %s failed: %s\n", call.Name, result.Error))
+			// Errors are typically short, but truncate to be safe
+			truncated := truncateOutput(result.Error, 500)
+			prompt.WriteString(fmt.Sprintf("❌ %s failed: %s\n", call.Name, truncated))
 		}
 	}
 
@@ -337,6 +351,7 @@ func (e *InferenceExecutor) isDone(text string) bool {
 	doneSignals := []string{
 		"task_complete",
 		"task complete",
+		"research_complete", // For blog research phase
 		"work is complete",
 		"i'm done",
 		"all done",

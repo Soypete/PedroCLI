@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/soypete/pedrocli/pkg/config"
 	"github.com/soypete/pedrocli/pkg/llm"
+	"github.com/soypete/pedrocli/pkg/llmcontext"
 	"github.com/soypete/pedrocli/pkg/storage/blog"
 	"github.com/soypete/pedrocli/pkg/tools"
 )
@@ -28,6 +29,7 @@ type BlogContentAgent struct {
 	config        *config.Config          // Configuration for Notion publishing
 	styleAnalyzer *BlogStyleAnalyzerAgent // Optional style analyzer
 	useStyleGuide bool                    // Whether to use style guide in editor
+	baseAgent     *BaseAgent              // For tool execution with InferenceExecutor
 }
 
 // SectionContent represents a generated blog section
@@ -128,6 +130,15 @@ func NewBlogContentAgent(cfg BlogContentAgentConfig) *BlogContentAgent {
 		fmt.Println("✓ Style analyzer enabled - will enhance editor with writing style guide")
 	}
 
+	// Create base agent for tool execution with InferenceExecutor
+	baseAgent := &BaseAgent{
+		name:        "blog_content_tools",
+		description: "Tool executor for blog content generation",
+		llm:         cfg.Backend,
+		config:      cfg.Config,
+		tools:       registeredTools,
+	}
+
 	agent := &BlogContentAgent{
 		backend:       cfg.Backend,
 		storage:       cfg.Storage,
@@ -137,6 +148,7 @@ func NewBlogContentAgent(cfg BlogContentAgentConfig) *BlogContentAgent {
 		config:        cfg.Config,
 		styleAnalyzer: styleAnalyzer,
 		useStyleGuide: useStyleGuide,
+		baseAgent:     baseAgent,
 	}
 
 	// Create initial blog post record
@@ -283,40 +295,36 @@ func (a *BlogContentAgent) phaseResearch(ctx context.Context) error {
 
 	systemPrompt := `You are a research assistant for technical blog writing.
 
-Your task is to use the available research tools to gather relevant information for a blog post.
+CRITICAL: When writing about code, ALWAYS search the local codebase first using code introspection tools.
 
 AVAILABLE TOOLS:
 - web_search: Search the web for relevant articles and documentation
 - web_scraper: Scrape content from URLs, GitHub repos, or local files (supports GitHub links!)
-- search_code: Search for code patterns, grep files, find files by name
-- navigate_code: List directories, get file outlines, analyze imports
+- search: Search for code patterns (grep, find files, find definitions)
+  Actions: grep, find_files, find_in_file, find_definition
+- navigate: Navigate code structure (list dirs, get file outlines, analyze imports)
 - file: Read/write files from the local codebase
 - rss_feed: Get recent blog posts from RSS feed
 - calendar: Get recent events and activities
 - static_links: Get configured social media and newsletter links
 
-CODE EXAMPLES:
-For blog posts about code, use these tools to find real examples:
-- Use search_code to find functions, patterns, or specific implementations
-- Use web_scraper with action=scrape_local to read local Go files
-- Use web_scraper with action=scrape_github to fetch code from GitHub repos
-- Use navigate_code to understand code structure and imports
+WORKFLOW:
+1. Analyze transcription to identify topics
+2. IF writing about code/implementation:
+   - Use search tool (action=grep or find_definition) to find relevant functions/types
+   - Use file to read actual source files
+   - Use navigate to understand code structure
+3. Use web_search for external articles/docs
+4. Use rss_feed for recent related posts
+5. When done, respond with "RESEARCH_COMPLETE" + summary
 
-INSTRUCTIONS:
-1. Analyze the transcription to identify key topics
-2. If writing about code, use code introspection tools to find real examples
-3. Search for 2-3 relevant articles or documentation pages
-4. Scrape the most relevant content (including GitHub code if relevant)
-5. Check RSS feed for recent related posts
-6. When done, respond with "RESEARCH_COMPLETE" followed by a summary
-
-Output format:
+COMPLETION FORMAT:
 RESEARCH_COMPLETE
 
-Summary of findings:
-- [Key finding 1]
-- [Key finding 2]
-- [Key finding 3]`
+Summary:
+- [Finding 1 with file paths if code-related]
+- [Finding 2]
+- [Finding 3]`
 
 	userPrompt := fmt.Sprintf(`Gather research for this blog post:
 
@@ -324,26 +332,52 @@ TRANSCRIPTION:
 %s
 
 Analyze the transcription and identify 2-3 key topics to research.
-Summarize what research would be helpful.`, a.currentPost.RawTranscription)
+Use the code introspection tools if writing about implementation details.`, a.currentPost.RawTranscription)
 
-	// For now, generate a simple research summary using LLM
-	// Full tool-based research will be implemented in Phase 5
-	req := &llm.InferenceRequest{
-		SystemPrompt: systemPrompt,
-		UserPrompt:   userPrompt,
-		Temperature:  0.4,
-		MaxTokens:    500,
+	// Create context manager for research phase
+	contextMgr, err := llmcontext.NewManager(
+		fmt.Sprintf("blog-research-%s", a.currentPost.ID.String()),
+		false, // debug
+		a.config.Model.ContextSize,
+	)
+	if err != nil {
+		a.progress.UpdatePhase("Research", PhaseStatusFailed, err.Error())
+		a.progress.PrintTree()
+		return fmt.Errorf("failed to create context manager: %w", err)
 	}
+	defer contextMgr.Cleanup()
 
-	resp, err := a.backend.Infer(ctx, req)
+	// Create InferenceExecutor with our baseAgent
+	executor := NewInferenceExecutor(a.baseAgent, contextMgr)
+	executor.SetSystemPrompt(systemPrompt)
+
+	// Track tool usage with progress callback
+	executor.SetProgressCallback(func(event ProgressEvent) {
+		if event.Type == ProgressEventToolCall {
+			a.progress.IncrementToolUse("Research")
+			a.progress.PrintTree()
+		}
+	})
+
+	// Execute research with InferenceExecutor
+	err = executor.Execute(ctx, userPrompt)
 	if err != nil {
 		a.progress.UpdatePhase("Research", PhaseStatusFailed, err.Error())
 		a.progress.PrintTree()
 		return fmt.Errorf("research failed: %w", err)
 	}
 
-	a.researchData = resp.Text
-	a.progress.AddTokens("Research", resp.TokensUsed)
+	// Extract research data from context history
+	history, err := contextMgr.GetHistoryWithinBudget(100000)
+	if err != nil {
+		return fmt.Errorf("failed to get context history: %w", err)
+	}
+
+	a.researchData = a.extractResearchSummary(history)
+
+	// Estimate tokens used (rough approximation)
+	estimatedTokens := len(history) / 4
+	a.progress.AddTokens("Research", estimatedTokens)
 
 	// Update post with research data (store in writer_output temporarily)
 	a.currentPost.WriterOutput = fmt.Sprintf("RESEARCH:\n%s", a.researchData)
@@ -742,10 +776,40 @@ func (a *BlogContentAgent) parseSectionsFromOutline(outline string) []string {
 
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		// Look for markdown h2 headings (##)
+
+		// Try multiple formats (GLM-4 might use different heading styles)
 		if strings.HasPrefix(trimmed, "## ") {
+			// Standard markdown h2
 			title := strings.TrimPrefix(trimmed, "## ")
 			sections = append(sections, title)
+		} else if strings.HasPrefix(trimmed, "# ") && !strings.HasPrefix(trimmed, "## ") {
+			// Markdown h1 (some models use this)
+			title := strings.TrimPrefix(trimmed, "# ")
+			sections = append(sections, title)
+		} else if len(trimmed) > 0 && trimmed[0] >= '1' && trimmed[0] <= '9' && strings.Contains(trimmed, ".") {
+			// Numbered list: "1. Section Title" or "1) Section Title"
+			// Remove leading number and punctuation
+			parts := strings.SplitN(trimmed, ".", 2)
+			if len(parts) == 2 {
+				title := strings.TrimSpace(parts[1])
+				if len(title) > 0 {
+					sections = append(sections, title)
+				}
+			} else {
+				parts = strings.SplitN(trimmed, ")", 2)
+				if len(parts) == 2 {
+					title := strings.TrimSpace(parts[1])
+					if len(title) > 0 {
+						sections = append(sections, title)
+					}
+				}
+			}
+		} else if strings.HasPrefix(trimmed, "* ") || strings.HasPrefix(trimmed, "- ") {
+			// Bullet list: "* Section Title" or "- Section Title"
+			title := strings.TrimSpace(trimmed[2:])
+			if len(title) > 0 && !strings.HasPrefix(title, "*") {
+				sections = append(sections, title)
+			}
 		}
 	}
 
@@ -755,12 +819,35 @@ func (a *BlogContentAgent) parseSectionsFromOutline(outline string) []string {
 func (a *BlogContentAgent) generateSection(ctx context.Context, title string, index int) (string, int, error) {
 	baseSystemPrompt := `You are writing a section for a technical blog post.
 
-Write clear, engaging content for generalist software engineers.
-Use code examples where appropriate.
-Keep paragraphs concise (2-4 sentences).
-Use markdown formatting.
+CRITICAL CODE EXAMPLES RULE:
+- When writing about code, ALWAYS use search + file tools
+- Find real code from the repository being documented
+- Include file paths and line numbers (e.g., pkg/agents/executor.go:120-147)
+- NEVER hallucinate code examples
 
-Do NOT include the section heading - just the content.`
+AVAILABLE TOOLS:
+- search: Find functions, types, patterns in codebase
+  Actions: grep, find_files, find_definition
+- navigate: Explore code structure
+- file: Read actual source files
+- web_search: Find external references
+
+WORKFLOW:
+1. Determine if section needs code examples
+2. IF code examples needed:
+   - Use search tool (action=find_definition or grep) to find relevant code
+   - Use file to read complete implementations
+   - Extract actual code snippets with file references
+3. Write 2-4 paragraphs of clear content
+4. Use markdown formatting
+5. When done, respond with "SECTION_COMPLETE"
+
+Do NOT include the section heading - just the content.
+
+COMPLETION FORMAT:
+SECTION_COMPLETE
+
+[Section content with real code examples and file paths]`
 
 	systemPrompt := a.enhancePromptWithStyle(baseSystemPrompt)
 
@@ -775,21 +862,53 @@ RESEARCH:
 TRANSCRIPTION:
 %s
 
-Write 2-4 paragraphs of clear, technical content.`, title, a.outline, a.researchData, a.currentPost.RawTranscription)
+Write 2-4 paragraphs of clear, technical content. Use code introspection tools if this section needs code examples.`, title, a.outline, a.researchData, a.currentPost.RawTranscription)
 
-	req := &llm.InferenceRequest{
-		SystemPrompt: systemPrompt,
-		UserPrompt:   userPrompt,
-		Temperature:  0.4,
-		MaxTokens:    800,
-	}
-
-	resp, err := a.backend.Infer(ctx, req)
+	// Create context manager for section generation
+	contextMgr, err := llmcontext.NewManager(
+		fmt.Sprintf("blog-section-%d-%s", index, a.currentPost.ID.String()),
+		false,
+		a.config.Model.ContextSize,
+	)
 	if err != nil {
-		return "", 0, err
+		return "", 0, fmt.Errorf("failed to create context manager: %w", err)
+	}
+	defer contextMgr.Cleanup()
+
+	// Create InferenceExecutor
+	executor := NewInferenceExecutor(a.baseAgent, contextMgr)
+	executor.SetSystemPrompt(systemPrompt)
+
+	// Track tool usage
+	toolCount := 0
+	executor.SetProgressCallback(func(event ProgressEvent) {
+		if event.Type == ProgressEventToolCall {
+			toolCount++
+			a.progress.IncrementToolUse("Generate Sections")
+			a.progress.UpdatePhase("Generate Sections", PhaseStatusInProgress,
+				fmt.Sprintf("section %d (tool: %v)", index+1, event.Data))
+			a.progress.PrintTree()
+		}
+	})
+
+	// Execute section generation
+	err = executor.Execute(ctx, userPrompt)
+	if err != nil {
+		return "", 0, fmt.Errorf("section generation failed: %w", err)
 	}
 
-	return resp.Text, resp.TokensUsed, nil
+	// Extract section content from context history
+	history, err := contextMgr.GetHistoryWithinBudget(100000)
+	if err != nil {
+		return "", 0, fmt.Errorf("failed to get context history: %w", err)
+	}
+
+	sectionContent := a.extractSectionContent(history)
+
+	// Estimate tokens used
+	estimatedTokens := len(history) / 4
+
+	return sectionContent, estimatedTokens, nil
 }
 
 // generateTitle creates an engaging blog post title based on the content
@@ -923,4 +1042,90 @@ func (a *BlogContentAgent) GetSocialPosts() map[string]string {
 // GetProgress returns the progress tracker
 func (a *BlogContentAgent) GetProgress() *ProgressTracker {
 	return a.progress
+}
+
+// extractResearchSummary extracts research summary from context history
+func (a *BlogContentAgent) extractResearchSummary(history string) string {
+	// Look for RESEARCH_COMPLETE marker in the history
+	if idx := strings.Index(history, "RESEARCH_COMPLETE"); idx != -1 {
+		// Extract everything after the marker
+		remaining := history[idx+len("RESEARCH_COMPLETE"):]
+
+		// Find the next user prompt or end of history
+		if userIdx := strings.Index(remaining, "\n\n---\nUser:"); userIdx != -1 {
+			remaining = remaining[:userIdx]
+		}
+
+		// Trim and return the summary
+		summary := strings.TrimSpace(remaining)
+		if len(summary) > 0 {
+			return summary
+		}
+	}
+
+	// Fallback: If no RESEARCH_COMPLETE marker, extract the last assistant response
+	lines := strings.Split(history, "\n")
+	var lastResponse strings.Builder
+	inAssistantResponse := false
+
+	for _, line := range lines {
+		if strings.HasPrefix(line, "Assistant:") {
+			inAssistantResponse = true
+			lastResponse.Reset()
+			continue
+		}
+		if strings.HasPrefix(line, "User:") || strings.HasPrefix(line, "---") {
+			inAssistantResponse = false
+			continue
+		}
+		if inAssistantResponse {
+			lastResponse.WriteString(line)
+			lastResponse.WriteString("\n")
+		}
+	}
+
+	return strings.TrimSpace(lastResponse.String())
+}
+
+// extractSectionContent extracts section content from context history
+func (a *BlogContentAgent) extractSectionContent(history string) string {
+	// Look for SECTION_COMPLETE marker in the history
+	if idx := strings.Index(history, "SECTION_COMPLETE"); idx != -1 {
+		// Extract everything after the marker
+		remaining := history[idx+len("SECTION_COMPLETE"):]
+
+		// Find the next user prompt or end of history
+		if userIdx := strings.Index(remaining, "\n\n---\nUser:"); userIdx != -1 {
+			remaining = remaining[:userIdx]
+		}
+
+		// Trim and return the content
+		content := strings.TrimSpace(remaining)
+		if len(content) > 0 {
+			return content
+		}
+	}
+
+	// Fallback: Extract the last assistant response
+	lines := strings.Split(history, "\n")
+	var lastResponse strings.Builder
+	inAssistantResponse := false
+
+	for _, line := range lines {
+		if strings.HasPrefix(line, "Assistant:") {
+			inAssistantResponse = true
+			lastResponse.Reset()
+			continue
+		}
+		if strings.HasPrefix(line, "User:") || strings.HasPrefix(line, "---") {
+			inAssistantResponse = false
+			continue
+		}
+		if inAssistantResponse {
+			lastResponse.WriteString(line)
+			lastResponse.WriteString("\n")
+		}
+	}
+
+	return strings.TrimSpace(lastResponse.String())
 }

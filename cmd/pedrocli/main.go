@@ -12,7 +12,6 @@ import (
 	"github.com/soypete/pedrocli/pkg/agents"
 	"github.com/soypete/pedrocli/pkg/cli"
 	"github.com/soypete/pedrocli/pkg/config"
-	"github.com/soypete/pedrocli/pkg/database"
 	depcheck "github.com/soypete/pedrocli/pkg/init"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/storage/blog"
@@ -540,42 +539,13 @@ func runBlogContentAgent(cfg *config.Config, transcription string, title string,
 		os.Exit(1)
 	}
 
-	// Setup storage backend
-	var storage blog.BlogStorage
-	if cfg.Blog.Enabled && cfg.Database.Database != "" {
-		// Use database storage if configured
-		dbCfg := &database.Config{
-			Host:     cfg.Database.Host,
-			Port:     cfg.Database.Port,
-			User:     cfg.Database.User,
-			Password: cfg.Database.Password,
-			Database: cfg.Database.Database,
-			SSLMode:  cfg.Database.SSLMode,
-		}
-
-		dbWrapper, err := database.New(dbCfg)
-		if err != nil {
-			fmt.Printf("Warning: Database connection failed: %v\n", err)
-			fmt.Println("Falling back to file storage in ./blog_output/")
-			// Fallback to file storage
-			storage, err = blog.NewFileStorage("./blog_output")
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: Failed to create file storage: %v\n", err)
-				os.Exit(1)
-			}
-		} else {
-			storage = blog.NewDatabaseStorage(dbWrapper.DB)
-			defer dbWrapper.DB.Close()
-		}
-	} else {
-		// Use file storage by default (no database required)
-		fmt.Println("📁 Using file storage (./blog_output/) - no database configured")
-		var err error
-		storage, err = blog.NewFileStorage("./blog_output")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: Failed to create file storage: %v\n", err)
-			os.Exit(1)
-		}
+	// Setup storage backend - CLI always uses temporary file storage
+	// Database storage is only used by the HTTP server
+	fmt.Println("📁 Using temporary file storage (/tmp/pedrocli-blog/)")
+	storage, err := blog.NewFileStorage("/tmp/pedrocli-blog")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to create file storage: %v\n", err)
+		os.Exit(1)
 	}
 	defer storage.Close()
 

@@ -480,7 +480,7 @@ The package includes standard test cases:
 
 ## Database Schema
 
-Logit configurations and logs are persisted in SQLite (Migration V3).
+Logit configurations and logs are persisted in PostgreSQL (Migration V3).
 
 ### Tables
 

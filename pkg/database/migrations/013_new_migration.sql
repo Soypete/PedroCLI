@@ -1,0 +1,2 @@
+-- SQL commands for the new migration
+-- Example: CREATE TABLE new_table (id SERIAL PRIMARY KEY, name VARCHAR(255));

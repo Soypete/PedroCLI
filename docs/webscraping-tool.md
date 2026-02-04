@@ -27,7 +27,7 @@ pkg/webscrape/
 ├── types.go          # Core type definitions
 ├── fetcher.go        # HTTP fetcher with caching and rate limiting
 ├── extractor.go      # HTML content extraction (text, code blocks)
-├── cache.go          # Caching layer (SQLite or in-memory)
+├── cache.go          # Caching layer (in-memory)
 ├── ratelimit.go      # Per-domain rate limiting
 ├── search.go         # Search engine integrations
 └── handlers/
@@ -61,7 +61,7 @@ pkg/tools/
 │  └───────────────────────────────────────────┘             │
 │                                                             │
 │  ┌───────────────────────────────────────────┐             │
-│  │     Cache (SQLite or In-Memory)           │             │
+│  │     Cache (In-Memory)                     │             │
 │  └───────────────────────────────────────────┘             │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
@@ -249,7 +249,7 @@ Add the following to your `.pedrocli.json`:
 | `timeout_seconds` | `30` | HTTP request timeout |
 | `max_size_mb` | `10` | Maximum response size in MB |
 | `cache_enabled` | `true` | Enable response caching |
-| `cache_type` | `memory` | Cache type: `memory` or `sqlite` |
+| `cache_type` | `memory` | Cache type (currently only `memory` supported) |
 | `cache_ttl_hours` | `1` | Default cache TTL |
 | `cache_max_size_mb` | `100` | Maximum cache size |
 | `search_engine` | `duckduckgo` | Search engine: `duckduckgo` or `searxng` |
@@ -297,23 +297,20 @@ Rate limits can be customized via configuration:
 
 The cache layer helps reduce API calls and improve response times:
 
-### In-Memory Cache (Default)
+### In-Memory Cache
 - Fast access
-- Lost on restart
 - Configurable max size
-
-### SQLite Cache
-- Persistent across restarts
 - Automatic cleanup of expired entries
-- Good for larger caches
+- Lost on restart (by design for simplicity)
 
-Configure SQLite cache:
+The cache is configured via the `web_scraping` section in `.pedrocli.json`:
 
 ```json
 {
   "web_scraping": {
-    "cache_type": "sqlite",
-    "cache_path": "/var/pedro/cache/webscrape.db"
+    "cache_enabled": true,
+    "cache_ttl_hours": 1,
+    "cache_max_size_mb": 100
   }
 }
 ```
@@ -415,9 +412,9 @@ All responses are formatted as JSON for easy agent consumption:
 - Try the site-specific handler if available
 
 ### Cache Issues
-- Clear cache by deleting the SQLite file or restarting (memory cache)
-- Check cache TTL settings
-- Verify cache directory permissions (SQLite)
+- Clear cache by restarting the server (in-memory cache)
+- Check cache TTL settings in config
+- Verify `cache_enabled` is set to `true`
 
 ## Future Enhancements
 

@@ -92,20 +92,76 @@ func TestExtractJSONData(t *testing.T) {
 
 func TestTruncateOutput(t *testing.T) {
 	tests := []struct {
-		input  string
-		maxLen int
-		want   string
+		name         string
+		input        string
+		maxLen       int
+		expectTrunc  bool
+		maxOutputLen int
 	}{
-		{"short", 10, "short"},
-		{"this is a long string", 10, "this is a ..."},
-		{"exact", 5, "exact"},
+		{
+			name:         "short output unchanged",
+			input:        "short",
+			maxLen:       10,
+			expectTrunc:  false,
+			maxOutputLen: 10,
+		},
+		{
+			name:         "exact length unchanged",
+			input:        "exact",
+			maxLen:       5,
+			expectTrunc:  false,
+			maxOutputLen: 5,
+		},
+		{
+			name:         "long output truncated",
+			input:        "this is a very long string that should be truncated",
+			maxLen:       10,
+			expectTrunc:  true,
+			maxOutputLen: 150, // Allow room for truncation message
+		},
+		{
+			name:         "very large output heavily truncated",
+			input:        strings.Repeat("Large search result content ", 5000), // ~140K chars
+			maxLen:       1000,
+			expectTrunc:  true,
+			maxOutputLen: 1200,
+		},
+		{
+			name:         "output with newlines truncates at newline",
+			input:        strings.Repeat("line\n", 300), // 1500 chars
+			maxLen:       1000,
+			expectTrunc:  true,
+			maxOutputLen: 1200,
+		},
 	}
 
 	for _, tt := range tests {
-		got := truncateOutput(tt.input, tt.maxLen)
-		if got != tt.want {
-			t.Errorf("truncateOutput(%q, %d) = %q, want %q", tt.input, tt.maxLen, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			result := truncateOutput(tt.input, tt.maxLen)
+
+			// Check length constraint
+			if len(result) > tt.maxOutputLen {
+				t.Errorf("Expected length <= %d, got %d", tt.maxOutputLen, len(result))
+			}
+
+			// Check truncation message presence
+			if tt.expectTrunc {
+				if !strings.Contains(result, "[Output truncated") {
+					t.Error("Expected truncation notice in output")
+				}
+				if !strings.Contains(result, "Full result saved to context files") {
+					t.Error("Expected context files message in output")
+				}
+			} else {
+				if strings.Contains(result, "[Output truncated") {
+					t.Error("Did not expect truncation notice for short output")
+				}
+				// For non-truncated, output should be identical
+				if result != tt.input {
+					t.Errorf("Expected output to be unchanged for short input, got %q want %q", result, tt.input)
+				}
+			}
+		})
 	}
 }
 

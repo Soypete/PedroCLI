@@ -281,12 +281,13 @@ func (a *BaseAgent) executeInferenceWithSystemPrompt(ctx context.Context, contex
 		return nil, err
 	}
 
-	// Build inference request
+	// Build inference request with phase-aware MaxTokens
+	maxTokens := a.getMaxTokensForContext(totalPromptTokens)
 	req := &llm.InferenceRequest{
 		SystemPrompt: systemPrompt,
 		UserPrompt:   fullPrompt,
 		Temperature:  a.config.Model.Temperature,
-		MaxTokens:    8192, // Reserve for response
+		MaxTokens:    maxTokens,
 	}
 
 	// Add tools if native tool calling is enabled
@@ -307,6 +308,31 @@ func (a *BaseAgent) executeInferenceWithSystemPrompt(ctx context.Context, contex
 	}
 
 	return response, nil
+}
+
+// getMaxTokensForContext calculates appropriate MaxTokens based on prompt size and context window
+// For GLM-4 reasoning models, we need to allow room for both reasoning and output tokens
+func (a *BaseAgent) getMaxTokensForContext(promptTokens int) int {
+	contextSize := a.config.Model.ContextSize
+
+	// Calculate available tokens for response
+	// Leave safety margin of 1024 tokens
+	available := contextSize - promptTokens - 1024
+
+	// Cap at reasonable maximums based on available space
+	// GLM-4 reasoning models need higher limits for reasoning + output
+	maxAllowed := 20480 // 20K tokens max for response
+
+	if available > maxAllowed {
+		return maxAllowed
+	}
+
+	if available < 2048 {
+		// Minimum response budget
+		return 2048
+	}
+
+	return available
 }
 
 // executeTool executes a tool

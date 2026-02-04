@@ -86,12 +86,14 @@ go run scripts/setup-podcast-tokens.go \
 
 **Verify token stored:**
 ```bash
-sqlite3 ~/.pedrocli/pedrocli.db "SELECT provider, service, expires_at FROM oauth_tokens;"
+psql $DATABASE_URL -c "SELECT provider, service, expires_at FROM oauth_tokens;"
 ```
 
 Expected output:
 ```
-notion|database|
+ provider | service  | expires_at
+----------+----------+------------
+ notion   | database |
 ```
 
 ### Step 2: Test Notion Connection

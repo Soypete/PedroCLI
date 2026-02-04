@@ -1,0 +1,66 @@
+{%- if tools %}
+<|system|>
+You are a helpful assistant with access to the following tools:
+
+{% for tool in tools %}
+## {{ tool.function.name }}
+{{ tool.function.description }}
+
+Parameters:
+{{ tool.function.parameters | tojson(indent=2) }}
+
+{% endfor %}
+
+To use a tool, respond with a JSON object in this format:
+```json
+{
+  "name": "tool_name",
+  "arguments": {
+    "param1": "value1",
+    "param2": "value2"
+  }
+}
+```
+
+You can call multiple tools in sequence. When you're done, respond with your final answer.
+{%- endif %}
+
+{% for message in messages %}
+{%- if message['role'] == 'system' -%}
+{%- if not tools -%}
+<|system|>
+{{ message['content'] }}
+{%- endif -%}
+{%- endif -%}
+
+{%- if message['role'] == 'user' -%}
+<|user|>
+{{ message['content'] }}
+{%- endif -%}
+
+{%- if message['role'] == 'assistant' -%}
+<|assistant|>
+{%- if message.get('tool_calls') -%}
+{%- for tool_call in message['tool_calls'] -%}
+```json
+{
+  "name": "{{ tool_call.function.name }}",
+  "arguments": {{ tool_call.function.arguments | tojson }}
+}
+```
+{%- endfor -%}
+{%- else -%}
+{{ message['content'] }}
+{%- endif -%}
+{%- endif -%}
+
+{%- if message['role'] == 'tool' -%}
+<|observation|>
+Tool: {{ message.get('name', 'unknown') }}
+Result: {{ message['content'] }}
+{%- endif -%}
+{% endfor %}
+
+{%- if add_generation_prompt -%}
+<|assistant|>
+{%- endif -%}

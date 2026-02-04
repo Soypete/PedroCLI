@@ -303,12 +303,12 @@ Uses existing `config.debug.keep_temp_files` setting:
 
 **Decision:** Rejected - file-based persistence is simpler and matches pedrocli
 
-### 3. Store Jobs in SQLite
+### 3. Store Jobs in Database
 
 **Pros:** Better querying, structured data
-**Cons:** Overkill for REPL, adds dependency
+**Cons:** Overkill for REPL, adds dependency, requires database connection
 
-**Decision:** Rejected - JSON files in /tmp are sufficient
+**Decision:** Rejected - JSON files in /tmp are sufficient for REPL use case
 
 ## Follow-Up Work
 

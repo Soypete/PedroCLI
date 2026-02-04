@@ -64,13 +64,26 @@ EXAMPLES:
 
 // Execute executes the web scraper tool
 func (t *WebScraperTool) Execute(ctx context.Context, args map[string]interface{}) (*Result, error) {
-	// Parse action
+	// Parse action (try explicit first, then infer from arguments)
 	action, ok := args["action"].(string)
-	if !ok {
-		return &Result{
-			Success: false,
-			Error:   "action is required (scrape_local, scrape_github, scrape_url)",
-		}, nil
+
+	// If action not provided, infer from other arguments for better UX
+	if !ok || action == "" {
+		if _, hasURL := args["url"]; hasURL {
+			action = "scrape_url"
+		} else if _, hasRepo := args["repo"]; hasRepo {
+			action = "scrape_github"
+		} else if _, hasPath := args["path"]; hasPath {
+			action = "scrape_local"
+		} else {
+			return &Result{
+				Success: false,
+				Error:   "action or url/path/repo is required",
+			}, nil
+		}
+
+		// Log inference for debugging
+		fmt.Fprintf(os.Stderr, "⚠️  web_scraper: inferred action=%s from args\n", action)
 	}
 
 	// Parse common options
