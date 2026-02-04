@@ -4,13 +4,26 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/soypete/pedrocli/pkg/config"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/tools"
 )
 
 func TestBuildFeedbackPrompt_Truncates(t *testing.T) {
-	// Create a minimal InferenceExecutor for testing
-	executor := &InferenceExecutor{}
+	// Create a minimal InferenceExecutor with config for testing
+	cfg := &config.Config{
+		Context: config.ContextConfig{
+			ToolResultLimits: map[string]int{
+				"web_search": 500,
+				"default":    500,
+			},
+		},
+	}
+	executor := &InferenceExecutor{
+		agent: &BaseAgent{
+			config: cfg,
+		},
+	}
 
 	tests := []struct {
 		name          string
@@ -118,7 +131,20 @@ func TestBuildFeedbackPrompt_Truncates(t *testing.T) {
 }
 
 func TestBuildFeedbackPrompt_ContextExplosionPrevention(t *testing.T) {
-	executor := &InferenceExecutor{}
+	// Create a minimal InferenceExecutor with config for testing
+	cfg := &config.Config{
+		Context: config.ContextConfig{
+			ToolResultLimits: map[string]int{
+				"web_search": 500,
+				"default":    500,
+			},
+		},
+	}
+	executor := &InferenceExecutor{
+		agent: &BaseAgent{
+			config: cfg,
+		},
+	}
 
 	// Simulate 20 tool calls with large outputs (like a blog research workflow)
 	calls := make([]llm.ToolCall, 20)

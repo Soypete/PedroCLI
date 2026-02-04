@@ -102,6 +102,20 @@ func (e *InferenceExecutor) Execute(ctx context.Context, initialPrompt string) e
 			}
 		}
 
+		// Force compaction every N rounds to prevent context explosion (configurable)
+		compactEvery := e.agent.config.Context.CompactEveryNRounds
+		if compactEvery == 0 {
+			compactEvery = 3 // Default to 3 if not configured
+		}
+		if e.currentRound%compactEvery == 0 && e.currentRound > 0 {
+			fmt.Fprintf(os.Stderr, "  🗜️  Compacting context (round %d)...\n", e.currentRound)
+			_, err := e.contextMgr.CompactHistory(2) // Keep last 2 rounds
+			if err != nil {
+				// Log warning but don't fail - compaction is best-effort
+				fmt.Fprintf(os.Stderr, "  ⚠️  Compaction failed: %v\n", err)
+			}
+		}
+
 		// Emit round start event
 		e.emitProgress(ProgressEventRoundStart, fmt.Sprintf("Round %d/%d", e.currentRound, e.maxRounds), map[string]interface{}{
 			"round":      e.currentRound,
@@ -319,6 +333,36 @@ func (e *InferenceExecutor) logConversationWithSuccess(ctx context.Context, jobI
 	}
 }
 
+// truncateToolResult truncates tool output based on per-tool limits to prevent context explosion
+func (e *InferenceExecutor) truncateToolResult(toolName string, output string) string {
+	// Use config limits if available, otherwise fall back to defaults
+	limits := e.agent.config.Context.ToolResultLimits
+	if limits == nil {
+		// Default per-tool character limits (roughly 4 chars per token)
+		limits = map[string]int{
+			"web_search":   500,  // 125 tokens
+			"web_scraper":  800,  // 200 tokens
+			"search":       600,  // 150 tokens
+			"grep":         600,  // 150 tokens
+			"file":         1200, // 300 tokens (code needs more context)
+			"read":         1200, // 300 tokens
+			"rss":          600,  // 150 tokens
+			"static_links": 400,  // 100 tokens
+			"default":      500,  // 125 tokens
+		}
+	}
+
+	maxChars := limits[toolName]
+	if maxChars == 0 {
+		maxChars = limits["default"]
+	}
+	if maxChars == 0 {
+		maxChars = 500 // Final fallback
+	}
+
+	return truncateOutput(output, maxChars)
+}
+
 // buildFeedbackPrompt builds a prompt with tool results for the next round
 func (e *InferenceExecutor) buildFeedbackPrompt(calls []llm.ToolCall, results []*tools.Result) string {
 	var prompt strings.Builder
@@ -330,8 +374,8 @@ func (e *InferenceExecutor) buildFeedbackPrompt(calls []llm.ToolCall, results []
 
 		// Format tool result
 		if result.Success {
-			// Truncate large outputs to prevent context window explosion
-			truncated := truncateOutput(result.Output, 1000)
+			// Use per-tool truncation limits to prevent context window explosion
+			truncated := e.truncateToolResult(call.Name, result.Output)
 			prompt.WriteString(fmt.Sprintf("✅ %s: %s\n", call.Name, truncated))
 		} else {
 			// Errors are typically short, but truncate to be safe
