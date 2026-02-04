@@ -69,19 +69,21 @@ For Google Calendar, you need to:
 After storing a token, verify it's in the database:
 
 ```bash
-sqlite3 ~/.pedrocli/pedrocli.db "SELECT provider, service, expires_at FROM oauth_tokens;"
+psql $DATABASE_URL -c "SELECT provider, service, expires_at FROM oauth_tokens;"
 ```
 
 Example output:
 ```
-notion|database|
-google|calendar|2024-12-27T15:30:00Z
+ provider | service  |       expires_at
+----------+----------+-------------------------
+ notion   | database |
+ google   | calendar | 2024-12-27T15:30:00Z
 ```
 
 ### Security Notes
 
 - **Never commit tokens** to version control
-- Tokens are stored in SQLite database (default: `~/.pedrocli/pedrocli.db`)
+- Tokens are stored in PostgreSQL database (connection string from `.pedrocli.json` or `DATABASE_URL`)
 - Access tokens are automatically refreshed if a refresh token is provided
 - Notion API keys don't expire, so no refresh token is needed
 
@@ -102,6 +104,6 @@ google|calendar|2024-12-27T15:30:00Z
 - Check that the database schema is up to date (run `pedrocli` once to auto-migrate)
 
 **Token not working in podcast commands**
-- Verify token is stored: `sqlite3 ~/.pedrocli/pedrocli.db "SELECT * FROM oauth_tokens;"`
+- Verify token is stored: `psql $DATABASE_URL -c "SELECT * FROM oauth_tokens;"`
 - Check that provider and service names match exactly
 - For Google tokens, ensure the token hasn't expired

@@ -1044,10 +1044,24 @@ func extractJSONData(text string) (map[string]interface{}, error) {
 	return data, nil
 }
 
-// truncateOutput truncates output to maxLen characters
+// truncateOutput truncates output to maxLen characters to prevent context window explosion
+// Adds helpful message about accessing full output from context files
 func truncateOutput(output string, maxLen int) string {
 	if len(output) <= maxLen {
 		return output
 	}
-	return output[:maxLen] + "..."
+
+	truncated := output[:maxLen]
+
+	// Try to truncate at a newline to avoid mid-sentence cuts
+	if lastNewline := strings.LastIndex(truncated, "\n"); lastNewline > maxLen/2 {
+		truncated = truncated[:lastNewline]
+	}
+
+	// Count approximate tokens truncated
+	truncatedChars := len(output) - len(truncated)
+	truncatedTokens := truncatedChars / 4
+
+	return fmt.Sprintf("%s\n\n[Output truncated: ~%d more tokens available. Full result saved to context files.]",
+		truncated, truncatedTokens)
 }

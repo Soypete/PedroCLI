@@ -110,7 +110,8 @@ func (t *WebSearchTool) searchDuckDuckGo(ctx context.Context, query string, maxR
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	// Accept both 200 OK and 202 Accepted (async processing)
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
 		return nil, fmt.Errorf("search returned status %d", resp.StatusCode)
 	}
 

@@ -178,7 +178,6 @@ type VoiceConfig struct {
 // RepoStorageConfig contains repository storage settings
 type RepoStorageConfig struct {
 	BasePath       string                      `json:"base_path"`
-	DatabasePath   string                      `json:"database_path,omitempty"` // Deprecated: no longer used (was for SQLite)
 	GitCredentials map[string]GitCredentialDef `json:"git_credentials,omitempty"`
 	AutoPruneDays  int                         `json:"auto_prune_days,omitempty"`
 	DefaultBranch  string                      `json:"default_branch,omitempty"`
@@ -612,7 +611,6 @@ func (c *Config) setDefaults() {
 	if c.RepoStorage.BasePath == "" {
 		c.RepoStorage.BasePath = "/var/pedro/repos"
 	}
-	// DatabasePath is deprecated (was for SQLite), no default set
 	if c.RepoStorage.DefaultBranch == "" {
 		c.RepoStorage.DefaultBranch = "main"
 	}

@@ -604,10 +604,10 @@ You can configure additional MCP servers to connect to:
     "direct_mode": true,
     "mcp_servers": [
       {
-        "name": "calendar",
-        "command": "/path/to/calendar-mcp-server",
+        "name": "example-server",
+        "command": "/path/to/mcp-server",
         "args": ["--port", "9000"],
-        "env": ["GOOGLE_CREDENTIALS=/path/to/creds.json"]
+        "env": ["API_KEY=your-api-key"]
       }
     ]
   }

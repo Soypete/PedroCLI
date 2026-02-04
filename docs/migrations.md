@@ -74,13 +74,13 @@ pedrocli migrate version
 
 ## Auto-Migration on Startup
 
-By default, migrations run automatically when the SQLiteStore is initialized. This happens when the HTTP server starts or when any component uses the database.
+By default, migrations run automatically when the database store is initialized. This happens when the HTTP server starts or when any component uses the database.
 
 To disable auto-migration and control it manually:
 
 ```go
 // Create store without auto-migration
-store, err := database.NewSQLiteStoreWithOptions(dbPath, false)
+store, err := database.NewStoreWithOptions(connString, false)
 if err != nil {
     return err
 }
@@ -137,8 +137,7 @@ DROP TABLE IF EXISTS users;
 ALTER TABLE users ADD COLUMN avatar_url TEXT;
 
 -- +goose Down
--- Note: SQLite has limited ALTER TABLE support
--- For SQLite, dropping columns requires recreating the table
+ALTER TABLE users DROP COLUMN avatar_url;
 ```
 
 ### Data Migrations
@@ -197,11 +196,11 @@ make db-fresh
 If goose reports "dirty database state":
 
 ```bash
-# Check goose_db_version table
-sqlite3 /var/pedro/repos/pedro.db "SELECT * FROM goose_db_version;"
+# Check goose_db_version table (PostgreSQL)
+psql $DATABASE_URL -c "SELECT * FROM goose_db_version;"
 
 # Manually mark as clean (use with caution)
-sqlite3 /var/pedro/repos/pedro.db "UPDATE goose_db_version SET dirty = false WHERE version_id = X;"
+psql $DATABASE_URL -c "UPDATE goose_db_version SET dirty = false WHERE version_id = X;"
 ```
 
 ## Development Workflow

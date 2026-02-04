@@ -1,0 +1,89 @@
+### Using Ontologies to Ground Agentic AI
+
+**by Miriah Peterson**
+
+Data engineers don't spend their careers chasing perfect data. We know that perfection is a myth. What we *do* chase is **validated accuracy** — accuracy that is explainable, defensible, and bounded. We build schemas so we know what is allowed to exist. We add constraints so we know what cannot. We audit pipelines not because data never breaks, but because we expect that it will.
+
+And then we build AI systems that validate nothing.
+
+That mismatch is the core problem facing agentic AI today. Not model capability. Not parameter count. Validation.
+
+When people talk about hallucinations, they usually frame them as an AI failure. In practice, hallucinations are what happens when you ask a system trained to *always answer* to operate without a model of correctness. Large language models are rewarded for fluency, not truth. Guessing confidently is better than saying "I don't know." That training works remarkably well — until correctness matters.
+
+As users, we instinctively compensate for this. When I use an LLM as a search engine, my next step is almost always the same: *where did that come from?* I ask for links. I ask for references. I ask for something external that lets me validate the claim. That instinct comes from the same place our data instincts come from: confidence without evidence is meaningless.
+
+Autonomous agents don't ask those follow-up questions. They act.
+
+Once an AI system can call tools, chain actions, or trigger workflows, validation stops being optional. Yet most agentic systems today rely on system prompts as their primary guardrail. Long lists of rules. Capitalized MUSTs. Carefully worded constraints. Anyone who has built a real agent knows how fragile this is. Relevance decays. Context windows fill. Rules get ignored. Prompt-based guardrails don't fail dramatically — they fail quietly.
+
+I learned this the hard way while building agents without a framework — just raw, self-hosted models and tool calls. In one case, I had an agent whose job was simple: find directories. The tool it was supposed to call was named `find_directories`. The agent kept calling `find_directory` instead. Singular. One character off. It did this **thirty-five times in a row**, looping confidently, failing silently, and only stopping because I capped the iteration count. The model wasn't "confused." It was unvalidated. There was nothing in the system that could say, *this action violates the structure of the world you're operating in.*
+
+When prompts stop working, teams reach for data. They query a database, dump rows into context, and ask the model to reason. But raw data doesn't carry meaning on its own. Rows don't explain relationships. IDs don't encode business rules. The model sees values, not semantics.
+
+Data without semantics is just noise to an LLM.
+
+This is where data engineering thinking becomes essential, because we have already solved this class of problem — just not for text.
+
+> "The data model for structured data is the ERD.
+The data model for unstructured data is the ontology."
+>
+
+— Bill Inmon, *Mastering Unstructured Data*
+
+That statement isn't about AI. It's about modeling. And that's exactly why it matters here.
+
+We don't reason about warehouses because we like tables. We reason about them because schemas encode meaning. They define what exists, how things relate, and which states are invalid. Ontologies do the same thing for text. They are schemas for language. They don't make language smarter — they make it **checkable**.
+
+An ontology doesn't just say that a dog is a mammal. It encodes that relationship so it can be traversed, queried, and validated. Meaning lives in the relationships, not the tokens. Once reasoning is explicit, it can be audited. When it's implicit, all you have is confidence.
+
+This difference becomes obvious when you give an agent a question it *sounds* like it should know. Ask an LLM: *What was the largest-attended World's Fair in history?* It will almost always answer confidently. Sometimes it will even be right. But unless you validate that claim against a semantic model — attendance, year, location, event type — you have no way to know whether the answer is correct or just plausible. With an ontology like Wikidata, that same agent can make a claim, query the graph, realize it's wrong, and correct itself. Not because it "thought harder," but because it checked the structure of the data.
+
+That's the distinction most AI systems are missing.
+
+What's changed recently isn't the theory — it's the urgency. Agents don't just describe information anymore. They act on it. Industry research is converging on the same conclusion from different directions: language models need semantic constraints to behave reliably. Whether it's ontology-guided extraction, graph-constrained reasoning, ontology-augmented generation, or function-calling schemas, the pattern is consistent. Meaning must be modeled outside the model.
+
+This is why ontologies work so well as AI guardrails. They allow deterministic validation in an otherwise probabilistic system. The same query returns the same answer every time. The reasoning path is visible. Violations can be explained instead of silently corrected. That is not an AI trick — it's data modeling applied to language.
+
+Which is why hallucination is not an AI problem. It's a data problem. We already know how to validate claims. We've been doing it in data pipelines for decades. We just haven't applied the same rigor to text.
+
+Agentic AI doesn't need more clever prompts. It needs grounding. It needs semantic models that constrain what can be said, not just how it should sound. It needs validation mechanisms that operate independently of model confidence.
+
+That work doesn't belong exclusively to AI researchers. It belongs to data engineers — the people who already understand how fragile truth becomes without structure.
+
+We don't need to retrain models to fix hallucination.
+
+We need to model meaning and enforce it.
+
+---
+
+### The Argument, Made Explicit
+
+- Data engineers validate accuracy with structure, not confidence
+- LLMs produce confidence without validation
+- Ontologies are schemas for text, not abstractions
+- Hallucination is a validation failure, not an intelligence failure
+- Agentic AI without semantic grounding is operational risk
+
+---
+
+## References
+
+### Ontology as Guardrail
+
+- ODKE+: Ontology-Guided Knowledge Extraction — Apple, 2025
+- Graph-Constrained Reasoning (GCR) — arXiv, 2024
+
+### Ontology as Context
+
+- Ontology-Augmented Generation — Palantir Docs
+- Building with AIP: Data Tools for RAG/OAG — Palantir Blog
+
+### Ontology Behind Tool Calls
+
+- FNCTOD: Function Calling for Task-Oriented Dialogue — ACL 2024
+- LLMs + KGs via Function Calling — CEUR Workshop
+- Less is More: Function Calling on Edge — SIU
+
+### Foundational
+
+- *Mastering Unstructured Data* — Bill Inmon

@@ -1,0 +1,27 @@
+{% for message in messages %}
+{%- if message['role'] == 'system' -%}
+<|system|>
+{{ message['content'] }}
+{%- endif -%}
+{%- if message['role'] == 'user' -%}
+<|user|>
+{{ message['content'] }}
+{%- endif -%}
+{%- if message['role'] == 'assistant' -%}
+<|assistant|>
+{%- if message.get('tool_calls') -%}
+{%- for tool_call in message['tool_calls'] -%}
+{{tool_call}}
+{%- endfor -%}
+{%- else -%}
+{{ message['content'] }}
+{%- endif -%}
+{%- endif -%}
+{%- if message['role'] == 'tool' -%}
+<|observation|>
+{{ message['content'] }}
+{%- endif -%}
+{% endfor %}
+{%- if add_generation_prompt -%}
+<|assistant|>
+{%- endif -%}

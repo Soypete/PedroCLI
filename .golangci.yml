@@ -88,12 +88,6 @@ issues:
         - errcheck
       text: "Error return value of `.*Unmarshal`"
 
-    # Exclude errcheck for token encoding in calendar server
-    - path: cmd/calendar-mcp-server/
-      linters:
-        - errcheck
-      text: "Error return value of `.*Encode`"
-
     # Exclude errcheck for navigate tree building (best effort)
     - path: pkg/tools/navigate\.go
       linters:
