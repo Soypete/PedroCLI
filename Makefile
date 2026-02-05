@@ -2,25 +2,44 @@
 
 # llama-server configuration
 LLAMA_PORT ?= 8082
+# Use Qwen3-Coder-30B-A3B-Instruct for better tool calling (set USE_HF=1)
+LLAMA_HF_REPO ?= unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_M
 LLAMA_MODEL ?= $(shell find ~/.cache/huggingface/hub/models--bartowski--Qwen2.5-Coder-32B-Instruct-GGUF -name "*.gguf" -type f | head -1)
 LLAMA_CTX_SIZE ?= 32768
 LLAMA_N_GPU_LAYERS ?= -1
 LLAMA_THREADS ?= 8
 LLAMA_REASONING_FORMAT ?= deepseek
-LLAMA_REASONING_BUDGET ?= 4096
+LLAMA_REASONING_BUDGET ?= -1
 LLAMA_GRAMMAR ?=
 LLAMA_GRAMMAR_FILE ?=
 LLAMA_LOGIT_BIAS ?=
+USE_HF ?= 0
 
 # llama-server targets
 llama-server: ## Start llama-server for tool calling with reasoning control
 	@echo "Starting llama-server on port $(LLAMA_PORT)..."
 	@echo "  Context: $(LLAMA_CTX_SIZE) tokens"
 	@echo "  Reasoning Budget: $(LLAMA_REASONING_BUDGET) tokens (format: $(LLAMA_REASONING_FORMAT))"
+ifeq ($(USE_HF),1)
+	@echo "  Using HuggingFace model: $(LLAMA_HF_REPO)"
+	@llama-server \
+		-hf $(LLAMA_HF_REPO) \
+		--port $(LLAMA_PORT) \
+		--ctx-size $(LLAMA_CTX_SIZE) \
+		--n-gpu-layers $(LLAMA_N_GPU_LAYERS) \
+		--threads $(LLAMA_THREADS) \
+		--reasoning-format $(LLAMA_REASONING_FORMAT) \
+		--reasoning-budget $(LLAMA_REASONING_BUDGET) \
+		--jinja \
+		--log-disable \
+		--no-webui \
+		--metrics
+else
 	@if [ -z "$(LLAMA_MODEL)" ]; then \
-		echo "Error: LLAMA_MODEL not found"; \
+		echo "Error: LLAMA_MODEL not found. Try USE_HF=1 for HuggingFace model."; \
 		exit 1; \
 	fi
+	@echo "  Using local model: $(LLAMA_MODEL)"
 	@llama-server \
 		--model $(LLAMA_MODEL) \
 		--port $(LLAMA_PORT) \
@@ -33,6 +52,7 @@ llama-server: ## Start llama-server for tool calling with reasoning control
 		--log-disable \
 		--no-webui \
 		--metrics
+endif
 
 llama-health: ## Check llama-server health
 	@curl -s http://localhost:$(LLAMA_PORT)/health | jq . || echo "Server not running"
