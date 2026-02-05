@@ -183,6 +183,19 @@ func (e *InferenceExecutor) Execute(ctx context.Context, initialPrompt string) e
 			continue
 		}
 
+		// Validate tool calls before execution
+		validCalls, validationErrors := e.validateToolCalls(toolCalls)
+		if len(validationErrors) > 0 {
+			// Build helpful feedback prompt
+			currentPrompt = "Tool call errors:\n\n"
+			for _, err := range validationErrors {
+				currentPrompt += "❌ " + err + "\n"
+			}
+			currentPrompt += "\nPlease retry with correct tool names and parameters. Review the tool descriptions carefully."
+			continue
+		}
+		toolCalls = validCalls
+
 		// Save tool calls
 		contextCalls := make([]llmcontext.ToolCall, len(toolCalls))
 		for i, tc := range toolCalls {
@@ -303,6 +316,71 @@ func (e *InferenceExecutor) executeToolsWithLogging(ctx context.Context, calls [
 	}
 
 	return results, nil
+}
+
+// validateToolCalls checks if tool names exist and have required parameters
+// Returns validated calls and any errors
+func (e *InferenceExecutor) validateToolCalls(calls []llm.ToolCall) ([]llm.ToolCall, []string) {
+	var validated []llm.ToolCall
+	var errors []string
+
+	for _, call := range calls {
+		// Check if tool exists
+		if _, exists := e.agent.tools[call.Name]; !exists {
+			// Check if this might be an action name mistakenly used as tool name
+			if isSearchAction(call.Name) || isFileAction(call.Name) {
+				errors = append(errors, fmt.Sprintf(
+					"Tool '%s' not found. Did you mean: {\"tool\": \"search\", \"args\": {\"action\": \"%s\", ...}}?",
+					call.Name, call.Name))
+			} else {
+				errors = append(errors, fmt.Sprintf("Tool '%s' not found", call.Name))
+			}
+			continue
+		}
+
+		// For multi-action tools, check if 'action' parameter is present
+		if call.Name == "search" || call.Name == "file" {
+			if action, ok := call.Args["action"]; !ok || action == "" {
+				// Check if they used 'type' instead of 'action'
+				if _, hasType := call.Args["type"]; hasType {
+					errors = append(errors, fmt.Sprintf(
+						"Tool '%s' error: parameter is named 'action', not 'type'. Use: {\"tool\": \"%s\", \"args\": {\"action\": \"...\", ...}}",
+						call.Name, call.Name))
+				} else {
+					errors = append(errors, fmt.Sprintf(
+						"Tool '%s' error: missing required 'action' parameter. Use: {\"tool\": \"%s\", \"args\": {\"action\": \"...\", ...}}",
+						call.Name, call.Name))
+				}
+				continue
+			}
+		}
+
+		validated = append(validated, call)
+	}
+
+	return validated, errors
+}
+
+// isSearchAction checks if a name is a search action
+func isSearchAction(name string) bool {
+	actions := []string{"grep", "find_files", "find_in_file", "find_definition"}
+	for _, action := range actions {
+		if name == action {
+			return true
+		}
+	}
+	return false
+}
+
+// isFileAction checks if a name is a file action
+func isFileAction(name string) bool {
+	actions := []string{"read", "write", "replace", "append", "delete"}
+	for _, action := range actions {
+		if name == action {
+			return true
+		}
+	}
+	return false
 }
 
 // logConversationWithSuccess logs a tool result with success status

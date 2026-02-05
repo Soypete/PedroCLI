@@ -1,7 +1,7 @@
 {
   "model": {
     "type": "llamacpp",
-    "model_name": "GLM-4.7-Flash",
+    "model_name": "Qwen3-Coder-30B-A3B-Instruct",
     "server_url": "http://localhost:8082",
     "model_path": "/Users/miriahpeterson/.cache/huggingface/hub/models--bartowski--Qwen2.5-Coder-32B-Instruct-GGUF/snapshots/40b525506a4f98ed425882fa6dfc90cc8139065e/Qwen2.5-Coder-32B-Instruct-Q4_K_M.gguf",
     "llamacpp_path": "/opt/homebrew/bin/llama-cli",

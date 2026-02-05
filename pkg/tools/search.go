@@ -31,27 +31,45 @@ func (s *SearchTool) Name() string {
 
 // Description returns the tool description
 func (s *SearchTool) Description() string {
-	return `Search code with regex patterns, find files, and locate definitions.
+	return `CRITICAL: This is a SINGLE tool named "search" with a REQUIRED "action" parameter.
 
-Actions:
-- grep: Search for pattern across files
-  Args: pattern (regex string), directory (optional), file_pattern (optional glob), case_insensitive (optional bool), max_results (optional int, default 100)
-- find_files: Find files matching a glob pattern
-  Args: pattern (glob string), directory (optional), max_results (optional int)
-- find_in_file: Search for pattern in a specific file
-  Args: path (string), pattern (regex string), case_insensitive (optional bool)
-- find_definition: Find function/class definitions
-  Args: name (string), directory (optional), language (optional: go/python/javascript/typescript)
+CORRECT USAGE - Always use this exact format:
+{"tool": "search", "args": {"action": "grep", "pattern": "func.*Error", "file_pattern": "*.go"}}
+{"tool": "search", "args": {"action": "find_files", "pattern": "*.go"}}
+{"tool": "search", "args": {"action": "find_in_file", "path": "main.go", "pattern": "func"}}
+{"tool": "search", "args": {"action": "find_definition", "name": "HandleRequest", "language": "go"}}
+
+WRONG - DO NOT use these formats:
+{"tool": "grep", "args": {...}}  ❌ WRONG: grep is not a tool, it's an action
+{"tool": "find_files", "args": {...}}  ❌ WRONG: find_files is not a tool, it's an action
+{"tool": "search", "args": {"type": "grep", ...}}  ❌ WRONG: parameter is "action", not "type"
+{"tool": "search", "args": {"pattern": "...", "file_pattern": "..."}}  ❌ WRONG: missing required "action" parameter
+
+The "action" parameter must be one of: "grep", "find_files", "find_in_file", "find_definition"
+
+Action Details:
+- action: "grep" - Search for regex pattern across files
+  Required: pattern (regex string)
+  Optional: directory, file_pattern (glob), case_insensitive (bool), max_results (int, default 100)
+
+- action: "find_files" - Find files matching a glob pattern
+  Required: pattern (glob string)
+  Optional: directory, max_results (int)
+
+- action: "find_in_file" - Search for pattern in a specific file
+  Required: path (string), pattern (regex string)
+  Optional: case_insensitive (bool)
+
+- action: "find_definition" - Find function/class definitions
+  Required: name (string)
+  Optional: directory, language (go/python/javascript/typescript)
 
 Usage Tips:
 - ALWAYS use this tool before modifying code to find the right files
-- Use find_definition to locate functions/types by name
+- ALWAYS include "action" parameter in args
+- Tool name is always "search", never "grep" or "find_files"
 - Supports full regex syntax for pattern matching
-- Automatically skips .git, node_modules, vendor directories
-
-Examples:
-{"tool": "search", "args": {"action": "grep", "pattern": "func.*Error", "file_pattern": "*.go"}}
-{"tool": "search", "args": {"action": "find_definition", "name": "HandleRequest", "language": "go"}}`
+- Automatically skips .git, node_modules, vendor directories`
 }
 
 // Execute executes the search tool
