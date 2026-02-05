@@ -337,7 +337,7 @@ Use the code introspection tools if writing about implementation details.`, a.cu
 	// Create context manager for research phase
 	contextMgr, err := llmcontext.NewManager(
 		fmt.Sprintf("blog-research-%s", a.currentPost.ID.String()),
-		false, // debug
+		a.config.Debug.Enabled,
 		a.config.Model.ContextSize,
 	)
 	if err != nil {
@@ -867,7 +867,7 @@ Write 2-4 paragraphs of clear, technical content. Use code introspection tools i
 	// Create context manager for section generation
 	contextMgr, err := llmcontext.NewManager(
 		fmt.Sprintf("blog-section-%d-%s", index, a.currentPost.ID.String()),
-		false,
+		a.config.Debug.Enabled,
 		a.config.Model.ContextSize,
 	)
 	if err != nil {

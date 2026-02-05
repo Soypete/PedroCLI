@@ -25,6 +25,7 @@ type Manager struct {
 	compactionThreshold float64                      // Trigger compaction at this % (default 0.75)
 	modelName           string                       // Model name for tokenization tracking
 	statsStore          storage.CompactionStatsStore // Optional stats recording
+	compactedHistory    string                       // Cached compacted history (cleared after use)
 }
 
 // ToolCall represents a tool call in the context
@@ -164,6 +165,13 @@ func (m *Manager) GetHistory() (string, error) {
 
 // GetHistoryWithinBudget returns history that fits within the token budget
 func (m *Manager) GetHistoryWithinBudget(budget int) (string, error) {
+	// If we have a cached compacted history, use it and clear the cache
+	if m.compactedHistory != "" {
+		compacted := m.compactedHistory
+		m.compactedHistory = "" // Clear cache after use
+		return compacted, nil
+	}
+
 	files, err := filepath.Glob(filepath.Join(m.jobDir, "*-prompt.txt"))
 	if err != nil {
 		return "", err
@@ -453,7 +461,11 @@ func (m *Manager) CompactHistory(keepRecentFiles int) (string, error) {
 		result.WriteString("\n")
 	}
 
-	return result.String(), nil
+	// Store compacted history for use by GetHistoryWithinBudget
+	compacted := result.String()
+	m.compactedHistory = compacted
+
+	return compacted, nil
 }
 
 // Cleanup removes the job directory
