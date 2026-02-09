@@ -372,8 +372,96 @@ Config structure in `pkg/config/config.go`:
 ```
 
 Config files can be in:
-1. `./.pedrocli.json` (current directory)
-2. `~/.pedrocli.json` (home directory)
+1. `./.pedrocli.json` (current directory) - **takes precedence**
+2. `~/.pedrocli.json` (home directory) - **fallback**
+
+### Configuration Best Practices
+
+#### Config File Precedence
+
+PedroCLI loads configuration in this order:
+1. **Current directory** (`./.pedrocli.json`) - checked first
+2. **Home directory** (`~/.pedrocli.json`) - used if not found in current dir
+
+**Important**: If you run `pedrocli` from a different directory, it will use the home config as fallback. To override for a specific project, place `.pedrocli.json` in that project's directory.
+
+#### Native Tool Calling (`enable_tools`)
+
+**Recommended: `"enable_tools": false`**
+
+**Why disable native tool calling?**
+- llama.cpp's grammar system has compatibility issues with certain models (Qwen3-Coder-30B-A3B, others)
+- Causes crashes: `Unexpected empty grammar stack after accepting piece`
+- Custom formatters (QwenFormatter, etc.) are more reliable and model-agnostic
+
+**When to enable (`true`):**
+- Using OpenAI API or other providers with stable native tool calling
+- Testing new llama.cpp versions with fixes
+
+```json
+{
+  "model": {
+    "type": "llamacpp",
+    "enable_tools": false,  // Use custom formatters (recommended)
+    // ... other settings
+  }
+}
+```
+
+#### Context Size Guidelines
+
+**Rule of thumb**: Use 75% of model's max context for `usable_context`
+
+| Hardware | Model Size | Recommended Context | Notes |
+|----------|-----------|---------------------|-------|
+| M1 Max (32GB) | 30B-32B | 16K (16384) | Safe for heavy tool use |
+| M1 Max (32GB) | 7B-14B | 32K (32768) | Can handle larger context |
+| M2/M3 Max (64GB+) | 30B-32B | 32K (32768) | More VRAM available |
+| Desktop (64GB+) | 70B+ | 16K-32K | Depends on quantization |
+
+**Example for M1 Max + 30B model:**
+```json
+{
+  "model": {
+    "context_size": 16384,
+    "usable_context": 12288,  // 75% of 16384
+    // ... other settings
+  }
+}
+```
+
+**Symptoms of context too large:**
+- `Post "http://localhost:8082/...": EOF` errors
+- llama-server crashes with OOM
+- Slow inference (>30s per token)
+
+**Solution**: Reduce `context_size` by half and test
+
+#### Complete Recommended Config
+
+```json
+{
+  "model": {
+    "type": "llamacpp",
+    "model_name": "Qwen3-Coder-30B-A3B-Instruct",
+    "server_url": "http://localhost:8082",
+    "context_size": 16384,
+    "usable_context": 12288,
+    "temperature": 0.2,
+    "threads": 8,
+    "n_gpu_layers": -1,
+    "enable_grammar": false,
+    "enable_tools": false  // Use custom formatters
+  },
+  "limits": {
+    "max_inference_runs": 25
+  },
+  "debug": {
+    "enabled": true,
+    "keep_temp_files": true
+  }
+}
+```
 
 ## Development Environment Setup
 

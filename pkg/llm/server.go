@@ -16,25 +16,27 @@ import (
 // ServerClient implements Backend for OpenAI-compatible HTTP APIs
 // Works with llama-server, ollama, vllm, lmstudio, etc.
 type ServerClient struct {
-	baseURL     string
-	modelName   string
-	contextSize int
-	usableSize  int
-	enableTools bool
-	httpClient  *http.Client
-	apiPath     string // e.g., "/v1/chat/completions" or "/api/generate"
-	maxRetries  int    // Maximum number of retries for failed requests
+	baseURL             string
+	modelName           string
+	contextSize         int
+	usableSize          int
+	enableTools         bool
+	httpClient          *http.Client
+	apiPath             string // e.g., "/v1/chat/completions" or "/api/generate"
+	maxRetries          int    // Maximum number of retries for failed requests
+	retryBackoffSeconds int    // Initial backoff in seconds for exponential retry
 }
 
 // ServerClientConfig configures the HTTP server client
 type ServerClientConfig struct {
-	BaseURL     string
-	ModelName   string
-	ContextSize int
-	EnableTools bool
-	APIPath     string        // Optional, defaults to "/v1/chat/completions"
-	Timeout     time.Duration // Optional, defaults to 20min for large models
-	MaxRetries  int           // Optional, defaults to 3
+	BaseURL             string
+	ModelName           string
+	ContextSize         int
+	EnableTools         bool
+	APIPath             string        // Optional, defaults to "/v1/chat/completions"
+	Timeout             time.Duration // Optional, defaults to 20min for large models
+	MaxRetries          int           // Optional, defaults to 3
+	RetryBackoffSeconds int           // Optional, defaults to 1 second
 }
 
 // NewServerClient creates a new HTTP server client
@@ -48,6 +50,9 @@ func NewServerClient(cfg ServerClientConfig) *ServerClient {
 	if cfg.MaxRetries == 0 {
 		cfg.MaxRetries = 3 // Default to 3 retries
 	}
+	if cfg.RetryBackoffSeconds == 0 {
+		cfg.RetryBackoffSeconds = 1 // Default to 1 second initial backoff
+	}
 
 	usableSize := cfg.ContextSize
 	if usableSize > 0 {
@@ -55,14 +60,15 @@ func NewServerClient(cfg ServerClientConfig) *ServerClient {
 	}
 
 	return &ServerClient{
-		baseURL:     cfg.BaseURL,
-		modelName:   cfg.ModelName,
-		contextSize: cfg.ContextSize,
-		usableSize:  usableSize,
-		enableTools: cfg.EnableTools,
-		apiPath:     cfg.APIPath,
-		httpClient:  &http.Client{Timeout: cfg.Timeout},
-		maxRetries:  cfg.MaxRetries,
+		baseURL:             cfg.BaseURL,
+		modelName:           cfg.ModelName,
+		contextSize:         cfg.ContextSize,
+		usableSize:          usableSize,
+		enableTools:         cfg.EnableTools,
+		apiPath:             cfg.APIPath,
+		httpClient:          &http.Client{Timeout: cfg.Timeout},
+		maxRetries:          cfg.MaxRetries,
+		retryBackoffSeconds: cfg.RetryBackoffSeconds,
 	}
 }
 
@@ -140,7 +146,9 @@ func (c *ServerClient) Infer(ctx context.Context, req *InferenceRequest) (*Infer
 			lastErr = err
 			// Check if error is retryable (network errors, timeouts)
 			if attempt < c.maxRetries && isRetryableError(err) {
-				backoff := time.Duration(1<<uint(attempt)) * time.Second // 1s, 2s, 4s
+				// Exponential backoff: base * (2^attempt) = base, 2*base, 4*base, ...
+				baseBackoff := time.Duration(c.retryBackoffSeconds) * time.Second
+				backoff := baseBackoff * time.Duration(1<<uint(attempt))
 				if os.Getenv("DEBUG") != "" {
 					fmt.Fprintf(os.Stderr, "[DEBUG] Request failed (attempt %d/%d): %v. Retrying in %v...\n",
 						attempt+1, c.maxRetries+1, err, backoff)
@@ -164,7 +172,9 @@ func (c *ServerClient) Infer(ctx context.Context, req *InferenceRequest) (*Infer
 		// 5xx errors are retryable, 4xx are not
 		if resp.StatusCode >= 500 && attempt < c.maxRetries {
 			lastErr = fmt.Errorf("server returned %d: %s", resp.StatusCode, string(errorBody))
-			backoff := time.Duration(1<<uint(attempt)) * time.Second // 1s, 2s, 4s
+			// Exponential backoff: base * (2^attempt) = base, 2*base, 4*base, ...
+			baseBackoff := time.Duration(c.retryBackoffSeconds) * time.Second
+			backoff := baseBackoff * time.Duration(1<<uint(attempt))
 			if os.Getenv("DEBUG") != "" {
 				fmt.Fprintf(os.Stderr, "[DEBUG] Server error %d (attempt %d/%d). Retrying in %v...\n",
 					resp.StatusCode, attempt+1, c.maxRetries+1, backoff)
