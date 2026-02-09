@@ -5,7 +5,7 @@ LLAMA_PORT ?= 8082
 # Use Qwen3-Coder-30B-A3B-Instruct for better tool calling (set USE_HF=1)
 LLAMA_HF_REPO ?= unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_M
 LLAMA_MODEL ?= $(shell find ~/.cache/huggingface/hub/models--bartowski--Qwen2.5-Coder-32B-Instruct-GGUF -name "*.gguf" -type f | head -1)
-LLAMA_CTX_SIZE ?= 32768
+LLAMA_CTX_SIZE ?= 16384
 LLAMA_N_GPU_LAYERS ?= -1
 LLAMA_THREADS ?= 8
 LLAMA_REASONING_FORMAT ?= deepseek
@@ -16,10 +16,9 @@ LLAMA_LOGIT_BIAS ?=
 USE_HF ?= 0
 
 # llama-server targets
-llama-server: ## Start llama-server for tool calling with reasoning control
+llama-server: ## Start llama-server for tool calling
 	@echo "Starting llama-server on port $(LLAMA_PORT)..."
 	@echo "  Context: $(LLAMA_CTX_SIZE) tokens"
-	@echo "  Reasoning Budget: $(LLAMA_REASONING_BUDGET) tokens (format: $(LLAMA_REASONING_FORMAT))"
 ifeq ($(USE_HF),1)
 	@echo "  Using HuggingFace model: $(LLAMA_HF_REPO)"
 	@llama-server \
@@ -28,8 +27,6 @@ ifeq ($(USE_HF),1)
 		--ctx-size $(LLAMA_CTX_SIZE) \
 		--n-gpu-layers $(LLAMA_N_GPU_LAYERS) \
 		--threads $(LLAMA_THREADS) \
-		--reasoning-format $(LLAMA_REASONING_FORMAT) \
-		--reasoning-budget $(LLAMA_REASONING_BUDGET) \
 		--jinja \
 		--log-disable \
 		--no-webui \
@@ -46,8 +43,6 @@ else
 		--ctx-size $(LLAMA_CTX_SIZE) \
 		--n-gpu-layers $(LLAMA_N_GPU_LAYERS) \
 		--threads $(LLAMA_THREADS) \
-		--reasoning-format $(LLAMA_REASONING_FORMAT) \
-		--reasoning-budget $(LLAMA_REASONING_BUDGET) \
 		--jinja \
 		--log-disable \
 		--no-webui \

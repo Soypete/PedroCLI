@@ -5,14 +5,14 @@
     "server_url": "http://localhost:8082",
     "model_path": "/Users/miriahpeterson/.cache/huggingface/hub/models--bartowski--Qwen2.5-Coder-32B-Instruct-GGUF/snapshots/40b525506a4f98ed425882fa6dfc90cc8139065e/Qwen2.5-Coder-32B-Instruct-Q4_K_M.gguf",
     "llamacpp_path": "/opt/homebrew/bin/llama-cli",
-    "context_size": 32768,
-    "usable_context": 24576,
+    "context_size": 16384,
+    "usable_context": 12288,
     "temperature": 0.2,
     "threads": 8,
     "n_gpu_layers": 35,
     "enable_grammar": false,
     "grammar_logging": true,
-    "enable_tools": true
+    "enable_tools": false
   },
   "project": {
     "name": "PedroCLI",

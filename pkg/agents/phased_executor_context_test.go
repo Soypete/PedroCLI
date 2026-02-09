@@ -69,6 +69,8 @@ func TestContextManagerLogging(t *testing.T) {
 			StartedAt: time.Now(),
 			Data:      make(map[string]interface{}),
 		},
+		calledTools: make(map[string]bool),
+		failedTools: make(map[string]int),
 	}
 
 	ctx := context.Background()
@@ -182,6 +184,8 @@ func TestContextManagerLoggingWithNilContextMgr(t *testing.T) {
 		currentRound: 0,
 		jobID:        "test-job",
 		result:       &PhaseResult{},
+		calledTools:  make(map[string]bool),
+		failedTools:  make(map[string]int),
 	}
 
 	ctx := context.Background()

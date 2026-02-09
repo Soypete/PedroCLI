@@ -60,7 +60,9 @@ type ModelConfig struct {
 	EnableTools bool `json:"enable_tools,omitempty"` // Enable native tool calling via chat template
 
 	// Retry configuration
-	MaxRetries int `json:"max_retries,omitempty"` // Maximum number of retries for failed requests (default: 3)
+	MaxRetries          int `json:"max_retries,omitempty"`           // Maximum number of retries for failed requests (default: 3)
+	TimeoutSeconds      int `json:"timeout_seconds,omitempty"`       // HTTP request timeout in seconds (default: 1200 = 20 minutes)
+	RetryBackoffSeconds int `json:"retry_backoff_seconds,omitempty"` // Initial backoff in seconds for exponential retry (default: 1)
 }
 
 // ExecutionConfig contains execution settings
@@ -101,8 +103,9 @@ type ProjectConfig struct {
 
 // LimitsConfig contains execution limits
 type LimitsConfig struct {
-	MaxTaskDurationMinutes int `json:"max_task_duration_minutes"`
-	MaxInferenceRuns       int `json:"max_inference_runs"`
+	MaxTaskDurationMinutes int  `json:"max_task_duration_minutes"`
+	MaxInferenceRuns       int  `json:"max_inference_runs"`
+	EnablePhaseCheckpoints bool `json:"enable_phase_checkpoints,omitempty"` // Save phase progress to disk for resume (default: true)
 }
 
 // ContextConfig contains context management settings
