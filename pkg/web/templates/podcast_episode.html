@@ -1,0 +1,528 @@
+{{define "podcast_episode.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Podcast Episode Review - PedroCLI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .fact-check-row:hover { background-color: #f9fafb; }
+        .tab-active { border-bottom: 2px solid #2563eb; color: #2563eb; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <a href="/" class="text-2xl font-bold text-blue-600">Pedro</a>
+                    <span class="text-gray-400">/</span>
+                    <span class="text-gray-600">Podcast Episode</span>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <span id="ep-status-badge" class="px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-700">Loading...</span>
+                    <a href="/" class="text-sm text-gray-500 hover:text-gray-700">Back to Dashboard</a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-6">
+        <!-- Episode Header -->
+        <div id="ep-header" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h1 id="ep-title" class="text-2xl font-bold text-gray-900">Loading...</h1>
+                    <div class="flex items-center gap-4 mt-2 text-sm text-gray-500">
+                        <span id="ep-number"></span>
+                        <span id="ep-record-date"></span>
+                    </div>
+                </div>
+            </div>
+            <!-- Workflow Progress -->
+            <div class="mt-4 flex items-center gap-2">
+                <div id="step-uploaded" class="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500">Uploaded</div>
+                <svg class="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                <div id="step-transcribed" class="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500">Transcribed</div>
+                <svg class="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                <div id="step-fact_checked" class="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500">Fact Checked</div>
+                <svg class="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                <div id="step-show_notes_done" class="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500">Show Notes</div>
+            </div>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="border-b border-gray-200 mb-6">
+            <nav class="flex space-x-8">
+                <button onclick="switchEpisodeTab('transcript')" id="etab-transcript" class="pb-3 text-sm font-medium tab-active">Transcript</button>
+                <button onclick="switchEpisodeTab('factcheck')" id="etab-factcheck" class="pb-3 text-sm font-medium text-gray-500 hover:text-gray-700">Fact Check</button>
+                <button onclick="switchEpisodeTab('shownotes')" id="etab-shownotes" class="pb-3 text-sm font-medium text-gray-500 hover:text-gray-700">Show Notes</button>
+                <button onclick="switchEpisodeTab('template')" id="etab-template" class="pb-3 text-sm font-medium text-gray-500 hover:text-gray-700">Template</button>
+            </nav>
+        </div>
+
+        <!-- Transcript Tab -->
+        <div id="esection-transcript" class="episode-tab-section">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold text-gray-900">Transcript</h2>
+                    <span id="transcript-status" class="text-sm text-gray-500"></span>
+                </div>
+                <div id="transcript-content" class="prose max-w-none">
+                    <p class="text-gray-500 italic">Transcript will appear here after transcription completes...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fact Check Tab -->
+        <div id="esection-factcheck" class="episode-tab-section hidden">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold text-gray-900">Fact Check</h2>
+                    <div class="flex gap-2">
+                        <button onclick="addFactCheck()" class="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">Add Check</button>
+                        <button onclick="saveFactChecks()" class="px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700">Save</button>
+                    </div>
+                </div>
+                <p class="text-sm text-gray-500 mb-4">Flag claims from the transcript that need verification. Mark each as verified, incorrect, or needs editing.</p>
+                <div id="fact-check-list" class="space-y-3">
+                    <p class="text-gray-400 text-sm italic">No fact checks yet. Click "Add Check" to flag a claim.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Show Notes Tab -->
+        <div id="esection-shownotes" class="episode-tab-section hidden">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold text-gray-900">Show Notes</h2>
+                    <button onclick="saveShowNotes()" class="px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700">Save</button>
+                </div>
+
+                <div class="space-y-6">
+                    <!-- Summary -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Episode Summary</label>
+                        <textarea id="shownotes-summary" rows="4"
+                                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                  placeholder="Brief summary of the episode..."></textarea>
+                    </div>
+
+                    <!-- Links -->
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="block text-sm font-medium text-gray-700">Links Mentioned</label>
+                            <button onclick="addShowNoteLink()" class="text-sm text-blue-600 hover:text-blue-700">+ Add Link</button>
+                        </div>
+                        <div id="shownotes-links" class="space-y-2">
+                            <!-- Dynamic link rows -->
+                        </div>
+                    </div>
+
+                    <!-- Chapters -->
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="block text-sm font-medium text-gray-700">Chapters / Timestamps</label>
+                            <button onclick="addChapter()" class="text-sm text-blue-600 hover:text-blue-700">+ Add Chapter</button>
+                        </div>
+                        <div id="shownotes-chapters" class="space-y-2">
+                            <!-- Dynamic chapter rows -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Template Tab -->
+        <div id="esection-template" class="episode-tab-section hidden">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold text-gray-900">Show Notes Template</h2>
+                    <button onclick="loadTemplate()" class="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">Generate</button>
+                </div>
+                <div id="template-content" class="prose max-w-none">
+                    <p class="text-gray-400 italic">Click "Generate" to build the show notes template from your data.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+<script>
+// Get episode ID from URL path
+const episodeId = window.location.pathname.split('/').filter(Boolean).pop();
+let currentEpisode = null;
+let factChecks = [];
+let showNoteLinks = [];
+let chapters = [];
+let linkCounter = 0;
+let chapterCounter = 0;
+let factCheckCounter = 0;
+
+// Tab switching
+function switchEpisodeTab(tab) {
+    document.querySelectorAll('.episode-tab-section').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('[id^="etab-"]').forEach(el => {
+        el.classList.remove('tab-active');
+        el.classList.add('text-gray-500');
+    });
+    document.getElementById('esection-' + tab).classList.remove('hidden');
+    const tabBtn = document.getElementById('etab-' + tab);
+    tabBtn.classList.add('tab-active');
+    tabBtn.classList.remove('text-gray-500');
+}
+
+// Load episode data
+async function loadEpisode() {
+    try {
+        const response = await fetch('/api/podcast/episodes/' + episodeId);
+        if (!response.ok) throw new Error('Episode not found');
+
+        currentEpisode = await response.json();
+        renderEpisode();
+
+        // Poll for transcription if still in progress
+        if (currentEpisode.status === 'transcribing' || currentEpisode.status === 'uploaded') {
+            setTimeout(loadEpisode, 3000);
+        }
+    } catch (error) {
+        console.error('Error loading episode:', error);
+        document.getElementById('ep-title').textContent = 'Error loading episode';
+    }
+}
+
+function renderEpisode() {
+    const ep = currentEpisode;
+    document.getElementById('ep-title').textContent = ep.title || 'Untitled';
+    document.getElementById('ep-number').textContent = ep.episode_number || '';
+    document.getElementById('ep-record-date').textContent = ep.record_date || '';
+
+    // Status badge
+    const badge = document.getElementById('ep-status-badge');
+    const statusColors = {
+        'uploaded': 'bg-gray-100 text-gray-700',
+        'transcribing': 'bg-yellow-100 text-yellow-700',
+        'transcribed': 'bg-blue-100 text-blue-700',
+        'fact_checked': 'bg-indigo-100 text-indigo-700',
+        'show_notes_done': 'bg-green-100 text-green-700',
+        'published': 'bg-green-200 text-green-800',
+    };
+    badge.className = 'px-3 py-1 rounded-full text-sm font-medium ' + (statusColors[ep.status] || 'bg-gray-100 text-gray-700');
+    badge.textContent = ep.status.replace(/_/g, ' ');
+
+    // Workflow progress steps
+    const steps = ['uploaded', 'transcribed', 'fact_checked', 'show_notes_done'];
+    const stepOrder = {
+        'uploaded': 0, 'transcribing': 0, 'transcribed': 1,
+        'fact_checking': 1, 'fact_checked': 2,
+        'show_notes': 2, 'show_notes_done': 3, 'published': 4
+    };
+    const currentStep = stepOrder[ep.status] || 0;
+
+    steps.forEach((step, i) => {
+        const el = document.getElementById('step-' + step);
+        if (i <= currentStep) {
+            el.classList.remove('bg-gray-100', 'text-gray-500');
+            el.classList.add('bg-blue-100', 'text-blue-700');
+        } else {
+            el.classList.remove('bg-blue-100', 'text-blue-700');
+            el.classList.add('bg-gray-100', 'text-gray-500');
+        }
+    });
+
+    // Transcript
+    const transcriptDiv = document.getElementById('transcript-content');
+    const transcriptStatus = document.getElementById('transcript-status');
+    if (ep.status === 'transcribing') {
+        transcriptDiv.innerHTML = `
+            <div class="flex items-center gap-3 text-yellow-600">
+                <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <span>Transcription in progress... This may take several minutes for long recordings.</span>
+            </div>
+        `;
+        transcriptStatus.textContent = 'Transcribing...';
+    } else if (ep.transcript) {
+        // Render transcript with paragraph breaks
+        const paragraphs = ep.transcript.split('\n').filter(p => p.trim());
+        transcriptDiv.innerHTML = paragraphs.map(p => `<p class="mb-3 text-gray-800 leading-relaxed">${escapeHtml(p)}</p>`).join('');
+        const wordCount = ep.transcript.split(/\s+/).length;
+        transcriptStatus.textContent = wordCount.toLocaleString() + ' words';
+    } else {
+        transcriptDiv.innerHTML = '<p class="text-gray-500 italic">No transcript available.</p>';
+    }
+
+    // Fact checks
+    if (ep.fact_checks && ep.fact_checks.length > 0) {
+        factChecks = ep.fact_checks;
+        renderFactChecks();
+    }
+
+    // Show notes
+    if (ep.show_notes) {
+        document.getElementById('shownotes-summary').value = ep.show_notes.summary || '';
+        if (ep.show_notes.links) {
+            showNoteLinks = ep.show_notes.links;
+            renderShowNoteLinks();
+        }
+        if (ep.show_notes.chapters) {
+            chapters = ep.show_notes.chapters;
+            renderChapters();
+        }
+    }
+}
+
+// Fact Check functions
+function addFactCheck() {
+    const id = 'fc-' + (factCheckCounter++);
+    factChecks.push({ id: id, timestamp: '', claim: '', status: 'unchecked', notes: '', corrected_to: '' });
+    renderFactChecks();
+}
+
+function renderFactChecks() {
+    const container = document.getElementById('fact-check-list');
+    if (factChecks.length === 0) {
+        container.innerHTML = '<p class="text-gray-400 text-sm italic">No fact checks yet. Click "Add Check" to flag a claim.</p>';
+        return;
+    }
+
+    container.innerHTML = factChecks.map((fc, i) => `
+        <div class="fact-check-row p-4 border border-gray-200 rounded-md space-y-3" data-index="${i}">
+            <div class="flex gap-3 items-start">
+                <input type="text" value="${escapeHtml(fc.timestamp)}" placeholder="00:00"
+                       onchange="factChecks[${i}].timestamp = this.value"
+                       class="w-20 px-2 py-1 text-sm border border-gray-300 rounded-md">
+                <textarea onchange="factChecks[${i}].claim = this.value" rows="2"
+                          class="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-md"
+                          placeholder="Claim to verify...">${escapeHtml(fc.claim)}</textarea>
+                <select onchange="factChecks[${i}].status = this.value"
+                        class="px-2 py-1 text-sm border border-gray-300 rounded-md">
+                    <option value="unchecked" ${fc.status === 'unchecked' ? 'selected' : ''}>Unchecked</option>
+                    <option value="verified" ${fc.status === 'verified' ? 'selected' : ''}>Verified</option>
+                    <option value="incorrect" ${fc.status === 'incorrect' ? 'selected' : ''}>Incorrect</option>
+                    <option value="needs_edit" ${fc.status === 'needs_edit' ? 'selected' : ''}>Needs Edit</option>
+                </select>
+                <button onclick="factChecks.splice(${i}, 1); renderFactChecks();"
+                        class="text-red-500 hover:text-red-700 p-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="flex gap-3 ml-20">
+                <input type="text" value="${escapeHtml(fc.notes)}" placeholder="Notes..."
+                       onchange="factChecks[${i}].notes = this.value"
+                       class="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-md">
+                ${fc.status === 'incorrect' || fc.status === 'needs_edit' ? `
+                <input type="text" value="${escapeHtml(fc.corrected_to || '')}" placeholder="Correction..."
+                       onchange="factChecks[${i}].corrected_to = this.value"
+                       class="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-md">
+                ` : ''}
+            </div>
+        </div>
+    `).join('');
+}
+
+async function saveFactChecks() {
+    try {
+        const response = await fetch('/api/podcast/episodes/' + episodeId + '/fact-checks', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(factChecks),
+        });
+        const data = await response.json();
+        if (data.success) {
+            loadEpisode(); // Refresh
+        } else {
+            alert('Save failed: ' + data.error);
+        }
+    } catch (error) {
+        alert('Save failed: ' + error.message);
+    }
+}
+
+// Show Notes functions
+function addShowNoteLink() {
+    showNoteLinks.push({ url: '', title: '', context: '', timestamp: '' });
+    renderShowNoteLinks();
+}
+
+function renderShowNoteLinks() {
+    const container = document.getElementById('shownotes-links');
+    if (showNoteLinks.length === 0) {
+        container.innerHTML = '<p class="text-gray-400 text-sm italic">No links yet.</p>';
+        return;
+    }
+
+    container.innerHTML = showNoteLinks.map((link, i) => `
+        <div class="flex gap-2 items-start p-2 bg-gray-50 rounded">
+            <input type="text" value="${escapeHtml(link.timestamp)}" placeholder="00:00"
+                   onchange="showNoteLinks[${i}].timestamp = this.value"
+                   class="w-16 px-2 py-1 text-sm border border-gray-300 rounded-md">
+            <input type="url" value="${escapeHtml(link.url)}" placeholder="https://..."
+                   onchange="showNoteLinks[${i}].url = this.value"
+                   class="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-md">
+            <input type="text" value="${escapeHtml(link.title)}" placeholder="Title"
+                   onchange="showNoteLinks[${i}].title = this.value"
+                   class="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-md">
+            <button onclick="showNoteLinks.splice(${i}, 1); renderShowNoteLinks();"
+                    class="text-red-500 hover:text-red-700 p-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+    `).join('');
+}
+
+function addChapter() {
+    chapters.push({ timestamp: '', title: '', summary: '' });
+    renderChapters();
+}
+
+function renderChapters() {
+    const container = document.getElementById('shownotes-chapters');
+    if (chapters.length === 0) {
+        container.innerHTML = '<p class="text-gray-400 text-sm italic">No chapters yet.</p>';
+        return;
+    }
+
+    container.innerHTML = chapters.map((ch, i) => `
+        <div class="flex gap-2 items-start p-2 bg-gray-50 rounded">
+            <input type="text" value="${escapeHtml(ch.timestamp)}" placeholder="00:00"
+                   onchange="chapters[${i}].timestamp = this.value"
+                   class="w-16 px-2 py-1 text-sm border border-gray-300 rounded-md">
+            <input type="text" value="${escapeHtml(ch.title)}" placeholder="Chapter title"
+                   onchange="chapters[${i}].title = this.value"
+                   class="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-md">
+            <input type="text" value="${escapeHtml(ch.summary)}" placeholder="Brief summary"
+                   onchange="chapters[${i}].summary = this.value"
+                   class="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-md">
+            <button onclick="chapters.splice(${i}, 1); renderChapters();"
+                    class="text-red-500 hover:text-red-700 p-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+    `).join('');
+}
+
+async function saveShowNotes() {
+    const showNotes = {
+        summary: document.getElementById('shownotes-summary').value.trim(),
+        links: showNoteLinks,
+        chapters: chapters,
+    };
+
+    try {
+        const response = await fetch('/api/podcast/episodes/' + episodeId + '/show-notes', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(showNotes),
+        });
+        const data = await response.json();
+        if (data.success) {
+            loadEpisode();
+        } else {
+            alert('Save failed: ' + data.error);
+        }
+    } catch (error) {
+        alert('Save failed: ' + error.message);
+    }
+}
+
+// Template
+async function loadTemplate() {
+    try {
+        const response = await fetch('/api/podcast/episodes/' + episodeId + '/template');
+        if (!response.ok) throw new Error('Failed to load template');
+
+        const tmpl = await response.json();
+        const container = document.getElementById('template-content');
+
+        let html = `<div class="space-y-6">`;
+
+        // Header
+        html += `<div class="border-b pb-4">
+            <h2 class="text-xl font-bold">${escapeHtml(tmpl.title || 'Untitled')}</h2>
+            <p class="text-gray-500">${tmpl.episode_number || ''} | Recorded: ${tmpl.record_date ? tmpl.record_date.split('T')[0] : 'N/A'}</p>
+        </div>`;
+
+        // Hosts
+        if (tmpl.hosts && tmpl.hosts.length > 0) {
+            html += `<div><h3 class="font-semibold text-gray-700 mb-2">Hosts</h3>`;
+            tmpl.hosts.forEach(h => {
+                html += `<div class="mb-2">
+                    <span class="font-medium">${escapeHtml(h.name)}</span>
+                    ${h.bio ? `<span class="text-gray-500 text-sm"> - ${escapeHtml(h.bio)}</span>` : ''}
+                    <div class="text-xs text-gray-400">
+                        ${h.twitter ? `Twitter: ${escapeHtml(h.twitter)}` : ''}
+                        ${h.github ? ` | GitHub: ${escapeHtml(h.github)}` : ''}
+                    </div>
+                </div>`;
+            });
+            html += `</div>`;
+        }
+
+        // Summary
+        if (tmpl.summary) {
+            html += `<div><h3 class="font-semibold text-gray-700 mb-2">Summary</h3>
+                <p class="text-gray-600">${escapeHtml(tmpl.summary)}</p></div>`;
+        }
+
+        // Chapters
+        if (tmpl.chapters && tmpl.chapters.length > 0) {
+            html += `<div><h3 class="font-semibold text-gray-700 mb-2">Chapters</h3><ul class="space-y-1">`;
+            tmpl.chapters.forEach(ch => {
+                html += `<li><span class="font-mono text-blue-600">${escapeHtml(ch.timestamp)}</span> - <span class="font-medium">${escapeHtml(ch.title)}</span>
+                    ${ch.summary ? `<span class="text-gray-500 text-sm"> - ${escapeHtml(ch.summary)}</span>` : ''}</li>`;
+            });
+            html += `</ul></div>`;
+        }
+
+        // Links
+        if (tmpl.links && tmpl.links.length > 0) {
+            html += `<div><h3 class="font-semibold text-gray-700 mb-2">Links</h3><ul class="space-y-1">`;
+            tmpl.links.forEach(link => {
+                html += `<li>
+                    <a href="${escapeHtml(link.url)}" target="_blank" class="text-blue-600 hover:underline">${escapeHtml(link.title || link.url)}</a>
+                    ${link.timestamp ? `<span class="text-gray-400 text-xs ml-2">(${escapeHtml(link.timestamp)})</span>` : ''}
+                </li>`;
+            });
+            html += `</ul></div>`;
+        }
+
+        // Sponsors
+        if (tmpl.sponsors && tmpl.sponsors.length > 0) {
+            html += `<div><h3 class="font-semibold text-gray-700 mb-2">Sponsors</h3>`;
+            tmpl.sponsors.forEach(s => {
+                html += `<p><strong>${escapeHtml(s.name)}</strong>: ${escapeHtml(s.message)}
+                    ${s.url ? ` - <a href="${escapeHtml(s.url)}" class="text-blue-600">${escapeHtml(s.url)}</a>` : ''}</p>`;
+            });
+            html += `</div>`;
+        }
+
+        html += `</div>`;
+        container.innerHTML = html;
+    } catch (error) {
+        alert('Failed to generate template: ' + error.message);
+    }
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', loadEpisode);
+</script>
+</body>
+</html>
+{{end}}

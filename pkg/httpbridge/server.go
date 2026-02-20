@@ -37,6 +37,7 @@ func NewServer(cfg *config.Config, ctx context.Context) (*Server, error) {
 		"pkg/web/templates/index.html",
 		"pkg/web/templates/components/job_card.html",
 		"pkg/web/templates/blog_review.html",
+		"pkg/web/templates/podcast_episode.html",
 	))
 
 	// Create SSE broadcaster
@@ -69,6 +70,7 @@ func (s *Server) setupRoutes() {
 	// Web UI routes
 	s.mux.HandleFunc("/", s.handleIndex)
 	s.mux.HandleFunc("/blog/review/", s.handleBlogReviewPage)
+	s.mux.HandleFunc("/podcast/episode/", s.handlePodcastEpisodePage)
 
 	// API routes
 	s.mux.HandleFunc("/api/jobs", s.handleJobs)
@@ -77,6 +79,32 @@ func (s *Server) setupRoutes() {
 	s.mux.HandleFunc("/api/blog", s.handleBlog)
 	s.mux.HandleFunc("/api/blog/orchestrate", s.handleBlogOrchestrate)
 	s.mux.HandleFunc("/api/podcast", s.handlePodcast)
+	s.mux.HandleFunc("/api/podcast/upload", s.handlePodcastUpload)
+	s.mux.HandleFunc("/api/podcast/episodes", s.handlePodcastEpisodes)
+	s.mux.HandleFunc("/api/podcast/episodes/", func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/podcast/episodes/")
+		parts := strings.Split(path, "/")
+
+		if len(parts) == 1 {
+			// /api/podcast/episodes/:id
+			s.handlePodcastEpisodeByID(w, r)
+		} else if len(parts) == 2 {
+			switch parts[1] {
+			case "fact-checks":
+				s.handlePodcastEpisodeFactChecks(w, r)
+			case "show-notes":
+				s.handlePodcastEpisodeShowNotes(w, r)
+			case "template":
+				s.handlePodcastEpisodeTemplate(w, r)
+			case "status":
+				s.handlePodcastEpisodeStatus(w, r)
+			default:
+				http.Error(w, "Not found", http.StatusNotFound)
+			}
+		} else {
+			http.Error(w, "Not found", http.StatusNotFound)
+		}
+	})
 	s.mux.HandleFunc("/api/health", s.handleHealth)
 
 	// Blog review API routes

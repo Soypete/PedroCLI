@@ -12,7 +12,10 @@ import (
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/storage"
 	"github.com/soypete/pedrocli/pkg/storage/blog"
+	"github.com/soypete/pedrocli/pkg/storage/podcast"
+	s3storage "github.com/soypete/pedrocli/pkg/storage/s3"
 	"github.com/soypete/pedrocli/pkg/tools"
+	"github.com/soypete/pedrocli/pkg/voice"
 )
 
 // AppContext holds all the shared dependencies for the HTTP server
@@ -51,6 +54,11 @@ type AppContext struct {
 
 	// Scheduling tools
 	CalComTool tools.Tool
+
+	// Podcast workflow
+	PodcastStore podcast.Store
+	S3Client     *s3storage.Client
+	VoiceClient  *voice.Client
 }
 
 // NewAppContext creates and initializes the application context with database-backed job manager.
@@ -149,6 +157,30 @@ func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, erro
 	if cfg.CalCom.Enabled {
 		appCtx.CalComTool = tools.NewCalComTool(cfg, nil) // nil tokenManager for now
 	}
+
+	// Initialize voice/whisper client
+	if cfg.Voice.Enabled && cfg.Voice.WhisperURL != "" {
+		appCtx.VoiceClient = voice.NewClient(cfg.Voice.WhisperURL)
+	}
+
+	// Initialize S3 client for podcast storage
+	if cfg.Podcast.S3.Enabled && cfg.Podcast.S3.Endpoint != "" {
+		s3Client, err := s3storage.NewClient(s3storage.Config{
+			Endpoint:  cfg.Podcast.S3.Endpoint,
+			Bucket:    cfg.Podcast.S3.Bucket,
+			AccessKey: cfg.Podcast.S3.AccessKey,
+			SecretKey: cfg.Podcast.S3.SecretKey,
+			UseSSL:    cfg.Podcast.S3.UseSSL,
+		})
+		if err != nil {
+			log.Printf("Warning: failed to create S3 client: %v", err)
+		} else {
+			appCtx.S3Client = s3Client
+		}
+	}
+
+	// Initialize podcast store (always available, S3 is optional)
+	appCtx.PodcastStore = podcast.NewMemoryStore(appCtx.S3Client)
 
 	return appCtx, nil
 }

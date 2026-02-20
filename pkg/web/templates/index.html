@@ -206,53 +206,81 @@
     <div id="section-podcast" class="tab-section hidden">
         <div class="mb-6 sm:mb-8">
             <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Podcast Tools</h1>
-            <p class="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600">Manage content for Domesticating AI podcast</p>
+            <p class="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600">Upload recordings, transcribe, fact-check, and create show notes</p>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
             <div class="lg:col-span-1">
                 <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
-                    <h2 class="text-xl font-semibold text-gray-900 mb-4">Create New Job</h2>
+                    <h2 class="text-xl font-semibold text-gray-900 mb-4">Upload Episode</h2>
 
-                    <form id="podcast-job-form" class="space-y-4">
+                    <form id="podcast-upload-form" class="space-y-4">
                         <div>
-                            <label for="podcast-type" class="block text-sm font-medium text-gray-700 mb-2">Job Type</label>
-                            <select id="podcast-type" name="type"
-                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
-                                <option value="create_script">Create Script - Generate episode script</option>
-                                <option value="create_outline">Create Outline - Generate episode outline</option>
-                            </select>
+                            <label for="podcast-episode-number" class="block text-sm font-medium text-gray-700 mb-2">Episode Number</label>
+                            <input type="text" id="podcast-episode-number" name="episode_number"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                   placeholder="S01E03">
                         </div>
 
                         <div>
-                            <div class="flex items-center justify-between mb-2">
-                                <label for="podcast-topic" class="block text-sm font-medium text-gray-700">Episode Topic</label>
-                                <button type="button" onclick="startVoiceInput('podcast-topic')"
-                                        class="inline-flex items-center px-3 py-1 bg-gray-800 text-white text-sm rounded-md hover:bg-gray-700">
-                                    🎤 Voice
-                                </button>
+                            <label for="podcast-title" class="block text-sm font-medium text-gray-700 mb-2">Episode Title</label>
+                            <input type="text" id="podcast-title" name="title"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                   placeholder="How to Choose a Local LLM">
+                        </div>
+
+                        <div>
+                            <label for="podcast-record-date" class="block text-sm font-medium text-gray-700 mb-2">Record Date</label>
+                            <input type="date" id="podcast-record-date" name="record_date"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+
+                        <!-- Drag & Drop Zone -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Recording (MP4/MP3/WAV)</label>
+                            <div id="podcast-drop-zone"
+                                 class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
+                                 onclick="document.getElementById('podcast-file-input').click()">
+                                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                          d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                                </svg>
+                                <p class="mt-2 text-sm text-gray-600">
+                                    <span class="font-medium text-blue-600">Click to upload</span> or drag and drop
+                                </p>
+                                <p class="mt-1 text-xs text-gray-500">MP4, MP3, WAV, WebM up to 500MB</p>
                             </div>
-                            <textarea id="podcast-topic" name="topic" rows="3"
-                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                                      placeholder="What is the episode about?"></textarea>
-                        </div>
-
-                        <div>
-                            <div class="flex items-center justify-between mb-2">
-                                <label for="podcast-notes" class="block text-sm font-medium text-gray-700">Notes (optional)</label>
-                                <button type="button" onclick="startVoiceInput('podcast-notes')"
-                                        class="inline-flex items-center px-3 py-1 bg-gray-800 text-white text-sm rounded-md hover:bg-gray-700">
-                                    🎤 Voice
-                                </button>
+                            <input type="file" id="podcast-file-input" accept="video/*,audio/*,.mp4,.mp3,.wav,.webm,.m4a"
+                                   class="hidden" onchange="handlePodcastFileSelect(this)">
+                            <div id="podcast-file-info" class="hidden mt-2 p-3 bg-gray-50 rounded-md">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center">
+                                        <svg class="h-5 w-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                        </svg>
+                                        <span id="podcast-file-name" class="text-sm text-gray-700"></span>
+                                    </div>
+                                    <button type="button" onclick="clearPodcastFile()" class="text-red-500 hover:text-red-700 text-sm">Remove</button>
+                                </div>
+                                <span id="podcast-file-size" class="text-xs text-gray-500 ml-7"></span>
                             </div>
-                            <textarea id="podcast-notes" name="notes" rows="3"
-                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                                      placeholder="Additional notes or context..."></textarea>
                         </div>
 
-                        <button type="submit"
-                                class="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
-                            Create Job
+                        <!-- Upload Progress -->
+                        <div id="podcast-upload-progress" class="hidden">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-sm text-gray-700">Uploading & Transcribing...</span>
+                                <span id="podcast-upload-percent" class="text-sm text-gray-500">0%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div id="podcast-upload-bar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <button type="submit" id="podcast-upload-btn"
+                                class="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled>
+                            Upload & Transcribe
                         </button>
                     </form>
                 </div>
@@ -260,10 +288,11 @@
 
             <div class="lg:col-span-2">
                 <div class="flex items-center justify-between mb-3 sm:mb-4">
-                    <h2 class="text-lg sm:text-xl font-semibold text-gray-900">Active Jobs</h2>
+                    <h2 class="text-lg sm:text-xl font-semibold text-gray-900">Episodes</h2>
+                    <button onclick="loadPodcastEpisodes()" class="text-sm text-blue-600 hover:text-blue-700 py-2 px-3">Refresh</button>
                 </div>
-                <div id="podcast-job-list" class="space-y-4">
-                    <div class="text-center py-12 text-gray-500">No podcast jobs yet</div>
+                <div id="podcast-episode-list" class="space-y-4">
+                    <div class="text-center py-12 text-gray-500">Loading episodes...</div>
                 </div>
             </div>
         </div>
@@ -415,9 +444,12 @@ function switchTab(tabName) {
     activeTab.classList.remove('text-gray-600', 'hover:bg-gray-100');
     activeTab.classList.add('bg-blue-600', 'text-white');
 
-    // Load blog posts when blog tab is activated
+    // Load data when tabs are activated
     if (tabName === 'blog') {
         loadBlogPosts();
+    }
+    if (tabName === 'podcast') {
+        loadPodcastEpisodes();
     }
 
     // Save preference
@@ -824,56 +856,198 @@ async function submitBlogPost(event) {
     }
 }
 
-// Podcast form submission
-async function submitPodcastJob(event) {
+// Podcast: file selection state
+let podcastSelectedFile = null;
+
+function handlePodcastFileSelect(input) {
+    if (input.files && input.files[0]) {
+        podcastSelectedFile = input.files[0];
+        showPodcastFileInfo(podcastSelectedFile);
+    }
+}
+
+function showPodcastFileInfo(file) {
+    document.getElementById('podcast-file-info').classList.remove('hidden');
+    document.getElementById('podcast-file-name').textContent = file.name;
+    const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+    document.getElementById('podcast-file-size').textContent = sizeMB + ' MB';
+    document.getElementById('podcast-upload-btn').disabled = false;
+
+    // Update drop zone visual
+    const dropZone = document.getElementById('podcast-drop-zone');
+    dropZone.classList.add('border-green-400', 'bg-green-50');
+    dropZone.classList.remove('border-gray-300');
+}
+
+function clearPodcastFile() {
+    podcastSelectedFile = null;
+    document.getElementById('podcast-file-input').value = '';
+    document.getElementById('podcast-file-info').classList.add('hidden');
+    document.getElementById('podcast-upload-btn').disabled = true;
+
+    const dropZone = document.getElementById('podcast-drop-zone');
+    dropZone.classList.remove('border-green-400', 'bg-green-50');
+    dropZone.classList.add('border-gray-300');
+}
+
+// Drag and drop handlers
+function initPodcastDragDrop() {
+    const dropZone = document.getElementById('podcast-drop-zone');
+    if (!dropZone) return;
+
+    ['dragenter', 'dragover'].forEach(evt => {
+        dropZone.addEventListener(evt, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.add('border-blue-500', 'bg-blue-50');
+        });
+    });
+
+    ['dragleave', 'drop'].forEach(evt => {
+        dropZone.addEventListener(evt, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+        });
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        const files = e.dataTransfer.files;
+        if (files && files[0]) {
+            podcastSelectedFile = files[0];
+            // Also update the file input
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(files[0]);
+            document.getElementById('podcast-file-input').files = dataTransfer.files;
+            showPodcastFileInfo(podcastSelectedFile);
+        }
+    });
+}
+
+// Podcast upload form submission
+async function submitPodcastUpload(event) {
     event.preventDefault();
 
-    const type = document.getElementById('podcast-type').value;
-    const topic = document.getElementById('podcast-topic').value.trim();
-    const notes = document.getElementById('podcast-notes').value.trim();
-    const submitBtn = event.target.querySelector('button[type="submit"]');
-
-    if (!topic) {
-        alert('Please provide an episode topic');
+    if (!podcastSelectedFile) {
+        alert('Please select a recording file');
         return;
     }
 
-    // Disable button
+    const submitBtn = document.getElementById('podcast-upload-btn');
+    const progressDiv = document.getElementById('podcast-upload-progress');
+    const progressBar = document.getElementById('podcast-upload-bar');
+    const progressPercent = document.getElementById('podcast-upload-percent');
+
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Creating...';
+    submitBtn.textContent = 'Uploading...';
+    progressDiv.classList.remove('hidden');
+
+    const formData = new FormData();
+    formData.append('file', podcastSelectedFile);
+    formData.append('episode_number', document.getElementById('podcast-episode-number').value.trim());
+    formData.append('title', document.getElementById('podcast-title').value.trim());
+    formData.append('record_date', document.getElementById('podcast-record-date').value);
 
     try {
-        const response = await fetch('/api/podcast', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                type: type,
-                topic: topic,
-                notes: notes
-            }),
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/podcast/upload');
+
+        xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable) {
+                const pct = Math.round((e.loaded / e.total) * 90); // 90% for upload, 10% for transcription
+                progressBar.style.width = pct + '%';
+                progressPercent.textContent = pct + '%';
+            }
         });
 
-        const data = await response.json();
+        const result = await new Promise((resolve, reject) => {
+            xhr.onload = () => {
+                progressBar.style.width = '100%';
+                progressPercent.textContent = '100%';
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve(JSON.parse(xhr.responseText));
+                } else {
+                    reject(new Error(xhr.responseText));
+                }
+            };
+            xhr.onerror = () => reject(new Error('Upload failed'));
+            xhr.send(formData);
+        });
 
-        if (data.success || response.ok) {
+        if (result.success) {
             // Clear form
-            document.getElementById('podcast-topic').value = '';
-            document.getElementById('podcast-notes').value = '';
+            clearPodcastFile();
+            document.getElementById('podcast-episode-number').value = '';
+            document.getElementById('podcast-title').value = '';
+            document.getElementById('podcast-record-date').value = '';
 
-            // Show success message
-            alert('Podcast job created! (Note: Podcast workflow is under development)');
+            // Redirect to episode review page
+            window.location.href = '/podcast/episode/' + result.episode_id;
         } else {
-            alert('Error: ' + (data.error || 'Unknown error'));
+            alert('Upload failed: ' + (result.error || 'Unknown error'));
         }
     } catch (error) {
-        console.error('Error creating podcast job:', error);
-        alert('Failed to create podcast job: ' + error.message);
+        console.error('Upload error:', error);
+        alert('Upload failed: ' + error.message);
     } finally {
-        // Re-enable button
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Create Job';
+        submitBtn.textContent = 'Upload & Transcribe';
+        progressDiv.classList.add('hidden');
+        progressBar.style.width = '0%';
+    }
+}
+
+// Load podcast episodes list
+async function loadPodcastEpisodes() {
+    try {
+        const response = await fetch('/api/podcast/episodes');
+        if (!response.ok) throw new Error('Failed to load episodes');
+
+        const data = await response.json();
+        const list = document.getElementById('podcast-episode-list');
+
+        if (!data.episodes || data.episodes.length === 0) {
+            list.innerHTML = '<div class="text-center py-12 text-gray-500">No episodes yet. Upload a recording to get started.</div>';
+            return;
+        }
+
+        list.innerHTML = data.episodes.map(ep => {
+            const statusColors = {
+                'uploaded': 'bg-gray-100 text-gray-700',
+                'transcribing': 'bg-yellow-100 text-yellow-700',
+                'transcribed': 'bg-blue-100 text-blue-700',
+                'fact_checking': 'bg-purple-100 text-purple-700',
+                'fact_checked': 'bg-indigo-100 text-indigo-700',
+                'show_notes': 'bg-orange-100 text-orange-700',
+                'show_notes_done': 'bg-green-100 text-green-700',
+                'published': 'bg-green-200 text-green-800',
+            };
+            const statusClass = statusColors[ep.status] || 'bg-gray-100 text-gray-700';
+
+            return `
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                            <h3 class="font-medium text-gray-900 mb-1">
+                                ${ep.episode_number ? ep.episode_number + ' - ' : ''}${ep.title || 'Untitled'}
+                            </h3>
+                            <div class="flex items-center gap-3 text-sm text-gray-500">
+                                <span class="px-2 py-0.5 rounded ${statusClass} text-xs font-medium">${ep.status.replace(/_/g, ' ')}</span>
+                                <span>${ep.record_date}</span>
+                            </div>
+                        </div>
+                        <a href="/podcast/episode/${ep.id}"
+                           class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm whitespace-nowrap">
+                            Review
+                        </a>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading episodes:', error);
+        document.getElementById('podcast-episode-list').innerHTML =
+            '<div class="text-center py-12 text-red-500">Error loading episodes</div>';
     }
 }
 
@@ -889,11 +1063,12 @@ document.addEventListener('DOMContentLoaded', function() {
         blogForm.addEventListener('submit', submitBlogPost);
     }
 
-    // Attach podcast form handler
-    const podcastForm = document.getElementById('podcast-job-form');
+    // Attach podcast upload form handler and drag-drop
+    const podcastForm = document.getElementById('podcast-upload-form');
     if (podcastForm) {
-        podcastForm.addEventListener('submit', submitPodcastJob);
+        podcastForm.addEventListener('submit', submitPodcastUpload);
     }
+    initPodcastDragDrop();
 });
 </script>
 {{end}}

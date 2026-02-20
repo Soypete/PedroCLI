@@ -225,12 +225,25 @@ type PodcastConfig struct {
 	Enabled bool `json:"enabled"`
 	// Model profile to use for podcast tasks (references ModelProfiles key)
 	ModelProfile string `json:"model_profile,omitempty"`
+	// S3-compatible storage for recordings and transcripts (e.g., Longhorn)
+	S3 S3Config `json:"s3,omitempty"`
 	// Notion MCP server configuration
 	Notion NotionMCPConfig `json:"notion,omitempty"`
 	// Google Calendar MCP server configuration
 	Calendar CalendarMCPConfig `json:"calendar,omitempty"`
 	// Podcast metadata
 	Metadata PodcastMetadata `json:"metadata,omitempty"`
+}
+
+// S3Config contains S3-compatible object storage configuration
+type S3Config struct {
+	Enabled   bool   `json:"enabled"`
+	Endpoint  string `json:"endpoint"`         // e.g., "http://longhorn-s3:9000"
+	Bucket    string `json:"bucket"`           // e.g., "podcast-episodes"
+	AccessKey string `json:"access_key"`
+	SecretKey string `json:"secret_key"`
+	Region    string `json:"region,omitempty"`
+	UseSSL    bool   `json:"use_ssl"`
 }
 
 // NotionMCPConfig contains Notion MCP server configuration
@@ -681,6 +694,9 @@ func (c *Config) setDefaults() {
 	if c.Podcast.Calendar.Command == "" {
 		// Use our built-in calendar MCP server
 		c.Podcast.Calendar.Command = "./pedrocli-calendar-mcp"
+	}
+	if c.Podcast.S3.Bucket == "" {
+		c.Podcast.S3.Bucket = "podcast-episodes"
 	}
 
 	// Web scraping defaults

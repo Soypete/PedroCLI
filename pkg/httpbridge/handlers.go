@@ -3,6 +3,7 @@ package httpbridge
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/soypete/pedrocli/pkg/cli"
 	"github.com/soypete/pedrocli/pkg/jobs"
+	"github.com/soypete/pedrocli/pkg/voice"
 )
 
 // CreateJobRequest represents the job creation request
@@ -442,22 +444,100 @@ type VoiceTranscribeResponse struct {
 	Error   string `json:"error,omitempty"`
 }
 
-// handleVoiceTranscribe handles voice transcription requests
+// handleVoiceTranscribe handles voice transcription requests via whisper.cpp proxy
 func (s *Server) handleVoiceTranscribe(w http.ResponseWriter, r *http.Request) {
-	// Voice transcription implementation would go here
-	// For now, return not implemented
-	respondJSON(w, http.StatusNotImplemented, VoiceTranscribeResponse{
-		Success: false,
-		Error:   "Voice transcription not yet implemented",
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.appCtx.VoiceClient == nil {
+		respondJSON(w, http.StatusServiceUnavailable, VoiceTranscribeResponse{
+			Success: false,
+			Error:   "Voice transcription not configured (check voice.enabled and voice.whisper_url in config)",
+		})
+		return
+	}
+
+	// Parse multipart form (max 50MB for audio)
+	if err := r.ParseMultipartForm(50 << 20); err != nil {
+		respondJSON(w, http.StatusBadRequest, VoiceTranscribeResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Failed to parse form: %v", err),
+		})
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, VoiceTranscribeResponse{
+			Success: false,
+			Error:   "Audio file is required",
+		})
+		return
+	}
+	defer file.Close()
+
+	audioData, err := io.ReadAll(file)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, VoiceTranscribeResponse{
+			Success: false,
+			Error:   "Failed to read audio data",
+		})
+		return
+	}
+
+	// Determine format from filename
+	format := "webm"
+	if header != nil && header.Filename != "" {
+		parts := strings.Split(header.Filename, ".")
+		if len(parts) > 1 {
+			format = parts[len(parts)-1]
+		}
+	}
+
+	resp, err := s.appCtx.VoiceClient.Transcribe(r.Context(), voice.TranscribeRequest{
+		Audio:    audioData,
+		Format:   format,
+		Language: s.config.Voice.Language,
+	})
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, VoiceTranscribeResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Transcription failed: %v", err),
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, VoiceTranscribeResponse{
+		Success: resp.Success,
+		Text:    resp.Text,
+		Error:   resp.Error,
 	})
 }
 
 // handleVoiceStatus checks if voice transcription service is available
 func (s *Server) handleVoiceStatus(w http.ResponseWriter, r *http.Request) {
-	// Voice status check implementation would go here
+	if s.appCtx.VoiceClient == nil {
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"available": false,
+			"reason":    "Voice transcription not configured",
+		})
+		return
+	}
+
+	status, err := s.appCtx.VoiceClient.Status(r.Context())
+	if err != nil {
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"available": false,
+			"reason":    fmt.Sprintf("Whisper server unreachable: %v", err),
+		})
+		return
+	}
+
 	respondJSON(w, http.StatusOK, map[string]interface{}{
-		"available": false,
-		"reason":    "Voice transcription not yet configured",
+		"available": status.Running,
+		"reason":    status.Error,
 	})
 }
 
