@@ -65,4 +65,85 @@ var (
 
 	// SpinnerFrames for animated progress indicators.
 	SpinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
+	// PedroFrames is a dancing Pedro ASCII animation rendered beside
+	// the progress tree while the agent is working. Each frame is
+	// exactly 5 lines tall and 11 characters wide so the layout
+	// stays stable across frames (no jitter).
+	PedroFrames = []string{
+		// Frame 0: neutral
+		"   ┌───┐  \n" +
+			"   │ ◕◕│  \n" +
+			"  ─┤   ├─ \n" +
+			"   │ ▽ │  \n" +
+			"   └┬─┬┘  ",
+		// Frame 1: arms up, lean right
+		"   ┌───┐  \n" +
+			"  \\│ ◕◕│  \n" +
+			"   ┤   ├\\ \n" +
+			"   │ ▽ │  \n" +
+			"   └┬─┬┘  ",
+		// Frame 2: arms down, lean left
+		"   ┌───┐  \n" +
+			"   │◕◕ │  \n" +
+			"  /┤   ├─ \n" +
+			"   │ ▽ │  \n" +
+			"   └┬─┬┘  ",
+		// Frame 3: hands up!
+		"  \\┌───┐/ \n" +
+			"   │ ◕◕│  \n" +
+			"   ┤   ├  \n" +
+			"   │ ▽ │  \n" +
+			"   └┬─┬┘  ",
+		// Frame 4: shimmy right
+		"   ┌───┐  \n" +
+			"   │◕ ◕│  \n" +
+			"   ┤   ├─ \n" +
+			"   │ ◡ │  \n" +
+			"    └┬─┬┘ ",
+		// Frame 5: shimmy left
+		"   ┌───┐  \n" +
+			"   │◕ ◕│  \n" +
+			"  ─┤   ├  \n" +
+			"   │ ◡ │  \n" +
+			"  └┬─┬┘   ",
+		// Frame 6: big wave
+		"   ┌───┐/ \n" +
+			"   │ ◕◕│  \n" +
+			"  ─┤   ├  \n" +
+			"   │ ▽ │  \n" +
+			"   └┬─┬┘  ",
+		// Frame 7: dip
+		"           \n" +
+			"   ┌───┐  \n" +
+			"  ─┤◕ ◕├─ \n" +
+			"   │ ◡ │  \n" +
+			"   └┬─┬┘  ",
+	}
+
+	// PedroIdleFrames is a slower idle animation when nothing is running.
+	PedroIdleFrames = []string{
+		"   ┌───┐  \n" +
+			"   │ ◕◕│  \n" +
+			"   ┤   ├  \n" +
+			"   │ ─ │  \n" +
+			"   └┬─┬┘  ",
+		"   ┌───┐  \n" +
+			"   │◕◕ │  \n" +
+			"   ┤   ├  \n" +
+			"   │ ─ │  \n" +
+			"   └┬─┬┘  ",
+	}
+
+	// PedroDoneFrame is shown when the agent finishes successfully.
+	PedroDoneFrame = "" +
+		"  \\┌───┐/ \n" +
+		"   │ ◕◕│  \n" +
+		"   ┤   ├  \n" +
+		"   │ ◡ │  \n" +
+		"   └┬─┬┘  "
+
+	// PedroStyle colors the Pedro animation.
+	PedroStyle = lipgloss.NewStyle().
+			Foreground(Theme.Accent)
 )

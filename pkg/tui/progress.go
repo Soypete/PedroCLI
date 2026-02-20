@@ -106,6 +106,20 @@ func (p *ProgressPanel) View() string {
 		return ""
 	}
 
+	// Build the phase tree (right side)
+	tree := p.renderTree()
+
+	// Build the Pedro animation (left side)
+	pedro := p.renderPedro()
+
+	// Join Pedro and tree side-by-side using Lip Gloss
+	combined := lipgloss.JoinHorizontal(lipgloss.Top, pedro, "  ", tree)
+
+	return combined + "\n"
+}
+
+// renderTree builds the text progress tree.
+func (p *ProgressPanel) renderTree() string {
 	var b strings.Builder
 
 	// Header line: agent name + elapsed time
@@ -117,9 +131,9 @@ func (p *ProgressPanel) View() string {
 	// Prompt summary (truncated)
 	if p.prompt != "" {
 		summary := p.prompt
-		maxLen := p.width - 6
+		maxLen := p.width - 20 // account for Pedro width
 		if maxLen < 20 {
-			maxLen = 60
+			maxLen = 40
 		}
 		if len(summary) > maxLen {
 			summary = summary[:maxLen-3] + "..."
@@ -185,6 +199,39 @@ func (p *ProgressPanel) View() string {
 	}
 
 	return b.String()
+}
+
+// renderPedro returns the current Pedro animation frame.
+func (p *ProgressPanel) renderPedro() string {
+	var frame string
+
+	if p.IsActive() {
+		// Dancing Pedro while agent is working
+		idx := (p.frame / 2) % len(PedroFrames) // slower: advance every 2 ticks
+		frame = PedroFrames[idx]
+	} else if p.allDone() {
+		// Celebration pose when finished
+		frame = PedroDoneFrame
+	} else {
+		// Idle blink
+		idx := (p.frame / 4) % len(PedroIdleFrames) // very slow blink
+		frame = PedroIdleFrames[idx]
+	}
+
+	return PedroStyle.Render(frame)
+}
+
+// allDone returns true if all phases are done (none pending or in_progress).
+func (p *ProgressPanel) allDone() bool {
+	if len(p.phases) == 0 {
+		return false
+	}
+	for _, ph := range p.phases {
+		if ph.Status == "pending" || ph.Status == "in_progress" {
+			return false
+		}
+	}
+	return true
 }
 
 // statusIcon returns the icon for a given status, with animation for in_progress.
