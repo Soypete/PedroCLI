@@ -10,9 +10,10 @@ import (
 	"github.com/soypete/pedrocli/pkg/cli"
 	"github.com/soypete/pedrocli/pkg/config"
 	"github.com/soypete/pedrocli/pkg/repl"
+	"github.com/soypete/pedrocli/pkg/tui"
 )
 
-func runCodeMode(debugMode bool) error {
+func runCodeMode(debugMode, tuiMode bool) error {
 	// Load config
 	cfg, err := loadConfig()
 	if err != nil {
@@ -35,7 +36,17 @@ func runCodeMode(debugMode bool) error {
 	}
 	defer bridge.Close()
 
-	// Create session
+	// Use new Bubble Tea TUI when --tui flag is set
+	if tuiMode {
+		return tui.Run(tui.RunnerConfig{
+			Config:    cfg,
+			Bridge:    bridge,
+			Mode:      "code",
+			DebugMode: debugMode,
+		})
+	}
+
+	// Fall back to classic readline REPL
 	sessionID := fmt.Sprintf("code-%s-%s", uuid.New().String()[:8], time.Now().Format("20060102-150405"))
 	session, err := repl.NewSession(sessionID, cfg, bridge, "code", debugMode)
 	if err != nil {

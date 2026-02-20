@@ -8,12 +8,15 @@ import (
 func main() {
 	// Parse flags
 	debugMode := false
+	tuiMode := false
 	mode := "code" // default mode
 
 	for i, arg := range os.Args[1:] {
 		switch arg {
 		case "-d", "--debug":
 			debugMode = true
+		case "--tui":
+			tuiMode = true
 		case "-h", "--help", "help":
 			printHelp()
 			return
@@ -32,7 +35,7 @@ func main() {
 	var err error
 	switch mode {
 	case "code":
-		err = runCodeMode(debugMode)
+		err = runCodeMode(debugMode, tuiMode)
 	case "blog":
 		err = runBlogMode(debugMode)
 	case "podcast":
@@ -67,6 +70,7 @@ Modes:
 
 Options:
   -d, --debug    Enable debug mode (verbose logging + keep logs)
+  --tui          Use game-engine TUI (Bubble Tea) instead of readline REPL
   -h, --help     Show this help message
   -v, --version  Show version information
 
