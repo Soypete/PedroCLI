@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 
+	"github.com/soypete/pedrocli/pkg/codegen"
 	"github.com/soypete/pedrocli/pkg/fileio"
 	"github.com/soypete/pedrocli/pkg/logits"
 )
@@ -101,7 +103,8 @@ func (f *FileTool) read(args map[string]interface{}) (*Result, error) {
 	}, nil
 }
 
-// write writes content to a file
+// write writes content to a file. For Go source files (.go), the content is
+// parsed through go/parser and formatted with gofmt for structural validation.
 func (f *FileTool) write(args map[string]interface{}) (*Result, error) {
 	path, ok := args["path"].(string)
 	if !ok {
@@ -113,7 +116,12 @@ func (f *FileTool) write(args map[string]interface{}) (*Result, error) {
 		return &Result{Success: false, Error: "missing 'content' parameter"}, nil
 	}
 
-	// Use fileio to write file (handles directory creation and atomic writes)
+	// For Go source files, run through AST validation and gofmt pipeline
+	if strings.HasSuffix(path, ".go") {
+		return f.writeGoFile(path, content)
+	}
+
+	// Non-Go files: write directly as before
 	if err := f.fs.WriteFileString(path, content); err != nil {
 		return &Result{Success: false, Error: err.Error()}, nil
 	}
@@ -122,6 +130,39 @@ func (f *FileTool) write(args map[string]interface{}) (*Result, error) {
 	return &Result{
 		Success:       true,
 		Output:        fmt.Sprintf("Wrote %d bytes to %s", len(content), path),
+		ModifiedFiles: []string{absPath},
+	}, nil
+}
+
+// writeGoFile uses the AST pipeline for Go source files.
+// It parses the content, formats it with gofmt, and writes the result.
+// If parsing fails, it still writes the raw content but reports the error.
+func (f *FileTool) writeGoFile(path string, content string) (*Result, error) {
+	formatted, err := codegen.FormatGoSource([]byte(content))
+
+	absPath, _ := filepath.Abs(path)
+
+	if err != nil {
+		// Agent's code has syntax errors. Still write it but report the issue
+		// so the agent can iterate and fix.
+		if writeErr := f.fs.WriteFile(path, []byte(content)); writeErr != nil {
+			return &Result{Success: false, Error: writeErr.Error()}, nil
+		}
+		return &Result{
+			Success:       true,
+			Output:        fmt.Sprintf("Wrote %d bytes to %s (has parse errors: %v)", len(content), path, err),
+			ModifiedFiles: []string{absPath},
+		}, nil
+	}
+
+	// Write the clean, formatted source
+	if err := f.fs.WriteFile(path, formatted); err != nil {
+		return &Result{Success: false, Error: err.Error()}, nil
+	}
+
+	return &Result{
+		Success:       true,
+		Output:        fmt.Sprintf("Wrote %d bytes to %s (AST-validated, gofmt'd)", len(formatted), path),
 		ModifiedFiles: []string{absPath},
 	}, nil
 }

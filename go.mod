@@ -8,6 +8,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/lib/pq v1.10.9
+	github.com/palantir/goastwriter v0.38.0
 	github.com/pressly/goose/v3 v3.26.0
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.11.1

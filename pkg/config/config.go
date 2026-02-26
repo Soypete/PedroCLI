@@ -41,6 +41,8 @@ type Config struct {
 	Vision VisionConfig `json:"vision"`
 	// Cal.com scheduling configuration
 	CalCom CalComConfig `json:"calcom,omitempty"`
+	// Code generation configuration (AST-based Go code writing)
+	Codegen CodegenConfig `json:"codegen,omitempty"`
 }
 
 // ModelConfig contains model configuration
@@ -289,6 +291,15 @@ type Cohost struct {
 	Bio         string   `json:"bio,omitempty"`
 	Role        string   `json:"role,omitempty"`         // e.g., "host", "cohost", "producer"
 	SocialLinks []string `json:"social_links,omitempty"` // Social media links for this cohost
+}
+
+// CodegenConfig contains code generation settings for AST-based Go code writing.
+type CodegenConfig struct {
+	Enabled          bool `json:"enabled"`            // Enable AST-based code generation for Go files
+	ASTValidation    bool `json:"ast_validation"`     // Parse all Go writes through go/parser
+	LSPValidation    bool `json:"lsp_validation"`     // Post-write gopls diagnostics (advisory)
+	AutoGofmt        bool `json:"auto_gofmt"`         // Always gofmt Go output
+	FallbackRawWrite bool `json:"fallback_raw_write"` // Write raw content if AST fails
 }
 
 // CalComConfig contains Cal.com scheduling configuration
@@ -765,6 +776,20 @@ func (c *Config) setDefaults() {
 	}
 	if c.Vision.PromptTemplates == nil {
 		c.Vision.PromptTemplates = make(map[string]PromptTemplate)
+	}
+
+	// Codegen defaults - enabled by default for Go files
+	if !c.Codegen.Enabled {
+		c.Codegen.Enabled = true
+	}
+	if !c.Codegen.ASTValidation {
+		c.Codegen.ASTValidation = true
+	}
+	if !c.Codegen.AutoGofmt {
+		c.Codegen.AutoGofmt = true
+	}
+	if !c.Codegen.FallbackRawWrite {
+		c.Codegen.FallbackRawWrite = true
 	}
 }
 
