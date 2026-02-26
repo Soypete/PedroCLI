@@ -77,6 +77,7 @@ func (s *Server) setupRoutes() {
 	s.mux.HandleFunc("/api/blog", s.handleBlog)
 	s.mux.HandleFunc("/api/blog/orchestrate", s.handleBlogOrchestrate)
 	s.mux.HandleFunc("/api/podcast", s.handlePodcast)
+	s.mux.HandleFunc("/api/ralph", s.handleRalph)
 	s.mux.HandleFunc("/api/health", s.handleHealth)
 
 	// Blog review API routes

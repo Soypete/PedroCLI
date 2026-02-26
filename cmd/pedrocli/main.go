@@ -15,6 +15,7 @@ import (
 	depcheck "github.com/soypete/pedrocli/pkg/init"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/storage/blog"
+	"github.com/soypete/pedrocli/pkg/tools"
 )
 
 const version = "0.2.0-dev"
@@ -134,6 +135,8 @@ func main() {
 		triageCommand(cfg, subcommandArgs)
 	case "blog":
 		blogCommand(cfg, subcommandArgs)
+	case "ralph":
+		ralphCommand(cfg, subcommandArgs)
 	case "run":
 		runSlashCommand(cfg, subcommandArgs)
 	case "commands":
@@ -163,6 +166,7 @@ Commands:
   review     Review a pull request or branch
   triage     Diagnose and triage an issue (no fix)
   blog       Create a blog post (writes to Notion)
+  ralph      Run Ralph Wiggum iterative loop from a PRD file
   run        Execute a slash command (e.g., /blog-outline)
   commands   List available slash commands
   status     Get status of a job
@@ -182,6 +186,7 @@ Examples:
   pedrocli triage -description "Memory leak in handler"
   pedrocli blog -title "My Post" -content "Raw thoughts here..."
   pedrocli blog -prompt "Write a 2025 recap with calendar events..." -publish
+  pedrocli ralph -prd stories.json -iterations 10
   pedrocli run /blog-outline "Building CLI tools in Go"
   pedrocli run /test
   pedrocli commands
@@ -517,6 +522,91 @@ func blogCommand(cfg *config.Config, args []string) {
 
 	// Run 7-phase BlogContentAgent workflow
 	runBlogContentAgent(cfg, transcription, postTitle, *publish)
+}
+
+func ralphCommand(cfg *config.Config, args []string) {
+	fs := flag.NewFlagSet("ralph", flag.ExitOnError)
+	prdPath := fs.String("prd", "", "Path to PRD JSON file (required)")
+	iterations := fs.Int("iterations", 10, "Maximum iterations (default: 10)")
+	fs.Parse(args)
+
+	if *prdPath == "" {
+		fmt.Fprintln(os.Stderr, "Error: -prd is required")
+		fmt.Fprintln(os.Stderr, "\nUsage: pedrocli ralph -prd <prd.json> [-iterations 10]")
+		fmt.Fprintln(os.Stderr, "\nThe PRD file should contain user stories in JSON format.")
+		fmt.Fprintln(os.Stderr, "Modes: code, blog, podcast")
+		fmt.Fprintln(os.Stderr, "\nExamples:")
+		fmt.Fprintln(os.Stderr, "  pedrocli ralph -prd stories.json")
+		fmt.Fprintln(os.Stderr, "  pedrocli ralph -prd stories.json -iterations 15")
+		os.Exit(1)
+	}
+
+	// Load PRD
+	prd, err := agents.LoadPRD(*prdPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to load PRD: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Setup LLM backend
+	var backend llm.Backend
+	switch cfg.Model.Type {
+	case "ollama":
+		backend = llm.NewOllamaClient(cfg)
+	case "llamacpp":
+		backend = llm.NewServerClient(llm.ServerClientConfig{
+			BaseURL:     cfg.Model.ServerURL,
+			ModelName:   cfg.Model.ModelName,
+			ContextSize: cfg.Model.ContextSize,
+			EnableTools: true,
+		})
+	default:
+		fmt.Fprintf(os.Stderr, "Error: Unknown model type: %s\n", cfg.Model.Type)
+		os.Exit(1)
+	}
+
+	// Get working directory
+	workDir := cfg.Project.Workdir
+	if workDir == "" {
+		workDir, _ = os.Getwd()
+	}
+
+	// Create agent
+	agent := agents.NewRalphWiggumAgent(agents.RalphWiggumConfig{
+		Config:        cfg,
+		Backend:       backend,
+		JobManager:    nil, // CLI runs synchronously, no job manager needed
+		PRD:           prd,
+		MaxIterations: *iterations,
+	})
+
+	// Register tools based on mode using CodeToolsSetup for code mode
+	switch prd.Mode {
+	case agents.PRDModeCode:
+		codeTools := tools.NewCodeToolsSetup(cfg, workDir)
+		codeTools.RegisterWithAgent(agent)
+	case agents.PRDModeBlog, agents.PRDModePodcast:
+		// For blog/podcast: register file + search tools + research tools
+		codeTools := tools.NewCodeToolsSetup(cfg, workDir)
+		codeTools.RegisterWithAgent(agent)
+	}
+
+	// Execute synchronously
+	if err := agent.ExecuteSync(context.Background()); err != nil {
+		fmt.Fprintf(os.Stderr, "\n%v\n", err)
+		// Save PRD state so user can resume
+		if saveErr := prd.SavePRD(*prdPath); saveErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to save PRD state: %v\n", saveErr)
+		} else {
+			fmt.Fprintf(os.Stderr, "PRD state saved to %s — run again to continue.\n", *prdPath)
+		}
+		os.Exit(1)
+	}
+
+	// Save final PRD state
+	if saveErr := prd.SavePRD(*prdPath); saveErr != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to save PRD state: %v\n", saveErr)
+	}
 }
 
 // runBlogContentAgent executes the 7-phase blog creation workflow

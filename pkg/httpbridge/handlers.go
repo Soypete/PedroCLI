@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/soypete/pedrocli/pkg/agents"
 	"github.com/soypete/pedrocli/pkg/cli"
 	"github.com/soypete/pedrocli/pkg/jobs"
 )
@@ -716,6 +717,72 @@ func (s *Server) handleBlogPostRevise(w http.ResponseWriter, r *http.Request) {
 		"success": true,
 		"job_id":  jobID,
 		"post_id": postID,
+	})
+}
+
+// Ralph Wiggum Handler
+
+// RalphRequest represents the request to start a Ralph Wiggum iteration loop
+type RalphRequest struct {
+	PRD           json.RawMessage `json:"prd"`            // PRD JSON inline
+	MaxIterations int             `json:"max_iterations"`  // Max iterations (default: 10)
+}
+
+// handleRalph handles POST /api/ralph (start Ralph Wiggum iteration loop)
+func (s *Server) handleRalph(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req RalphRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"error": fmt.Sprintf("Invalid request: %v", err),
+		})
+		return
+	}
+
+	if len(req.PRD) == 0 {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"error": "PRD is required",
+		})
+		return
+	}
+
+	// Parse PRD from request
+	prd, err := agents.ParsePRD(req.PRD)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"error": fmt.Sprintf("Invalid PRD: %v", err),
+		})
+		return
+	}
+
+	maxIter := req.MaxIterations
+	if maxIter <= 0 {
+		maxIter = 10
+	}
+
+	// Create and start agent
+	agent := s.appCtx.NewRalphWiggumAgent(prd, maxIter)
+
+	job, err := agent.Execute(s.ctx, map[string]interface{}{
+		"prd":            req.PRD,
+		"max_iterations": maxIter,
+	})
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"error": fmt.Sprintf("Failed to start Ralph Wiggum: %v", err),
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"job_id":  job.ID,
+		"mode":    string(prd.Mode),
+		"stories": len(prd.UserStories),
 	})
 }
 

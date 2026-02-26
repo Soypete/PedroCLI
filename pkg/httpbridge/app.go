@@ -250,3 +250,35 @@ func (ctx *AppContext) NewDynamicBlogAgent() *agents.DynamicBlogAgent {
 	registerSchedulingTools(agent, ctx)
 	return agent
 }
+
+// NewRalphWiggumAgent creates a fully configured Ralph Wiggum iterative agent.
+// Tools are registered based on the PRD mode (code, blog, podcast).
+func (ctx *AppContext) NewRalphWiggumAgent(prd *agents.PRD, maxIterations int) *agents.RalphWiggumAgent {
+	agent := agents.NewRalphWiggumAgent(agents.RalphWiggumConfig{
+		Config:        ctx.Config,
+		Backend:       ctx.Backend,
+		JobManager:    ctx.JobManager,
+		PRD:           prd,
+		MaxIterations: maxIterations,
+	})
+
+	// Register tools based on mode
+	switch prd.Mode {
+	case agents.PRDModeCode:
+		registerCodeTools(agent, ctx)
+	case agents.PRDModeBlog:
+		// Blog mode: file tools + research tools
+		registerCodeTools(agent, ctx)
+		agent.RegisterTool(ctx.RSSFeedTool)
+		agent.RegisterTool(ctx.StaticLinksTool)
+	case agents.PRDModePodcast:
+		// Podcast mode: file tools + research tools
+		registerCodeTools(agent, ctx)
+		agent.RegisterTool(ctx.RSSFeedTool)
+		agent.RegisterTool(ctx.StaticLinksTool)
+		registerSchedulingTools(agent, ctx)
+	}
+
+	agent.SetCompactionStatsStore(ctx.CompactionStatsStore)
+	return agent
+}
