@@ -1,0 +1,31 @@
+{
+  "projectName": "my-project",
+  "branchName": "ralph/feature-batch",
+  "mode": "code",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Add health check endpoint",
+      "description": "Add a /healthz endpoint that returns 200 OK with a JSON body containing service name and uptime.",
+      "acceptanceCriteria": [
+        "GET /healthz returns 200",
+        "Response body includes service name and uptime in seconds",
+        "Endpoint has a test"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "US-002",
+      "title": "Add structured logging",
+      "description": "Replace fmt.Println calls with structured slog logging. Use JSON format in production, text format in development.",
+      "acceptanceCriteria": [
+        "All log calls use slog",
+        "Log level is configurable via LOG_LEVEL env var",
+        "JSON output in production, text in dev"
+      ],
+      "priority": 2,
+      "passes": false
+    }
+  ]
+}

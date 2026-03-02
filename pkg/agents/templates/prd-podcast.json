@@ -1,0 +1,72 @@
+{
+  "projectName": "podcast-episode-title",
+  "mode": "podcast",
+  "outputFile": "episodes/ep-XXX-script.md",
+  "userStories": [
+    {
+      "id": "POD-001",
+      "title": "Define episode metadata and structure",
+      "description": "Set the episode title, number, target duration, guest info (if any), and outline the segment structure with time allocations.",
+      "acceptanceCriteria": [
+        "Episode title is engaging and descriptive",
+        "Total segment durations add up to target episode length",
+        "Each segment has a clear topic and purpose",
+        "Guest bio included if applicable"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "POD-002",
+      "title": "Write the cold open and hook",
+      "description": "Write the first 60 seconds of the episode. This should grab attention immediately — a surprising fact, a provocative question, or a relatable story.",
+      "acceptanceCriteria": [
+        "Under 60 seconds when read at conversational pace (~150 words)",
+        "Creates curiosity or stakes for the listener",
+        "Feels natural when spoken aloud, not written",
+        "Transitions smoothly into the intro"
+      ],
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "POD-003",
+      "title": "Write main discussion segments",
+      "description": "Write the core segments with talking points, discussion questions for co-hosts, and natural transitions. Include host cues and pivot points.",
+      "acceptanceCriteria": [
+        "Each segment has 3-5 discussion-ready talking points",
+        "Questions are open-ended (not yes/no)",
+        "Transitions between segments feel conversational",
+        "Includes at least one concrete example or story per segment"
+      ],
+      "priority": 3,
+      "passes": false
+    },
+    {
+      "id": "POD-004",
+      "title": "Write outro, CTA, and show notes",
+      "description": "Write the closing segment with key takeaways, calls to action, next episode tease, and compile the full show notes with timestamps and links.",
+      "acceptanceCriteria": [
+        "Outro summarizes episode in 2-3 sentences",
+        "At least one clear call to action",
+        "Show notes include timestamps for each segment",
+        "All mentioned resources have links"
+      ],
+      "priority": 4,
+      "passes": false
+    },
+    {
+      "id": "POD-005",
+      "title": "Revision pass: speakability and pacing",
+      "description": "Read the entire script with a focus on how it sounds. Fix anything that's too formal, too dense, or doesn't flow in conversation. Adjust pacing so no segment drags.",
+      "acceptanceCriteria": [
+        "No jargon without explanation",
+        "Talking points are concise enough to riff on",
+        "Segment pacing varies (not all the same length/energy)",
+        "Host handoffs are clear"
+      ],
+      "priority": 5,
+      "passes": false
+    }
+  ]
+}

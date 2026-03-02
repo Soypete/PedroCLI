@@ -1,0 +1,72 @@
+{
+  "projectName": "blog-post-title",
+  "mode": "blog",
+  "outputFile": "content/blog/my-post.md",
+  "userStories": [
+    {
+      "id": "BLOG-001",
+      "title": "Write the hook and introduction",
+      "description": "Write the opening section that hooks the reader and sets up the problem being solved. Should be 2-3 paragraphs max.",
+      "acceptanceCriteria": [
+        "Opens with a concrete scenario or question",
+        "States the problem clearly within first 2 paragraphs",
+        "Hints at the solution without giving it all away",
+        "Under 200 words"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "BLOG-002",
+      "title": "Write the core technical explanation",
+      "description": "The meat of the post. Explain the approach, include code examples, walk through the reasoning.",
+      "acceptanceCriteria": [
+        "Includes at least one code snippet",
+        "Explains WHY not just WHAT",
+        "Each paragraph advances the narrative",
+        "Uses subheadings to break up sections"
+      ],
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "BLOG-003",
+      "title": "Write conclusion and takeaways",
+      "description": "Wrap up with key learnings, what the reader should try next, and any caveats.",
+      "acceptanceCriteria": [
+        "Summarizes the key insight in 1-2 sentences",
+        "Gives the reader a clear next action",
+        "Acknowledges limitations or trade-offs",
+        "Under 150 words"
+      ],
+      "priority": 3,
+      "passes": false
+    },
+    {
+      "id": "BLOG-004",
+      "title": "Revision pass: voice and flow",
+      "description": "Read the full post end-to-end. Fix awkward transitions, repetitive words, passive voice, and filler phrases. Ensure it sounds like a human wrote it.",
+      "acceptanceCriteria": [
+        "No paragraph starts with 'In this section' or similar meta-narration",
+        "No more than 2 sentences in a row start with 'The' or 'This'",
+        "All transitions between sections feel natural",
+        "Read time is under 8 minutes"
+      ],
+      "priority": 4,
+      "passes": false
+    },
+    {
+      "id": "BLOG-005",
+      "title": "Add metadata and frontmatter",
+      "description": "Add the frontmatter block with title, description, tags, date, and any other fields required by the blog platform.",
+      "acceptanceCriteria": [
+        "Title is compelling and under 65 characters",
+        "Meta description is under 160 characters",
+        "At least 3 relevant tags",
+        "Date is set correctly"
+      ],
+      "priority": 5,
+      "passes": false
+    }
+  ]
+}

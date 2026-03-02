@@ -166,7 +166,7 @@ Commands:
   review     Review a pull request or branch
   triage     Diagnose and triage an issue (no fix)
   blog       Create a blog post (writes to Notion)
-  ralph      Run Ralph Wiggum iterative loop from a PRD file
+  ralph      Run Ralph Wiggum iterative loop (from PRD or prompt)
   run        Execute a slash command (e.g., /blog-outline)
   commands   List available slash commands
   status     Get status of a job
@@ -187,6 +187,7 @@ Examples:
   pedrocli blog -title "My Post" -content "Raw thoughts here..."
   pedrocli blog -prompt "Write a 2025 recap with calendar events..." -publish
   pedrocli ralph -prd stories.json -iterations 10
+  pedrocli ralph -prompt "Add rate limiting and logging" -mode code
   pedrocli run /blog-outline "Building CLI tools in Go"
   pedrocli run /test
   pedrocli commands
@@ -526,43 +527,79 @@ func blogCommand(cfg *config.Config, args []string) {
 
 func ralphCommand(cfg *config.Config, args []string) {
 	fs := flag.NewFlagSet("ralph", flag.ExitOnError)
-	prdPath := fs.String("prd", "", "Path to PRD JSON file (required)")
+	prdPath := fs.String("prd", "", "Path to PRD JSON file")
+	prompt := fs.String("prompt", "", "Generate PRD from a description (requires -mode)")
+	mode := fs.String("mode", "code", "PRD mode: code, blog, or podcast (used with -prompt)")
+	output := fs.String("output", "", "Save generated PRD to file (used with -prompt, default: prd.json)")
 	iterations := fs.Int("iterations", 10, "Maximum iterations (default: 10)")
 	fs.Parse(args)
 
-	if *prdPath == "" {
-		fmt.Fprintln(os.Stderr, "Error: -prd is required")
-		fmt.Fprintln(os.Stderr, "\nUsage: pedrocli ralph -prd <prd.json> [-iterations 10]")
-		fmt.Fprintln(os.Stderr, "\nThe PRD file should contain user stories in JSON format.")
-		fmt.Fprintln(os.Stderr, "Modes: code, blog, podcast")
-		fmt.Fprintln(os.Stderr, "\nExamples:")
+	if *prdPath == "" && *prompt == "" {
+		fmt.Fprintln(os.Stderr, "Error: either -prd or -prompt is required")
+		fmt.Fprintln(os.Stderr, "\nUsage:")
+		fmt.Fprintln(os.Stderr, "  pedrocli ralph -prd <prd.json> [-iterations 10]")
+		fmt.Fprintln(os.Stderr, "  pedrocli ralph -prompt \"description\" -mode code [-output prd.json] [-iterations 10]")
+		fmt.Fprintln(os.Stderr, "\nFrom a PRD file:")
 		fmt.Fprintln(os.Stderr, "  pedrocli ralph -prd stories.json")
 		fmt.Fprintln(os.Stderr, "  pedrocli ralph -prd stories.json -iterations 15")
-		os.Exit(1)
-	}
-
-	// Load PRD
-	prd, err := agents.LoadPRD(*prdPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to load PRD: %v\n", err)
+		fmt.Fprintln(os.Stderr, "\nFrom a prompt (auto-generates PRD):")
+		fmt.Fprintln(os.Stderr, "  pedrocli ralph -prompt \"Add rate limiting and structured logging\" -mode code")
+		fmt.Fprintln(os.Stderr, "  pedrocli ralph -prompt \"Write about building CLI tools in Go\" -mode blog")
+		fmt.Fprintln(os.Stderr, "  pedrocli ralph -prompt \"Episode on local LLMs\" -mode podcast")
+		fmt.Fprintln(os.Stderr, "\nTemplates available in pkg/agents/templates/:")
+		fmt.Fprintln(os.Stderr, "  prd-code.json, prd-blog.json, prd-podcast.json")
 		os.Exit(1)
 	}
 
 	// Setup LLM backend
-	var backend llm.Backend
-	switch cfg.Model.Type {
-	case "ollama":
-		backend = llm.NewOllamaClient(cfg)
-	case "llamacpp":
-		backend = llm.NewServerClient(llm.ServerClientConfig{
-			BaseURL:     cfg.Model.ServerURL,
-			ModelName:   cfg.Model.ModelName,
-			ContextSize: cfg.Model.ContextSize,
-			EnableTools: true,
-		})
-	default:
-		fmt.Fprintf(os.Stderr, "Error: Unknown model type: %s\n", cfg.Model.Type)
-		os.Exit(1)
+	backend := createBackend(cfg)
+
+	var prd *agents.PRD
+	var savePath string
+
+	if *prompt != "" {
+		// Generate PRD from prompt
+		prdMode := agents.PRDMode(*mode)
+		if prdMode != agents.PRDModeCode && prdMode != agents.PRDModeBlog && prdMode != agents.PRDModePodcast {
+			fmt.Fprintf(os.Stderr, "Error: -mode must be one of: code, blog, podcast (got %q)\n", *mode)
+			os.Exit(1)
+		}
+
+		fmt.Fprintf(os.Stderr, "Generating PRD from prompt (%s mode)...\n", *mode)
+
+		var err error
+		prd, err = agents.GeneratePRD(context.Background(), backend, *prompt, prdMode)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: Failed to generate PRD: %v\n", err)
+			os.Exit(1)
+		}
+
+		// Determine save path
+		savePath = *output
+		if savePath == "" {
+			savePath = "prd.json"
+		}
+
+		// Save the generated PRD so user can inspect/edit it
+		if err := prd.SavePRD(savePath); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to save generated PRD: %v\n", err)
+		} else {
+			fmt.Fprintf(os.Stderr, "Generated PRD saved to %s\n", savePath)
+		}
+
+		// Show what was generated
+		fmt.Fprintf(os.Stderr, "\nGenerated %d stories for %q:\n", len(prd.UserStories), prd.ProjectName)
+		fmt.Fprint(os.Stderr, prd.StatusSummary())
+		fmt.Fprintln(os.Stderr)
+	} else {
+		// Load PRD from file
+		var err error
+		prd, err = agents.LoadPRD(*prdPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: Failed to load PRD: %v\n", err)
+			os.Exit(1)
+		}
+		savePath = *prdPath
 	}
 
 	// Get working directory
@@ -580,33 +617,46 @@ func ralphCommand(cfg *config.Config, args []string) {
 		MaxIterations: *iterations,
 	})
 
-	// Register tools based on mode using CodeToolsSetup for code mode
-	switch prd.Mode {
-	case agents.PRDModeCode:
-		codeTools := tools.NewCodeToolsSetup(cfg, workDir)
-		codeTools.RegisterWithAgent(agent)
-	case agents.PRDModeBlog, agents.PRDModePodcast:
-		// For blog/podcast: register file + search tools + research tools
-		codeTools := tools.NewCodeToolsSetup(cfg, workDir)
-		codeTools.RegisterWithAgent(agent)
-	}
+	// Register tools based on mode
+	codeTools := tools.NewCodeToolsSetup(cfg, workDir)
+	codeTools.RegisterWithAgent(agent)
 
 	// Execute synchronously
 	if err := agent.ExecuteSync(context.Background()); err != nil {
 		fmt.Fprintf(os.Stderr, "\n%v\n", err)
 		// Save PRD state so user can resume
-		if saveErr := prd.SavePRD(*prdPath); saveErr != nil {
+		if saveErr := prd.SavePRD(savePath); saveErr != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to save PRD state: %v\n", saveErr)
 		} else {
-			fmt.Fprintf(os.Stderr, "PRD state saved to %s — run again to continue.\n", *prdPath)
+			fmt.Fprintf(os.Stderr, "PRD state saved to %s — run again to continue.\n", savePath)
 		}
 		os.Exit(1)
 	}
 
 	// Save final PRD state
-	if saveErr := prd.SavePRD(*prdPath); saveErr != nil {
+	if saveErr := prd.SavePRD(savePath); saveErr != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to save PRD state: %v\n", saveErr)
 	}
+}
+
+// createBackend creates an LLM backend from config
+func createBackend(cfg *config.Config) llm.Backend {
+	var backend llm.Backend
+	switch cfg.Model.Type {
+	case "ollama":
+		backend = llm.NewOllamaClient(cfg)
+	case "llamacpp":
+		backend = llm.NewServerClient(llm.ServerClientConfig{
+			BaseURL:     cfg.Model.ServerURL,
+			ModelName:   cfg.Model.ModelName,
+			ContextSize: cfg.Model.ContextSize,
+			EnableTools: true,
+		})
+	default:
+		fmt.Fprintf(os.Stderr, "Error: Unknown model type: %s\n", cfg.Model.Type)
+		os.Exit(1)
+	}
+	return backend
 }
 
 // runBlogContentAgent executes the 7-phase blog creation workflow
