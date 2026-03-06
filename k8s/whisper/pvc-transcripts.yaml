@@ -1,0 +1,22 @@
+# k8s/whisper/pvc-transcripts.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: whisper-transcripts
+  namespace: ai-services
+  labels:
+    app.kubernetes.io/name: whisper-server
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 10Gi
+
+# Notes
+# - ReadWriteOnce is sufficient since only the whisper-server pod writes here.
+# - Upgrade to ReadWriteMany if a sidecar or separate pod needs direct access.
+# - Mounted at /data/transcripts in the whisper-server deployment.
+# - Enable Longhorn scheduled snapshots for backup protection.

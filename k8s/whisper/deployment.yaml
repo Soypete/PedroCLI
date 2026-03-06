@@ -1,0 +1,74 @@
+# k8s/whisper/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: whisper-server
+  namespace: ai-services
+  labels:
+    app.kubernetes.io/name: whisper-server
+    app.kubernetes.io/component: inference
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  # Single replica with RWO PVC — no rolling update
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: whisper-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: whisper-server
+    spec:
+      containers:
+        - name: whisper-server
+          image: your-registry/whisper-server:latest
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: whisper-config
+          resources:
+            requests:
+              cpu: "2"
+              memory: "2Gi"
+            limits:
+              cpu: "4"
+              memory: "4Gi"
+          volumeMounts:
+            - name: models
+              mountPath: /models
+              readOnly: true
+            - name: transcripts
+              mountPath: /data/transcripts
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: whisper-models
+        - name: transcripts
+          persistentVolumeClaim:
+            claimName: whisper-transcripts
+
+# Notes
+# - Recreate strategy is required because whisper-transcripts PVC is RWO.
+# - CPU requests/limits sized for CPU-based inference on a homelab node.
+#   Adjust based on your hardware (e.g., 8 CPU cores for faster transcription).
+# - Models volume is mounted read-only for safety.
+# - Increase memory limits if using larger models (large-v3 needs ~4GB RAM).

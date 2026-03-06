@@ -1,0 +1,40 @@
+{{- if .Values.tailscale.enabled }}
+# Tailscale Ingress resource (alternative to service annotations).
+# The Tailscale Kubernetes operator watches for Ingress resources with
+# the tailscale IngressClass and creates a Tailscale proxy automatically.
+#
+# This resource is provided as an alternative to the service annotation
+# approach in service.yaml. Use ONE of the two methods, not both.
+# To use this instead: set tailscale.enabled=false in values.yaml
+# (disables service annotations) and apply this resource manually.
+#
+# Uncomment below to use the Ingress approach:
+#
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: {{ .Release.Name }}-tailscale
+#   labels:
+#     app.kubernetes.io/name: whisper-web-ui
+#     app.kubernetes.io/instance: {{ .Release.Name }}
+# spec:
+#   ingressClassName: tailscale
+#   defaultBackend:
+#     service:
+#       name: {{ .Release.Name }}-web-ui
+#       port:
+#         number: {{ .Values.service.port }}
+#   tls:
+#     - hosts:
+#         - {{ .Values.tailscale.hostname }}
+{{- end }}
+
+# Notes
+# The primary Tailscale exposure method uses service annotations
+# (tailscale.com/expose: "true") in service.yaml. This is simpler
+# and recommended for single-service exposure.
+#
+# The Ingress approach above is useful when you need path-based
+# routing or want to use the tailscale IngressClass explicitly.
+# Both methods require the Tailscale Kubernetes Operator to be
+# installed in the cluster.

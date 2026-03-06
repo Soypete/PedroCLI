@@ -1,0 +1,12 @@
+apiVersion: v2
+name: whisper-web-ui
+description: Web UI for whisper.cpp transcription, exposed via Tailscale
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - whisper
+  - transcription
+  - tailscale
+maintainers:
+  - name: soypete

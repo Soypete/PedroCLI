@@ -1,0 +1,7 @@
+# k8s/whisper/namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-services
+  labels:
+    app.kubernetes.io/part-of: whisper-pipeline

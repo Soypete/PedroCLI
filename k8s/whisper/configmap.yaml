@@ -1,0 +1,14 @@
+# k8s/whisper/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: whisper-config
+  namespace: ai-services
+  labels:
+    app.kubernetes.io/name: whisper-server
+    app.kubernetes.io/component: config
+data:
+  WHISPER_MODEL_PATH: "/models/ggml-base.en.bin"
+  WHISPER_THREADS: "4"
+  WHISPER_PORT: "8080"
+  WHISPER_OUTPUT_DIR: "/data/transcripts"

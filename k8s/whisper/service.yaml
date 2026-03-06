@@ -1,0 +1,23 @@
+# k8s/whisper/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: whisper-svc
+  namespace: ai-services
+  labels:
+    app.kubernetes.io/name: whisper-server
+    app.kubernetes.io/component: inference
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: whisper-server
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+
+# Notes
+# - ClusterIP only — whisper-server is never exposed outside the cluster.
+# - The web UI proxies to this service via nginx reverse proxy.
+# - Internal DNS: whisper-svc.ai-services.svc.cluster.local:8080

@@ -1,0 +1,22 @@
+# k8s/whisper/pvc-models.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: whisper-models
+  namespace: ai-services
+  labels:
+    app.kubernetes.io/name: whisper-server
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 5Gi
+
+# Notes
+# - ReadWriteMany so a model-seeding Job can write to this PVC
+#   while the whisper-server pod reads from it.
+# - 5Gi accommodates the large-v3 model (~3GB) plus smaller models.
+# - Mounted read-only in the whisper-server deployment at /models.
