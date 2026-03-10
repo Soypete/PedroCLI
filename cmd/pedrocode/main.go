@@ -8,12 +8,22 @@ import (
 func main() {
 	// Parse flags
 	debugMode := false
+	configPath := ""
 	mode := "code" // default mode
 
-	for i, arg := range os.Args[1:] {
-		switch arg {
+	args := os.Args[1:]
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
 		case "-d", "--debug":
 			debugMode = true
+		case "-c", "--config":
+			if i+1 < len(args) {
+				i++
+				configPath = args[i]
+			} else {
+				fmt.Fprintf(os.Stderr, "Error: --config requires a path argument\n")
+				os.Exit(1)
+			}
 		case "-h", "--help", "help":
 			printHelp()
 			return
@@ -21,10 +31,7 @@ func main() {
 			printVersion()
 			return
 		default:
-			// First non-flag argument is the mode
-			if i == 0 || (i > 0 && os.Args[i] != "-d" && os.Args[i] != "--debug") {
-				mode = arg
-			}
+			mode = args[i]
 		}
 	}
 
@@ -32,7 +39,7 @@ func main() {
 	var err error
 	switch mode {
 	case "code":
-		err = runCodeMode(debugMode)
+		err = runCodeMode(debugMode, configPath)
 	case "blog":
 		err = runBlogMode(debugMode)
 	case "podcast":
@@ -66,6 +73,7 @@ Modes:
             Agents: podcast
 
 Options:
+  -c, --config   Path to config file (default: .pedrocli.json)
   -d, --debug    Enable debug mode (verbose logging + keep logs)
   -h, --help     Show this help message
   -v, --version  Show version information
@@ -76,6 +84,7 @@ Examples:
   pedrocode blog             # Start in blog mode
   pedrocode --debug          # Start with debug logging
   pedrocode --debug podcast  # Debug mode + podcast mode
+  pedrocode --config .pedrocli.example.exo.json  # Use Exo cluster config
 
 Debug Mode:
   When enabled with --debug:

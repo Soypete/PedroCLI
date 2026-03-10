@@ -1,0 +1,60 @@
+{
+  "model": {
+    "type": "llamacpp",
+    "model_name": "mlx-community/GLM-4.7-Flash-8bit",
+    "server_url": "http://localhost:52415",
+    "context_size": 131072,
+    "usable_context": 65536,
+    "temperature": 0.2,
+    "enable_tools": true
+  },
+  "project": {
+    "name": "pedro-ops",
+    "workdir": "/Users/soypete/code/pedro/pedro-ops",
+    "tech_stack": [
+      "Kubernetes",
+      "Helm",
+      "Bash"
+    ]
+  },
+  "tools": {
+    "allowed_bash_commands": [
+      "kubectl",
+      "helm",
+      "git",
+      "cat",
+      "ls",
+      "head",
+      "tail",
+      "wc",
+      "sort",
+      "uniq",
+      "foundry",
+      "curl",
+      "grep"
+    ],
+    "forbidden_commands": [
+      "rm",
+      "mv",
+      "dd",
+      "sudo"
+    ]
+  },
+  "git": {
+    "always_draft_pr": true,
+    "branch_prefix": "pedrocli/",
+    "remote": "origin"
+  },
+  "limits": {
+    "max_task_duration_minutes": 60,
+    "max_inference_runs": 25
+  },
+  "debug": {
+    "enabled": true,
+    "keep_temp_files": false,
+    "log_level": "info"
+  },
+  "init": {
+    "skip_checks": true
+  }
+}

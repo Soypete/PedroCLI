@@ -12,9 +12,9 @@ import (
 	"github.com/soypete/pedrocli/pkg/repl"
 )
 
-func runCodeMode(debugMode bool) error {
+func runCodeMode(debugMode bool, configFile string) error {
 	// Load config
-	cfg, err := loadConfig()
+	cfg, err := loadConfig(configFile)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -69,7 +69,16 @@ func runCodeMode(debugMode bool) error {
 }
 
 // loadConfig loads the configuration file
-func loadConfig() (*config.Config, error) {
+func loadConfig(configFile string) (*config.Config, error) {
+	// If explicit config path provided, use it directly
+	if configFile != "" {
+		cfg, err := config.Load(configFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load config %s: %w", configFile, err)
+		}
+		return cfg, nil
+	}
+
 	// Try current directory first
 	configPath := ".pedrocli.json"
 	if _, err := os.Stat(configPath); err != nil {

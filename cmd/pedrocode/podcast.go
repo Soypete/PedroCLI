@@ -12,7 +12,7 @@ import (
 
 func runPodcastMode(debugMode bool) error {
 	// Load config
-	cfg, err := loadConfig()
+	cfg, err := loadConfig("")
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
