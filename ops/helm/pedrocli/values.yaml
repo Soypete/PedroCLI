@@ -1,0 +1,86 @@
+# PedroCLI Helm Chart Values
+# Override with: helm upgrade --install pedrocli ./ops/helm/pedrocli \
+#   --set-string pedrocli.env.NOTION_TOKEN="$NOTION_TOKEN" \
+#   --set-string pedrocli.env.CAL_API_KEY="$CAL_API_KEY"
+
+pedrocli:
+  image: 100.81.89.62:5000/pedrocli-http:latest
+  imagePullPolicy: Always
+  port: 8080
+  replicas: 1
+
+  # .pedrocli.json configuration
+  config:
+    model:
+      type: llamacpp
+      modelName: gptoss20b2
+      # pedrogpt runs llama.cpp and is reachable via Tailscale
+      serverUrl: "http://100.121.229.114:8080"
+      temperature: 0.2
+      contextSize: 16384
+      usableContext: 12288
+    whisper:
+      enabled: true
+      # in-cluster whisper service
+      whisperUrl: "http://whisper:8081"
+    web:
+      port: 8080
+      host: "0.0.0.0"
+
+  # Environment variables (set via --set-string at deploy time)
+  # These are passed as env vars to the pod
+  env:
+    NOTION_TOKEN: ""
+    CAL_API_KEY: ""
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+postgres:
+  image: postgres:15-alpine
+  user: pedrocli
+  password: pedrocli
+  database: pedrocli
+  storageSize: 5Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+whisper:
+  image: 100.81.89.62:5000/whisper:latest
+  imagePullPolicy: Always
+  port: 8081
+  replicas: 1
+  model: base.en
+
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+ingress:
+  enabled: true
+  # Uses Tailscale operator — creates MagicDNS device: pedrocli-pedrocli.<tailnet>.ts.net
+  className: tailscale
+  # Tailscale hostname (the part before .<tailnet>.ts.net)
+  host: pedrocli
+
+monitoring:
+  # Creates ServiceMonitor — auto-discovered by cluster Prometheus (no additional config needed)
+  enabled: true
+  interval: 30s
+  path: /metrics
+
+namespace: pedrocli

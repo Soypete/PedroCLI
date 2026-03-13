@@ -8,6 +8,40 @@ PedroCLI is a self-hosted autonomous coding agent system - an open-source altern
 
 **Key Concept**: PedroCLI uses **direct agent execution** - agents run embedded in the CLI and HTTP server binaries with direct LLM backend integration. No subprocess spawning required.
 
+## Kubernetes & Infrastructure Management
+
+The k3s cluster (blue1/blue2/refurb + pedro-ops-api) is managed via **foundry CLI** at `~/Code/foundry/foundry`.
+
+```bash
+~/Code/foundry/foundry cluster status   # Check cluster health
+~/Code/foundry/foundry stack --help      # Manage full infrastructure stack
+~/Code/foundry/foundry logs              # View pod/Loki logs
+```
+
+**kubeconfig**: `$KUBECONFIG` env var points to `~/kubeconfig` (set in `.zsh_profile`).
+The working kubeconfig is also at `~/.foundry/kubeconfig` (API server: `pedro-ops-api` at `100.118.20.111:6443`).
+If `kubectl` stops working, run: `cp ~/.foundry/kubeconfig ~/kubeconfig`
+
+**Deploying PedroCLI to k8s**:
+```bash
+# Build and push images (cross-compile Go for linux/amd64)
+make push-images                          # build-http-image + build-whisper-image + push
+
+# Deploy/upgrade via Helm (secrets from 1Password via op run)
+op run --env-file=.env -- make deploy
+# or directly:
+op run --env-file=.env -- ./ops/scripts/deploy.sh
+```
+
+Helm chart lives in `ops/helm/pedrocli/`. Web UI is accessible at:
+`https://pedrocli-pedrocli-ingress-ingress.tail6fbc5.ts.net` (Tailscale MagicDNS)
+
+**Image build notes**:
+- Use `Dockerfile.http` (not `Dockerfile`) for the HTTP server k8s image
+- Go binary is cross-compiled natively (`GOOS=linux GOARCH=amd64`) — no QEMU needed
+- Whisper uses `podman build --platform linux/amd64` (C++ tolerates QEMU)
+- Images pushed to ZOT registry at `100.81.89.62:5000`
+
 ## Build & Test Commands
 
 ### Build

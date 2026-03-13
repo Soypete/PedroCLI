@@ -1,0 +1,12 @@
+apiVersion: v2
+name: pedrocli
+description: PedroCLI web UI + whisper.cpp for autonomous coding agent
+type: application
+version: 0.1.0
+appVersion: "latest"
+keywords:
+  - pedrocli
+  - llm
+  - coding-agent
+  - whisper
+home: https://github.com/Soypete/PedroCLI

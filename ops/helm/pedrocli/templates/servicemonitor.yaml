@@ -1,0 +1,24 @@
+{{- if .Values.monitoring.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: pedrocli
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: pedrocli-http
+    app.kubernetes.io/name: pedrocli
+    app.kubernetes.io/managed-by: Helm
+    # Prometheus auto-discovers ServiceMonitors cluster-wide — no additional config needed
+    release: prometheus
+spec:
+  namespaceSelector:
+    matchNames:
+    - {{ .Values.namespace }}
+  selector:
+    matchLabels:
+      app: pedrocli-http
+  endpoints:
+  - port: http
+    path: {{ .Values.monitoring.path }}
+    interval: {{ .Values.monitoring.interval }}
+{{- end }}

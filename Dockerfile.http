@@ -1,0 +1,38 @@
+# Dockerfile.http - PedroCLI HTTP server for linux/amd64 k8s deployment
+# Build flow: Go binary is cross-compiled natively (no QEMU needed),
+# then packaged into an amd64 alpine image.
+#
+# Build:
+#   GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o pedrocli-http-server-amd64 ./cmd/http-server
+#   docker build -f Dockerfile.http -t 100.81.89.62:5000/pedrocli-http:latest .
+
+FROM --platform=linux/amd64 alpine:latest
+
+RUN apk add --no-cache \
+    ca-certificates \
+    git \
+    curl \
+    github-cli \
+    && rm -rf /var/cache/apk/*
+
+RUN addgroup -g 1000 pedrocli && \
+    adduser -D -u 1000 -G pedrocli pedrocli
+
+COPY pedrocli-http-server-amd64 /usr/local/bin/pedrocli-http-server
+RUN chmod +x /usr/local/bin/pedrocli-http-server
+
+# Copy web templates (loaded from relative path pkg/web/templates/ at runtime)
+COPY pkg/web/templates/ /app/pkg/web/templates/
+
+USER pedrocli
+WORKDIR /app
+
+# Ensure the binary finds ~/.pedrocli.json in the pedrocli user's home
+ENV HOME=/home/pedrocli
+
+ENTRYPOINT ["/usr/local/bin/pedrocli-http-server"]
+
+LABEL org.opencontainers.image.title="PedroCLI HTTP Server"
+LABEL org.opencontainers.image.description="Self-hosted autonomous coding agent web UI"
+LABEL org.opencontainers.image.source="https://github.com/Soypete/PedroCLI"
+LABEL org.opencontainers.image.licenses="MIT"

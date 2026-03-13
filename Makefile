@@ -1,4 +1,26 @@
-.PHONY: build build-mac build-linux build-all test test-postgres-up test-postgres-down test-postgres-clean test-with-postgres test-coverage test-coverage-report install clean run-cli run-http serve build-http build-calendar fmt lint tidy migrate-up migrate-down migrate-status migrate-reset migrate-redo db-reset db-fresh postgres-up postgres-down postgres-logs postgres-shell llama-server llama-health stop-llama whisper-server whisper-health stop-whisper
+.PHONY: build build-mac build-linux build-all test test-postgres-up test-postgres-down test-postgres-clean test-with-postgres test-coverage test-coverage-report install clean run-cli run-http serve build-http build-calendar fmt lint tidy migrate-up migrate-down migrate-status migrate-reset migrate-redo db-reset db-fresh postgres-up postgres-down postgres-logs postgres-shell llama-server llama-health stop-llama whisper-server whisper-health stop-whisper build-http-image push-http-image build-whisper-image push-whisper-image push-images deploy
+
+# ZOT registry (Tailscale IP of the local container registry)
+ZOT_REGISTRY ?= 100.81.89.62:5000
+
+# Docker image targets for k8s deployment
+build-http-image: ## Build pedrocli-http Docker image (cross-compiles Go for linux/amd64, no QEMU)
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o pedrocli-http-server-amd64 ./cmd/http-server
+	docker build -f Dockerfile.http -t $(ZOT_REGISTRY)/pedrocli-http:latest .
+
+push-http-image: build-http-image ## Build and push pedrocli-http image to ZOT
+	docker push $(ZOT_REGISTRY)/pedrocli-http:latest
+
+build-whisper-image: ## Build whisper.cpp Docker image
+	docker build -f Dockerfile.whisper -t $(ZOT_REGISTRY)/whisper:latest .
+
+push-whisper-image: build-whisper-image ## Build and push whisper image to ZOT
+	docker push $(ZOT_REGISTRY)/whisper:latest
+
+push-images: push-http-image push-whisper-image ## Build and push both images to ZOT
+
+deploy: ## Deploy to k3s cluster via Helm (set NOTION_TOKEN and CAL_API_KEY env vars first)
+	./ops/scripts/deploy.sh
 
 # llama-server configuration
 LLAMA_PORT ?= 8082
