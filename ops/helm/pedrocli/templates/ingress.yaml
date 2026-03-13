@@ -1,0 +1,29 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pedrocli-ingress
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: pedrocli
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    # Tailscale operator creates a MagicDNS device named:
+    #   <host>-<namespace>.<tailnet>.ts.net
+    # e.g.: pedrocli-pedrocli.<tailnet>.ts.net
+    tailscale.com/funnel: "false"
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: pedrocli-http
+            port:
+              number: {{ .Values.pedrocli.port }}
+  tls:
+  - {}
+{{- end }}

@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: whisper
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: whisper
+    app.kubernetes.io/name: whisper
+    app.kubernetes.io/component: transcription
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: {{ .Values.whisper.replicas }}
+  selector:
+    matchLabels:
+      app: whisper
+  template:
+    metadata:
+      labels:
+        app: whisper
+        app.kubernetes.io/name: whisper
+        app.kubernetes.io/component: transcription
+    spec:
+      containers:
+      - name: whisper
+        image: {{ .Values.whisper.image }}
+        imagePullPolicy: {{ .Values.whisper.imagePullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.whisper.port }}
+          protocol: TCP
+        resources:
+          {{- toYaml .Values.whisper.resources | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 3

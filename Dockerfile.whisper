@@ -1,0 +1,65 @@
+# Dockerfile.whisper - Build whisper.cpp server for Kubernetes
+# PedroCLI uses the native whisper-server binary (NOT the Python wrapper)
+# Endpoint: POST /inference (multipart form: file=audio.wav, response_format=json)
+#
+# Build: docker build -f Dockerfile.whisper -t 100.81.89.62:5000/whisper:latest .
+# Push:  docker push 100.81.89.62:5000/whisper:latest
+
+# Stage 1: Build whisper.cpp from source
+FROM ubuntu:22.04 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    cmake \
+    build-essential \
+    curl \
+    git \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Clone whisper.cpp (shallow clone for speed)
+RUN git clone --depth=1 https://github.com/ggerganov/whisper.cpp /src
+
+WORKDIR /src
+
+# Build whisper-server binary
+RUN cmake -B build -DCMAKE_BUILD_TYPE=Release && \
+    cmake --build build --target whisper-server -j$(nproc)
+
+# Download base.en model (~142MB, good accuracy/speed balance)
+RUN bash ./models/download-ggml-model.sh base.en
+
+# Stage 2: Minimal runtime image
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# ffmpeg required for --convert flag (converts browser WebM/OGG audio to WAV)
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy built binary, all shared libs, and model
+COPY --from=builder /src/build/bin/whisper-server /usr/local/bin/whisper-server
+COPY --from=builder /src/build/src/ /usr/local/lib/whisper-libs/
+COPY --from=builder /src/build/ggml/src/ /usr/local/lib/ggml-libs/
+COPY --from=builder /src/models/ggml-base.en.bin /models/ggml-base.en.bin
+
+# Collect all .so files into /usr/local/lib and refresh linker cache
+RUN find /usr/local/lib/whisper-libs /usr/local/lib/ggml-libs -name "*.so*" -exec cp {} /usr/local/lib/ \; && ldconfig
+
+RUN chmod +x /usr/local/bin/whisper-server
+
+EXPOSE 8081
+
+# --convert: use ffmpeg to accept WebM/OGG from browsers, not just WAV
+ENTRYPOINT ["whisper-server", \
+    "-m", "/models/ggml-base.en.bin", \
+    "--port", "8081", \
+    "--host", "0.0.0.0", \
+    "--convert"]
+
+LABEL org.opencontainers.image.title="whisper-server"
+LABEL org.opencontainers.image.description="whisper.cpp HTTP server for PedroCLI voice transcription"

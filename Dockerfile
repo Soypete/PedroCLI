@@ -3,7 +3,7 @@
 # Run: docker run -v /path/to/project:/workspace -v ~/.pedroceli.json:/root/.pedroceli.json pedrocli
 
 # Stage 1: Build
-FROM golang:1.21-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /build
 
@@ -18,8 +18,8 @@ RUN go mod download
 COPY . .
 
 # Build binaries
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o pedrocli ./cmd/pedrocli
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o pedrocli-server ./cmd/mcp-server
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o pedrocli ./cmd/pedrocli
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o pedrocli-http-server ./cmd/http-server
 
 # Stage 2: Runtime
 FROM alpine:latest
@@ -39,18 +39,13 @@ WORKDIR /workspace
 
 # Copy binaries from builder
 COPY --from=builder /build/pedrocli /usr/local/bin/
-COPY --from=builder /build/pedrocli-server /usr/local/bin/
-
-# Copy example configs
-COPY .pedroceli.example.ollama.json /usr/share/pedrocli/
-COPY .pedroceli.example.llamacpp.json /usr/share/pedrocli/
+COPY --from=builder /build/pedrocli-http-server /usr/local/bin/
 
 # Switch to non-root user
 USER pedrocli
 
-# Default command
-ENTRYPOINT ["/usr/local/bin/pedrocli"]
-CMD ["help"]
+# Default command: run the HTTP server
+ENTRYPOINT ["/usr/local/bin/pedrocli-http-server"]
 
 # Labels
 LABEL org.opencontainers.image.title="PedroCLI"

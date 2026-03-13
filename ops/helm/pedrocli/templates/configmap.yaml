@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pedrocli-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: pedrocli
+    app.kubernetes.io/managed-by: Helm
+data:
+  .pedrocli.json: |
+    {
+      "model": {
+        "type": "{{ .Values.pedrocli.config.model.type }}",
+        "model_name": "{{ .Values.pedrocli.config.model.modelName }}",
+        "server_url": "{{ .Values.pedrocli.config.model.serverUrl }}",
+        "temperature": {{ .Values.pedrocli.config.model.temperature }},
+        "context_size": {{ .Values.pedrocli.config.model.contextSize }},
+        "usable_context": {{ .Values.pedrocli.config.model.usableContext }}
+      },
+      "voice": {
+        "enabled": {{ .Values.pedrocli.config.whisper.enabled }},
+        "whisper_url": "{{ .Values.pedrocli.config.whisper.whisperUrl }}",
+        "language": "en"
+      },
+      "web": {
+        "port": {{ .Values.pedrocli.config.web.port }},
+        "host": "{{ .Values.pedrocli.config.web.host }}"
+      },
+      "blog": {
+        "enabled": true
+      },
+      "podcast": {
+        "enabled": true
+      },
+      "limits": {
+        "max_inference_runs": 35
+      },
+      "init": {
+        "skip_checks": true
+      }
+    }
