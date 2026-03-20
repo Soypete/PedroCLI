@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soypete/pedro-agentware/middleware"
 	"github.com/soypete/pedrocli/pkg/agents/testutil"
 	"github.com/soypete/pedrocli/pkg/config"
 	"github.com/soypete/pedrocli/pkg/llm"
@@ -69,8 +70,7 @@ func TestContextManagerLogging(t *testing.T) {
 			StartedAt: time.Now(),
 			Data:      make(map[string]interface{}),
 		},
-		calledTools: make(map[string]bool),
-		failedTools: make(map[string]int),
+		callHistory: middleware.NewCallHistory(),
 	}
 
 	ctx := context.Background()
@@ -184,8 +184,7 @@ func TestContextManagerLoggingWithNilContextMgr(t *testing.T) {
 		currentRound: 0,
 		jobID:        "test-job",
 		result:       &PhaseResult{},
-		calledTools:  make(map[string]bool),
-		failedTools:  make(map[string]int),
+		callHistory:  middleware.NewCallHistory(),
 	}
 
 	ctx := context.Background()

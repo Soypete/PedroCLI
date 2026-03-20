@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/soypete/pedro-agentware/middleware"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/llmcontext"
 	"github.com/soypete/pedrocli/pkg/logits"
@@ -240,9 +241,8 @@ func (pe *PhasedExecutor) executePhase(ctx context.Context, phase Phase, input s
 		maxRounds:    maxRounds,
 		currentRound: 0,
 		jobID:        pe.jobID,
-		result:       result,                // Pass result so executor can track tool calls
-		calledTools:  make(map[string]bool), // Track successfully called tools
-		failedTools:  make(map[string]int),  // Track failed tool calls
+		result:       result,                      // Pass result so executor can track tool calls
+		callHistory:  middleware.NewCallHistory(), // Track tool calls and failures via middleware
 	}
 
 	// Execute the inference loop for this phase
@@ -703,9 +703,8 @@ type phaseInferenceExecutor struct {
 	maxRounds    int
 	currentRound int
 	jobID        string
-	result       *PhaseResult    // Track tool calls in this phase
-	calledTools  map[string]bool // Track which tools have been successfully called
-	failedTools  map[string]int  // Track tools that have failed (tool_name -> failure count)
+	result       *PhaseResult            // Track tool calls in this phase
+	callHistory  *middleware.CallHistory // Track tool calls and failures via middleware
 }
 
 // execute runs the inference loop for a phase
@@ -1081,13 +1080,13 @@ func (pie *phaseInferenceExecutor) filterToolDefinitions(defs []llm.ToolDefiniti
 	removedTools := make(map[string]string)
 
 	// Remove successfully called tools
-	for toolName := range pie.calledTools {
+	for toolName := range pie.callHistory.GetCalledTools() {
 		delete(allowedSet, toolName)
 		removedTools[toolName] = "already called successfully"
 	}
 
 	// Remove tools that have failed repeatedly (3+ failures = give up)
-	for toolName, failCount := range pie.failedTools {
+	for toolName, failCount := range pie.callHistory.GetFailedTools() {
 		if failCount >= 3 {
 			delete(allowedSet, toolName)
 			removedTools[toolName] = fmt.Sprintf("failed %d times", failCount)
@@ -1129,10 +1128,12 @@ func (pie *phaseInferenceExecutor) filterToolDefinitions(defs []llm.ToolDefiniti
 		} else if !foundTools[toolName] && pie.agent.config.Debug.Enabled {
 			// Tool exists but was filtered - this is expected behavior
 			reason := "filtered"
-			if pie.calledTools[toolName] {
+			calledTools := pie.callHistory.GetCalledTools()
+			failedTools := pie.callHistory.GetFailedTools()
+			if calledTools[toolName] {
 				reason = "already called successfully"
-			} else if pie.failedTools[toolName] >= 3 {
-				reason = fmt.Sprintf("failed %d times", pie.failedTools[toolName])
+			} else if failedTools[toolName] >= 3 {
+				reason = fmt.Sprintf("failed %d times", failedTools[toolName])
 			}
 			fmt.Fprintf(os.Stderr, "   [DEBUG] Tool %q filtered out: %s\n", toolName, reason)
 		}
@@ -1241,16 +1242,13 @@ func (pie *phaseInferenceExecutor) executeTools(ctx context.Context, calls []llm
 
 		if result.Success {
 			fmt.Fprintf(os.Stderr, "   ✅ %s\n", call.Name)
-			// Track successful tool calls for phases that should only call tools once
-			pie.calledTools[call.Name] = true
-			// Reset failure count on success
-			delete(pie.failedTools, call.Name)
+			pie.callHistory.RecordToolCall(call.Name, true)
 		} else {
 			fmt.Fprintf(os.Stderr, "   ❌ %s: %s\n", call.Name, result.Error)
-			// Track failed tool calls
-			pie.failedTools[call.Name]++
+			pie.callHistory.RecordToolCall(call.Name, false)
 			if pie.agent.config.Debug.Enabled {
-				fmt.Fprintf(os.Stderr, "      [DEBUG] Tool %s has failed %d time(s)\n", call.Name, pie.failedTools[call.Name])
+				failedTools := pie.callHistory.GetFailedTools()
+				fmt.Fprintf(os.Stderr, "      [DEBUG] Tool %s has failed %d time(s)\n", call.Name, failedTools[call.Name])
 			}
 		}
 	}

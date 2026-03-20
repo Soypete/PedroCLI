@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/soypete/pedro-agentware/middleware"
 	"github.com/soypete/pedrocli/pkg/config"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/llmcontext"
@@ -779,8 +780,9 @@ func TestFilterToolDefinitions(t *testing.T) {
 			agent := NewBaseAgent("test", "test", cfg, nil, nil)
 
 			pie := &phaseInferenceExecutor{
-				agent: agent,
-				phase: phase,
+				agent:       agent,
+				phase:       phase,
+				callHistory: middleware.NewCallHistory(),
 			}
 
 			filtered := pie.filterToolDefinitions(tt.allTools)
@@ -1088,8 +1090,9 @@ func TestFilterToolDefinitions_NilVsEmptySemantics(t *testing.T) {
 			agent := NewBaseAgent("test", "test", cfg, nil, nil)
 
 			pie := &phaseInferenceExecutor{
-				agent: agent,
-				phase: phase,
+				agent:       agent,
+				phase:       phase,
+				callHistory: middleware.NewCallHistory(),
 			}
 
 			filtered := pie.filterToolDefinitions(allTools)
