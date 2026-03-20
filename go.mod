@@ -1,6 +1,6 @@
 module github.com/soypete/pedrocli
 
-go 1.24.7
+go 1.26.1
 
 require (
 	github.com/chzyer/readline v1.5.1
@@ -9,7 +9,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/lib/pq v1.10.9
 	github.com/pressly/goose/v3 v3.26.0
-	github.com/soypete/pedro-agentware/middleware v0.0.0
+	github.com/soypete/pedro-agentware v0.0.1
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.11.1
 	github.com/xeipuuv/gojsonschema v1.2.0
@@ -17,8 +17,6 @@ require (
 	golang.org/x/oauth2 v0.34.0
 	gopkg.in/yaml.v3 v3.0.1
 )
-
-replace github.com/soypete/pedro-agentware/middleware => /Users/miriahpeterson/Code/go-projects/pedro-agentware/middleware
 
 require (
 	4d63.com/gocheckcompilerdirectives v1.3.0 // indirect
