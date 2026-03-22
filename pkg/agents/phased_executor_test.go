@@ -253,6 +253,95 @@ func TestTruncateOutput(t *testing.T) {
 	}
 }
 
+// TestResultFilter verifies middleware-based result filtering with per-tool limits
+func TestResultFilter(t *testing.T) {
+	limits := map[string]int{
+		"web_search": 500,
+		"file":       1200,
+		"rss":        600,
+		"default":    500,
+	}
+
+	rf := newResultFilter(limits)
+
+	t.Run("short output unchanged", func(t *testing.T) {
+		output := "short result"
+		filtered := rf.FilterToolOutput("web_search", output)
+		if filtered != output {
+			t.Errorf("Expected unchanged output, got %q", filtered)
+		}
+	})
+
+	t.Run("respects per-tool limits", func(t *testing.T) {
+		longOutput := strings.Repeat("x", 2000)
+
+		// web_search has 500 char limit
+		filtered := rf.FilterToolOutput("web_search", longOutput)
+		if !strings.Contains(filtered, "[Output truncated") {
+			t.Error("Expected truncation for web_search output exceeding 500 chars")
+		}
+
+		// file has 1200 char limit - output under limit should not truncate
+		mediumOutput := strings.Repeat("y", 1000)
+		filtered = rf.FilterToolOutput("file", mediumOutput)
+		if strings.Contains(filtered, "[Output truncated") {
+			t.Error("Did not expect truncation for file output under 1200 chars")
+		}
+	})
+
+	t.Run("uses default limit for unknown tools", func(t *testing.T) {
+		longOutput := strings.Repeat("z", 1000)
+		filtered := rf.FilterToolOutput("unknown_tool", longOutput)
+		if !strings.Contains(filtered, "[Output truncated") {
+			t.Error("Expected truncation for unknown tool exceeding default 500 chars")
+		}
+	})
+
+	t.Run("preserves context window protection", func(t *testing.T) {
+		// Simulate large output that would explode context
+		hugeOutput := strings.Repeat("Large content ", 10000) // ~140K chars
+		filtered := rf.FilterToolOutput("rss", hugeOutput)
+		if len(filtered) > 1200 {
+			t.Errorf("Expected filtered output under 1200 chars, got %d", len(filtered))
+		}
+		if !strings.Contains(filtered, "[Output truncated") {
+			t.Error("Expected truncation notice")
+		}
+	})
+}
+
+// TestResultFilterFromConfig verifies result filter works with config-style limits
+func TestResultFilterFromConfig(t *testing.T) {
+	// Simulate config defaults (same as config.go setDefaults)
+	limits := map[string]int{
+		"web_search":   500,
+		"web_scraper":  800,
+		"search":       600,
+		"grep":         600,
+		"file":         1200,
+		"read":         1200,
+		"rss":          600,
+		"static_links": 400,
+		"default":      500,
+	}
+
+	rf := newResultFilter(limits)
+
+	// Verify it uses config limits
+	longOutput := strings.Repeat("a", 2000)
+	filtered := rf.FilterToolOutput("web_search", longOutput)
+	if !strings.Contains(filtered, "[Output truncated") {
+		t.Error("Expected truncation with config-based limits")
+	}
+
+	// File tool has higher limit (1200)
+	mediumOutput := strings.Repeat("b", 1000)
+	filtered = rf.FilterToolOutput("file", mediumOutput)
+	if strings.Contains(filtered, "[Output truncated") {
+		t.Error("Did not expect truncation for file output under 1200 chars")
+	}
+}
+
 // TestPhaseResultToolTracking verifies that tool calls are captured in PhaseResult
 // DISABLED: ToolCalls and ModifiedFiles fields removed from PhaseResult during merge
 func TestPhaseResultToolTracking_DISABLED(t *testing.T) {

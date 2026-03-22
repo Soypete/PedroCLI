@@ -243,6 +243,7 @@ func (pe *PhasedExecutor) executePhase(ctx context.Context, phase Phase, input s
 		jobID:        pe.jobID,
 		result:       result,                      // Pass result so executor can track tool calls
 		callHistory:  middleware.NewCallHistory(), // Track tool calls and failures via middleware
+		resFilter:    newResultFilter(pe.agent.config.Context.ToolResultLimits), // Middleware-based result filtering
 	}
 
 	// Execute the inference loop for this phase
@@ -695,6 +696,74 @@ func insertPhases(phases []Phase, position int, newPhases []Phase) []Phase {
 	return result
 }
 
+// resultFilter uses middleware Policy to configure per-tool output limits
+// and filter tool results to prevent context window explosion.
+type resultFilter struct {
+	mw *middleware.Middleware
+	// outputLimits caches per-tool character limits extracted from policy
+	outputLimits map[string]int
+	defaultLimit int
+}
+
+// newResultFilter creates a result filter from config-based tool result limits.
+// It builds a middleware Policy with ActionFilter rules for each tool limit.
+func newResultFilter(toolResultLimits map[string]int) *resultFilter {
+	defaultLimit := 500
+	if dl, ok := toolResultLimits["default"]; ok && dl > 0 {
+		defaultLimit = dl
+	}
+
+	// Build middleware policy rules from per-tool limits
+	var rules []middleware.Rule
+	for toolName, limit := range toolResultLimits {
+		if toolName == "default" {
+			continue
+		}
+		rules = append(rules, middleware.Rule{
+			Name:   fmt.Sprintf("limit-%s", toolName),
+			Tools:  []string{toolName},
+			Action: middleware.ActionFilter,
+			ArgSchema: map[string]middleware.Schema{
+				"output": {MaxLength: limit},
+			},
+		})
+	}
+
+	policy := middleware.Policy{Rules: rules}
+
+	// Create a no-op executor since we only use policy filtering, not tool execution
+	executor := &noOpToolExecutor{}
+
+	mw := middleware.New(executor, policy)
+
+	return &resultFilter{
+		mw:           mw,
+		outputLimits: toolResultLimits,
+		defaultLimit: defaultLimit,
+	}
+}
+
+// FilterToolOutput applies the middleware policy's output limits to truncate
+// tool output for a given tool name.
+func (rf *resultFilter) FilterToolOutput(toolName string, output string) string {
+	maxLen := rf.defaultLimit
+	if limit, ok := rf.outputLimits[toolName]; ok && limit > 0 {
+		maxLen = limit
+	}
+	return truncateOutput(output, maxLen)
+}
+
+// noOpToolExecutor satisfies middleware.ToolExecutor for policy-only usage.
+type noOpToolExecutor struct{}
+
+func (n *noOpToolExecutor) CallTool(_ context.Context, _ string, _ map[string]interface{}) (*middleware.ToolResult, error) {
+	return &middleware.ToolResult{}, nil
+}
+
+func (n *noOpToolExecutor) ListTools() []middleware.ToolDefinition {
+	return nil
+}
+
 // phaseInferenceExecutor handles inference for a single phase
 type phaseInferenceExecutor struct {
 	agent        *BaseAgent
@@ -705,6 +774,7 @@ type phaseInferenceExecutor struct {
 	jobID        string
 	result       *PhaseResult            // Track tool calls in this phase
 	callHistory  *middleware.CallHistory // Track tool calls and failures via middleware
+	resFilter    *resultFilter          // Middleware-based result filtering
 }
 
 // execute runs the inference loop for a phase
@@ -1283,7 +1353,9 @@ func (pie *phaseInferenceExecutor) buildFeedbackPrompt(calls []llm.ToolCall, res
 	for i, call := range calls {
 		result := results[i]
 		if result.Success {
-			sb.WriteString(fmt.Sprintf("✅ %s: %s\n", call.Name, truncateOutput(result.Output, 1000)))
+			// Use middleware result filter for per-tool output limits
+			filtered := pie.resFilter.FilterToolOutput(call.Name, result.Output)
+			sb.WriteString(fmt.Sprintf("✅ %s: %s\n", call.Name, filtered))
 		} else {
 			sb.WriteString(fmt.Sprintf("❌ %s failed: %s\n", call.Name, result.Error))
 			allSucceeded = false
