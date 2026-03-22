@@ -233,6 +233,9 @@ func (pe *PhasedExecutor) executePhase(ctx context.Context, phase Phase, input s
 		maxRounds = phase.MaxRounds
 	}
 
+	// Build policy from registered tools: allow only registered tool names, deny all others
+	toolPolicy := buildToolPolicy(pe.agent)
+
 	// Create a phase-specific inference executor
 	executor := &phaseInferenceExecutor{
 		agent:        pe.agent,
@@ -243,6 +246,7 @@ func (pe *PhasedExecutor) executePhase(ctx context.Context, phase Phase, input s
 		jobID:        pe.jobID,
 		result:       result,                      // Pass result so executor can track tool calls
 		callHistory:  middleware.NewCallHistory(), // Track tool calls and failures via middleware
+		policyEval:   middleware.NewPolicyEvaluator(toolPolicy), // Policy-based tool validation
 	}
 
 	// Execute the inference loop for this phase
@@ -705,6 +709,7 @@ type phaseInferenceExecutor struct {
 	jobID        string
 	result       *PhaseResult            // Track tool calls in this phase
 	callHistory  *middleware.CallHistory // Track tool calls and failures via middleware
+	policyEval   middleware.PolicyEvaluator // Policy engine for tool call validation
 }
 
 // execute runs the inference loop for a phase
@@ -1393,31 +1398,51 @@ func (pie *phaseInferenceExecutor) logConversationWithSuccess(ctx context.Contex
 	}
 }
 
-// validateToolCalls validates tool calls before execution
-// Returns valid calls and error messages for invalid ones
+// buildToolPolicy creates a middleware Policy from the agent's registered tools.
+// It generates an allow rule for each registered tool and sets default-deny
+// so that unrecognized tool names are rejected by the policy engine.
+func buildToolPolicy(agent *BaseAgent) middleware.Policy {
+	var toolNames []string
+	if agent.registry != nil {
+		for _, t := range agent.registry.List() {
+			toolNames = append(toolNames, t.Name())
+		}
+	} else {
+		for name := range agent.tools {
+			toolNames = append(toolNames, name)
+		}
+	}
+
+	// Single rule that allows all registered tools; default-deny catches the rest
+	rules := []middleware.Rule{
+		{
+			Name:   "allow-registered-tools",
+			Tools:  toolNames,
+			Action: middleware.ActionAllow,
+		},
+	}
+
+	return middleware.Policy{
+		Rules:       rules,
+		DefaultDeny: true,
+	}
+}
+
+// validateToolCalls validates tool calls before execution using middleware policy evaluation.
+// Returns valid calls and error messages for invalid ones.
 func (pie *phaseInferenceExecutor) validateToolCalls(calls []llm.ToolCall) ([]llm.ToolCall, []string) {
 	var validated []llm.ToolCall
 	var errors []string
 
 	for _, call := range calls {
-		// Get the actual tool instance
-		var tool tools.Tool
-		var toolExists bool
+		// Use middleware policy evaluation to check if the tool is allowed
+		decision := pie.policyEval.Evaluate(middleware.CallerContext{
+			Trusted: true,
+			Phase:   pie.phase.Name,
+		}, call.Name, call.Args)
 
-		if pie.agent.registry != nil {
-			for _, t := range pie.agent.registry.List() {
-				if t.Name() == call.Name {
-					tool = t
-					toolExists = true
-					break
-				}
-			}
-		} else {
-			tool, toolExists = pie.agent.tools[call.Name]
-		}
-
-		if !toolExists {
-			// Check if this might be an action name mistakenly used as tool name
+		if decision.IsDenied() {
+			// Tool was denied by policy — provide helpful error messages
 			if isSearchAction(call.Name) {
 				errors = append(errors, fmt.Sprintf(
 					"Tool '%s' not found. Did you mean: {\"tool\": \"search\", \"args\": {\"action\": \"%s\", ...}}?",
@@ -1436,7 +1461,19 @@ func (pie *phaseInferenceExecutor) validateToolCalls(calls []llm.ToolCall) ([]ll
 			continue
 		}
 
-		// Comprehensive schema-based validation for required parameters
+		// Policy allows this tool — now validate required parameters
+		var tool tools.Tool
+		if pie.agent.registry != nil {
+			for _, t := range pie.agent.registry.List() {
+				if t.Name() == call.Name {
+					tool = t
+					break
+				}
+			}
+		} else {
+			tool = pie.agent.tools[call.Name]
+		}
+
 		requiredParams := pie.getRequiredParameters(tool)
 		var missingParams []string
 
