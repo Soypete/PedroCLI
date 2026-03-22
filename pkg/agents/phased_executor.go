@@ -1075,21 +1075,19 @@ func (pie *phaseInferenceExecutor) filterToolDefinitions(defs []llm.ToolDefiniti
 
 	// Prevent tool call loops by removing:
 	// 1. Tools that have been successfully called
-	// 2. Tools that have failed 3+ times (likely invalid arguments)
+	// 2. Tools that have failed MaxFailures+ times (likely invalid arguments)
 	// This forces the LLM to either use different tools or output PHASE_COMPLETE
 	removedTools := make(map[string]string)
 
-	// Remove successfully called tools
-	for toolName := range pie.callHistory.GetCalledTools() {
-		delete(allowedSet, toolName)
-		removedTools[toolName] = "already called successfully"
-	}
-
-	// Remove tools that have failed repeatedly (3+ failures = give up)
-	for toolName, failCount := range pie.callHistory.GetFailedTools() {
-		if failCount >= 3 {
+	// Remove successfully called tools and repeatedly failed tools using middleware helpers
+	for toolName := range allowedSet {
+		if pie.callHistory.WasToolCalled(toolName) {
 			delete(allowedSet, toolName)
-			removedTools[toolName] = fmt.Sprintf("failed %d times", failCount)
+			removedTools[toolName] = "already called successfully"
+		} else if pie.callHistory.HasToolFailedTooManyTimes(toolName) {
+			failedTools := pie.callHistory.GetFailedTools()
+			delete(allowedSet, toolName)
+			removedTools[toolName] = fmt.Sprintf("failed %d times", failedTools[toolName])
 		}
 	}
 
@@ -1128,11 +1126,10 @@ func (pie *phaseInferenceExecutor) filterToolDefinitions(defs []llm.ToolDefiniti
 		} else if !foundTools[toolName] && pie.agent.config.Debug.Enabled {
 			// Tool exists but was filtered - this is expected behavior
 			reason := "filtered"
-			calledTools := pie.callHistory.GetCalledTools()
-			failedTools := pie.callHistory.GetFailedTools()
-			if calledTools[toolName] {
+			if pie.callHistory.WasToolCalled(toolName) {
 				reason = "already called successfully"
-			} else if failedTools[toolName] >= 3 {
+			} else if pie.callHistory.HasToolFailedTooManyTimes(toolName) {
+				failedTools := pie.callHistory.GetFailedTools()
 				reason = fmt.Sprintf("failed %d times", failedTools[toolName])
 			}
 			fmt.Fprintf(os.Stderr, "   [DEBUG] Tool %q filtered out: %s\n", toolName, reason)
