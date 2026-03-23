@@ -417,11 +417,16 @@ func (s *JobStore) AppendConversation(ctx context.Context, id string, entry Conv
 		return fmt.Errorf("failed to marshal conversation entry: %w", err)
 	}
 
-	// Use PostgreSQL jsonb concatenation for atomic append
+	// conversation_history is stored as text (JSON array). Append via text manipulation:
+	// strip the trailing ']', append the new entry, re-close the array.
 	query := `
 		UPDATE jobs
-		SET conversation_history = COALESCE(conversation_history, '[]'::jsonb) || $2::jsonb,
-		    updated_at = $3
+		SET conversation_history = CASE
+			WHEN conversation_history IS NULL OR conversation_history = '' OR conversation_history = '[]'
+			THEN '[' || $2 || ']'
+			ELSE left(conversation_history, length(conversation_history) - 1) || ',' || $2 || ']'
+		END,
+		updated_at = $3
 		WHERE id = $1
 	`
 	_, err = s.db.ExecContext(ctx, query, id, string(entryJSON), time.Now())
