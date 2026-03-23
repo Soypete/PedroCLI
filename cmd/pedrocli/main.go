@@ -532,7 +532,7 @@ func runBlogContentAgent(cfg *config.Config, transcription string, title string,
 			BaseURL:     cfg.Model.ServerURL,
 			ModelName:   cfg.Model.ModelName,
 			ContextSize: cfg.Model.ContextSize,
-			EnableTools: cfg.Model.EnableTools,
+			EnableTools: true,
 		})
 	default:
 		fmt.Fprintf(os.Stderr, "Error: Unknown model type: %s\n", cfg.Model.Type)
@@ -560,8 +560,8 @@ func runBlogContentAgent(cfg *config.Config, transcription string, title string,
 		}
 	}
 
-	// Create and execute agent (using phased implementation with checkpoint/resume)
-	agent := agents.NewBlogContentAgentPhased(agents.BlogContentAgentConfig{
+	// Create and execute agent
+	agent := agents.NewBlogContentAgent(agents.BlogContentAgentConfig{
 		Backend:       backend,
 		Storage:       storage,
 		WorkingDir:    cfg.Project.Workdir,
@@ -571,7 +571,7 @@ func runBlogContentAgent(cfg *config.Config, transcription string, title string,
 		Config:        cfg,
 	})
 
-	fmt.Println("\n🚀 Starting BlogContentAgentPhased workflow (with checkpoints)...")
+	fmt.Println("\n🚀 Starting BlogContentAgent workflow...")
 
 	if err := agent.Execute(context.Background()); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: Workflow failed: %v\n", err)

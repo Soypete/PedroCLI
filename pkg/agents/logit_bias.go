@@ -115,46 +115,6 @@ func GetToolResultValidationBias(provider TokenIDProvider) map[int]float32 {
 	return bias
 }
 
-// GetMultiActionToolBias returns logit bias to encourage "action" parameter
-// This helps LLMs correctly call multi-action tools with the required "action" parameter
-func GetMultiActionToolBias(provider TokenIDProvider) map[int]float32 {
-	bias := make(map[int]float32)
-
-	patterns := []BiasPattern{
-		// Strongly encourage "action" key in JSON
-		{"\"action\"", 50.0},
-		{"\"args\"", 20.0},
-
-		// Penalize common mistakes
-		{"\"type\"", -100.0},        // Wrong parameter name
-		{"\"action_type\"", -100.0}, // Wrong parameter name
-		{"\"command\"", -100.0},     // Wrong parameter name
-	}
-
-	// Get token IDs for patterns
-	phrases := make([]string, len(patterns))
-	for i, p := range patterns {
-		phrases[i] = p.Phrase
-	}
-
-	tokenIDs, err := provider.GetTokenIDs(phrases)
-	if err != nil {
-		// If tokenization fails, return empty bias
-		return bias
-	}
-
-	// Apply bias values to token IDs
-	for _, pattern := range patterns {
-		if ids, ok := tokenIDs[pattern.Phrase]; ok {
-			for _, tokenID := range ids {
-				bias[tokenID] = pattern.Bias
-			}
-		}
-	}
-
-	return bias
-}
-
 // Note on Dynamic Token IDs:
 // This implementation uses dynamic token ID lookup via the LLM backend's /tokenize endpoint.
 // Benefits:

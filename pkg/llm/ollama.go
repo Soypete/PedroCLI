@@ -1,8 +1,6 @@
 package llm
 
 import (
-	"time"
-
 	"github.com/soypete/pedrocli/pkg/config"
 )
 
@@ -38,20 +36,13 @@ func NewOllamaClientFromModel(cfg *config.Config, modelCfg config.ModelConfig) *
 	}
 
 	// Create server client using OpenAI-compatible endpoint
-	var timeout time.Duration
-	if modelCfg.TimeoutSeconds > 0 {
-		timeout = time.Duration(modelCfg.TimeoutSeconds) * time.Second
-	}
-
 	serverClient := NewServerClient(ServerClientConfig{
-		BaseURL:             serverURL,
-		ModelName:           modelName,
-		ContextSize:         contextSize,
-		EnableTools:         modelCfg.EnableTools,
-		APIPath:             "/v1/chat/completions", // Ollama supports OpenAI-compatible API
-		Timeout:             timeout,                // Pass timeout config (0 = use default)
-		MaxRetries:          modelCfg.MaxRetries,    // Pass retry config
-		RetryBackoffSeconds: modelCfg.RetryBackoffSeconds,
+		BaseURL:     serverURL,
+		ModelName:   modelName,
+		ContextSize: contextSize,
+		EnableTools: modelCfg.EnableTools,
+		APIPath:     "/v1/chat/completions", // Ollama supports OpenAI-compatible API
+		MaxRetries:  modelCfg.MaxRetries,    // Pass retry config
 	})
 
 	return &OllamaClient{

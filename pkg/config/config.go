@@ -60,9 +60,7 @@ type ModelConfig struct {
 	EnableTools bool `json:"enable_tools,omitempty"` // Enable native tool calling via chat template
 
 	// Retry configuration
-	MaxRetries          int `json:"max_retries,omitempty"`           // Maximum number of retries for failed requests (default: 3)
-	TimeoutSeconds      int `json:"timeout_seconds,omitempty"`       // HTTP request timeout in seconds (default: 1200 = 20 minutes)
-	RetryBackoffSeconds int `json:"retry_backoff_seconds,omitempty"` // Initial backoff in seconds for exponential retry (default: 1)
+	MaxRetries int `json:"max_retries,omitempty"` // Maximum number of retries for failed requests (default: 3)
 }
 
 // ExecutionConfig contains execution settings
@@ -103,9 +101,8 @@ type ProjectConfig struct {
 
 // LimitsConfig contains execution limits
 type LimitsConfig struct {
-	MaxTaskDurationMinutes int  `json:"max_task_duration_minutes"`
-	MaxInferenceRuns       int  `json:"max_inference_runs"`
-	EnablePhaseCheckpoints bool `json:"enable_phase_checkpoints,omitempty"` // Save phase progress to disk for resume (default: true)
+	MaxTaskDurationMinutes int `json:"max_task_duration_minutes"`
+	MaxInferenceRuns       int `json:"max_inference_runs"`
 }
 
 // ContextConfig contains context management settings
@@ -395,14 +392,16 @@ type CustomLink struct {
 	Icon string `json:"icon,omitempty"` // emoji or icon name
 }
 
-// DatabaseConfig contains database configuration (PostgreSQL only)
+// DatabaseConfig contains database configuration (PostgreSQL / Supabase).
+// For Supabase, set DATABASE_URL env var to your project's connection string.
+// Secrets should be injected via Vault in production (not stored in config).
 type DatabaseConfig struct {
 	Host     string `json:"host"`
 	Port     int    `json:"port"`
 	User     string `json:"user"`
-	Password string `json:"password"` // TODO: Move to secure storage
+	Password string `json:"password"` // Injected via Vault in production; do NOT store in config
 	Database string `json:"database"`
-	SSLMode  string `json:"ssl_mode"` // disable, require, verify-ca, verify-full
+	SSLMode  string `json:"ssl_mode"` // disable, require, verify-ca, verify-full (default: require)
 }
 
 // GetModelConfig returns the model configuration for a given profile name.
@@ -733,7 +732,7 @@ func (c *Config) setDefaults() {
 		c.Blog.StaticLinks.YouTubePlaceholder = "🎥 **Latest Video**: [ADD LINK BEFORE SUBSTACK PUBLISH]"
 	}
 
-	// Database defaults
+	// Database defaults (Supabase-friendly)
 	if c.Database.Host == "" {
 		c.Database.Host = "localhost"
 	}
@@ -741,13 +740,13 @@ func (c *Config) setDefaults() {
 		c.Database.Port = 5432
 	}
 	if c.Database.User == "" {
-		c.Database.User = "pedrocli"
+		c.Database.User = "postgres"
 	}
 	if c.Database.Database == "" {
-		c.Database.Database = "pedrocli_blog"
+		c.Database.Database = "postgres"
 	}
 	if c.Database.SSLMode == "" {
-		c.Database.SSLMode = "disable" // TODO: Enable SSL for production
+		c.Database.SSLMode = "require" // SSL required for Supabase
 	}
 
 	// Vision defaults

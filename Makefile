@@ -1,4 +1,4 @@
-.PHONY: build build-mac build-linux build-all test test-postgres-up test-postgres-down test-postgres-clean test-with-postgres test-coverage test-coverage-report install clean run-cli run-http serve build-http build-calendar fmt lint tidy migrate-up migrate-down migrate-status migrate-reset migrate-redo db-reset db-fresh postgres-up postgres-down postgres-logs postgres-shell llama-server llama-health stop-llama whisper-server whisper-health stop-whisper build-http-image push-http-image build-whisper-image push-whisper-image push-images deploy
+.PHONY: build build-mac build-linux build-all test test-postgres-up test-postgres-down test-postgres-clean test-with-postgres test-coverage test-coverage-report install clean run-cli run-http serve build-http build-calendar fmt lint tidy migrate-up migrate-down migrate-status migrate-reset migrate-redo db-reset db-fresh postgres-up postgres-down postgres-local-up postgres-local-down postgres-logs postgres-shell vault-sync llama-server llama-health stop-llama whisper-server whisper-health stop-whisper build-http-image push-http-image build-whisper-image push-whisper-image push-images deploy
 
 # ZOT registry (Tailscale IP of the local container registry)
 ZOT_REGISTRY ?= 100.81.89.62:5000
@@ -19,7 +19,7 @@ push-whisper-image: build-whisper-image ## Build and push whisper image to ZOT
 
 push-images: push-http-image push-whisper-image ## Build and push both images to ZOT
 
-deploy: ## Deploy to k3s cluster via Helm (set NOTION_TOKEN and CAL_API_KEY env vars first)
+deploy: ## Deploy to k3s cluster via Helm (secrets pulled from OpenBao automatically)
 	./ops/scripts/deploy.sh
 
 # llama-server configuration
@@ -27,7 +27,7 @@ LLAMA_PORT ?= 8082
 # Use Qwen3-Coder-30B-A3B-Instruct for better tool calling (set USE_HF=1)
 LLAMA_HF_REPO ?= unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_M
 LLAMA_MODEL ?= $(shell find ~/.cache/huggingface/hub/models--bartowski--Qwen2.5-Coder-32B-Instruct-GGUF -name "*.gguf" -type f | head -1)
-LLAMA_CTX_SIZE ?= 16384
+LLAMA_CTX_SIZE ?= 32768
 LLAMA_N_GPU_LAYERS ?= -1
 LLAMA_THREADS ?= 8
 LLAMA_REASONING_FORMAT ?= deepseek
@@ -38,9 +38,10 @@ LLAMA_LOGIT_BIAS ?=
 USE_HF ?= 0
 
 # llama-server targets
-llama-server: ## Start llama-server for tool calling
+llama-server: ## Start llama-server for tool calling with reasoning control
 	@echo "Starting llama-server on port $(LLAMA_PORT)..."
 	@echo "  Context: $(LLAMA_CTX_SIZE) tokens"
+	@echo "  Reasoning Budget: $(LLAMA_REASONING_BUDGET) tokens (format: $(LLAMA_REASONING_FORMAT))"
 ifeq ($(USE_HF),1)
 	@echo "  Using HuggingFace model: $(LLAMA_HF_REPO)"
 	@llama-server \
@@ -49,6 +50,8 @@ ifeq ($(USE_HF),1)
 		--ctx-size $(LLAMA_CTX_SIZE) \
 		--n-gpu-layers $(LLAMA_N_GPU_LAYERS) \
 		--threads $(LLAMA_THREADS) \
+		--reasoning-format $(LLAMA_REASONING_FORMAT) \
+		--reasoning-budget $(LLAMA_REASONING_BUDGET) \
 		--jinja \
 		--log-disable \
 		--no-webui \
@@ -65,6 +68,8 @@ else
 		--ctx-size $(LLAMA_CTX_SIZE) \
 		--n-gpu-layers $(LLAMA_N_GPU_LAYERS) \
 		--threads $(LLAMA_THREADS) \
+		--reasoning-format $(LLAMA_REASONING_FORMAT) \
+		--reasoning-budget $(LLAMA_REASONING_BUDGET) \
 		--jinja \
 		--log-disable \
 		--no-webui \
@@ -240,9 +245,13 @@ db-fresh:
 	go run cmd/pedrocli/main.go migrate up
 	@echo "Fresh database created"
 
-# PostgreSQL Docker Management
-postgres-up:
-	@echo "Starting PostgreSQL..."
+# PostgreSQL / Supabase Management
+#
+# Production uses Supabase. Set DATABASE_URL in .env.
+# For local dev, use postgres-local-up to start a local container.
+
+postgres-local-up:
+	@echo "Starting local PostgreSQL for development..."
 	@mkdir -p postgres-data
 	@docker run -d \
 		--name pedrocli-postgres \
@@ -255,10 +264,10 @@ postgres-up:
 	@echo "Waiting for PostgreSQL to be ready..."
 	@sleep 3
 	@docker exec pedrocli-postgres pg_isready -U pedrocli || sleep 2
-	@echo "PostgreSQL is ready at postgres://pedrocli:pedrocli@localhost:5432/pedrocli"
+	@echo "Local PostgreSQL is ready at postgres://pedrocli:pedrocli@localhost:5432/pedrocli"
 
-postgres-down:
-	@echo "Stopping PostgreSQL..."
+postgres-local-down:
+	@echo "Stopping local PostgreSQL..."
 	@docker stop pedrocli-postgres || true
 	@docker rm pedrocli-postgres || true
 
@@ -266,4 +275,33 @@ postgres-logs:
 	docker logs -f pedrocli-postgres
 
 postgres-shell:
-	docker exec -it pedrocli-postgres psql -U pedrocli -d pedrocli
+	@if [ -n "$$DATABASE_URL" ]; then \
+		echo "Connecting to Supabase via DATABASE_URL..."; \
+		psql "$$DATABASE_URL"; \
+	else \
+		echo "Connecting to local PostgreSQL..."; \
+		docker exec -it pedrocli-postgres psql -U pedrocli -d pedrocli; \
+	fi
+
+# Backwards compatibility aliases
+postgres-up: postgres-local-up
+postgres-down: postgres-local-down
+
+# OpenBao secret sync (1Password → OpenBao)
+# Requires: op CLI (1Password), vault CLI
+# OpenBao is API-compatible with Vault; uses VAULT_ADDR to target OpenBao.
+OPENBAO_ADDR ?= http://100.81.89.62:8200
+
+vault-sync:
+	@echo "Syncing secrets from 1Password to OpenBao ($(OPENBAO_ADDR))..."
+	@echo "  → DATABASE_URL + NOTION_TOKEN + CAL_API_KEY"
+	@# op://pedro/POSTGRES_URL/credential is the Supabase session-mode pooler (port 5432)
+	@# which supports goose migrations (unlike transaction mode on port 6543).
+	@DB_URL=$$(op read "op://pedro/POSTGRES_URL/credential" | awk '{u=$$1;p=$$2;h=$$3;po=$$4;d=$$5; sub("user=","",u); sub("password=","",p); sub("host=","",h); sub("port=","",po); sub("dbname=","",d); print "postgresql://"u":"p"@"h":"po"/"d"?sslmode=require"}') && \
+	 NT=$$(op read "op://pedro/notion_api_key/credential") && \
+	 CAL=$$(op read "op://pedro/cal.com/credential") && \
+	 VAULT_ADDR=$(OPENBAO_ADDR) vault kv put secret/apps/pedrocli \
+	   database_url="$$DB_URL" \
+	   notion_token="$$NT" \
+	   cal_api_key="$$CAL"
+	@echo "Secrets synced to OpenBao!"

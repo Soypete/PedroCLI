@@ -1,5 +1,5 @@
 -- +goose Up
--- placeholder migration (no-op)
+-- placeholder migration
 
 -- +goose Down
--- placeholder migration (no-op)
+-- placeholder migration
