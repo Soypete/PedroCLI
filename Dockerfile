@@ -3,7 +3,7 @@
 # Run: docker run -v /path/to/project:/workspace -v ~/.pedroceli.json:/root/.pedroceli.json pedrocli
 
 # Stage 1: Build
-FROM golang:1.24-alpine AS builder
+FROM golang:1.26.1-alpine AS builder
 
 WORKDIR /build
 
