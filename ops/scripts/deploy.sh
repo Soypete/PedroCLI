@@ -2,12 +2,12 @@
 # Deploy PedroCLI to k3s cluster via Helm
 # Usage: ./ops/scripts/deploy.sh [--dry-run] [extra helm args...]
 #
-# Required env vars (or pass via --set-string):
-#   NOTION_TOKEN   - Notion integration secret
-#   CAL_API_KEY    - Cal.com API key
+# Secrets are pulled automatically from OpenBao at secret/apps/pedrocli.
+# Override by setting env vars before running:
+#   DATABASE_URL, NOTION_TOKEN, CAL_API_KEY
 #
 # Example:
-#   op run --env-file=.env -- ./ops/scripts/deploy.sh
+#   ./ops/scripts/deploy.sh
 #   ./ops/scripts/deploy.sh --dry-run
 
 set -euo pipefail
@@ -18,9 +18,38 @@ CHART_DIR="${REPO_ROOT}/ops/helm/pedrocli"
 
 RELEASE_NAME="pedrocli"
 NAMESPACE="pedrocli"
+OPENBAO_ADDR="${OPENBAO_ADDR:-http://100.81.89.62:8200}"
+OPENBAO_SECRET_PATH="secret/apps/pedrocli"
 
-# Collect optional secret overrides
-EXTRA_ARGS=()
+# Pull secrets from OpenBao if not already set in environment
+_bao_get() {
+    VAULT_ADDR="${OPENBAO_ADDR}" vault kv get -field="$1" "${OPENBAO_SECRET_PATH}" 2>/dev/null || true
+}
+
+if [[ -z "${DATABASE_URL:-}" ]]; then
+    echo "==> Fetching DATABASE_URL from OpenBao..."
+    DATABASE_URL="$(_bao_get database_url)"
+fi
+
+if [[ -z "${NOTION_TOKEN:-}" ]]; then
+    echo "==> Fetching NOTION_TOKEN from OpenBao..."
+    NOTION_TOKEN="$(_bao_get notion_token)"
+fi
+
+if [[ -z "${CAL_API_KEY:-}" ]]; then
+    echo "==> Fetching CAL_API_KEY from OpenBao..."
+    CAL_API_KEY="$(_bao_get cal_api_key)"
+fi
+
+if [[ -z "${DATABASE_URL:-}" ]]; then
+    echo "ERROR: DATABASE_URL not found in OpenBao (${OPENBAO_ADDR} ${OPENBAO_SECRET_PATH}) and not set in environment." >&2
+    exit 1
+fi
+
+# Collect secret overrides
+EXTRA_ARGS=(
+    --set-string "pedrocli.env.DATABASE_URL=${DATABASE_URL}"
+)
 
 if [[ -n "${NOTION_TOKEN:-}" ]]; then
     EXTRA_ARGS+=(--set-string "pedrocli.env.NOTION_TOKEN=${NOTION_TOKEN}")

@@ -24,6 +24,8 @@ spec:
   # storageClassName: fast-ssd
 ---
 # ConfigMap for PedroCLI configuration
+# NOTE: Database credentials are NOT stored here. They are injected via Vault.
+# Set DATABASE_URL env var via Vault Agent Injector (see Deployment annotations).
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -37,9 +39,11 @@ data:
         "model_name": "qwen2.5-coder:32b",
         "ollama_url": "http://ollama-service:11434"
       },
+      "database": {
+        "ssl_mode": "require"
+      },
       "repo_storage": {
         "base_path": "/var/pedro/repos",
-        "database_path": "/var/pedro/repos/pedro.db",
         "fetch_on_access": true,
         "default_branch": "main",
         "auto_prune_days": 30
@@ -57,6 +61,17 @@ data:
     }
 ---
 # Deployment for PedroCLI HTTP Server
+#
+# Secrets flow: 1Password → Vault → K8s (via Vault Agent Injector)
+#
+# Prerequisites:
+#   1. Install Vault Agent Injector: helm install vault hashicorp/vault --set injector.enabled=true
+#   2. Sync secrets from 1Password to Vault:
+#      op read "op://pedro/supabase_database_url/credential" | vault kv put secret/pedrocli/database url=-
+#      op read "op://pedro/notion_api_key/credential" | vault kv put secret/pedrocli/notion token=-
+#      op read "op://pedro/cal.com/credential" | vault kv put secret/pedrocli/calcom api_key=-
+#   3. Create Vault policy and K8s auth role (see docs/vault-setup.md)
+#
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -73,10 +88,44 @@ spec:
     metadata:
       labels:
         app: pedrocli
+      annotations:
+        # --- Vault Agent Injector annotations ---
+        # Enable Vault sidecar injection
+        vault.hashicorp.com/agent-inject: "true"
+        # Vault role for K8s auth
+        vault.hashicorp.com/role: "pedrocli"
+        # Inject DATABASE_URL from Vault
+        vault.hashicorp.com/agent-inject-secret-database: "secret/data/pedrocli/database"
+        vault.hashicorp.com/agent-inject-template-database: |
+          {{- with secret "secret/data/pedrocli/database" -}}
+          export DATABASE_URL="{{ .Data.data.url }}"
+          {{- end }}
+        # Inject NOTION_TOKEN from Vault
+        vault.hashicorp.com/agent-inject-secret-notion: "secret/data/pedrocli/notion"
+        vault.hashicorp.com/agent-inject-template-notion: |
+          {{- with secret "secret/data/pedrocli/notion" -}}
+          export NOTION_TOKEN="{{ .Data.data.token }}"
+          {{- end }}
+        # Inject CAL_API_KEY from Vault
+        vault.hashicorp.com/agent-inject-secret-calcom: "secret/data/pedrocli/calcom"
+        vault.hashicorp.com/agent-inject-template-calcom: |
+          {{- with secret "secret/data/pedrocli/calcom" -}}
+          export CAL_API_KEY="{{ .Data.data.api_key }}"
+          {{- end }}
     spec:
+      serviceAccountName: pedrocli
       containers:
         - name: pedrocli
           image: pedrocli:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              # Source Vault-injected secrets into environment
+              . /vault/secrets/database
+              . /vault/secrets/notion
+              . /vault/secrets/calcom
+              exec /app/pedrocli-server
           ports:
             - containerPort: 8080
               name: http
@@ -165,3 +214,13 @@ metadata:
   namespace: default
 type: Opaque
 # data should contain base64-encoded SSH keys
+---
+# ServiceAccount for Vault authentication
+# Vault K8s auth binds this SA to a Vault role
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pedrocli
+  namespace: default
+  labels:
+    app: pedrocli

@@ -360,21 +360,10 @@ func (a *BaseAgent) convertToolsToDefinitions() []llm.ToolDefinition {
 			schema := make(map[string]interface{})
 			if metadata.Schema != nil {
 				schema["type"] = "object"
-
-				// CRITICAL: Ensure properties is never nil for llama.cpp Jinja2 template
-				if metadata.Schema.Properties != nil {
-					schema["properties"] = metadata.Schema.Properties
-				} else {
-					schema["properties"] = make(map[string]interface{})
-				}
-
+				schema["properties"] = metadata.Schema.Properties
 				if len(metadata.Schema.Required) > 0 {
 					schema["required"] = metadata.Schema.Required
 				}
-			} else {
-				// No schema metadata - provide empty properties
-				schema["type"] = "object"
-				schema["properties"] = make(map[string]interface{})
 			}
 
 			toolDefs = append(toolDefs, llm.ToolDefinition{
@@ -394,47 +383,10 @@ func (a *BaseAgent) convertToolsToDefinitions() []llm.ToolDefinition {
 
 	var toolDefs []llm.ToolDefinition
 	for _, tool := range a.tools {
+		// Simple schema that allows any properties
+		// LLM must infer parameters from tool description
 		schema := make(map[string]interface{})
 		schema["type"] = "object"
-
-		// Try to get schema from ExtendedTool metadata if available
-		if extTool, ok := tool.(tools.ExtendedTool); ok {
-			if metadata := extTool.Metadata(); metadata != nil && metadata.Schema != nil {
-				// Use the tool's schema
-				if metadata.Schema.Properties != nil {
-					// Convert JSONSchema properties to map[string]interface{} for serialization
-					props := make(map[string]interface{})
-					for propName, propSchema := range metadata.Schema.Properties {
-						// Convert each property schema to a map
-						propMap := make(map[string]interface{})
-						if propSchema.Type != "" {
-							propMap["type"] = propSchema.Type
-						}
-						if propSchema.Description != "" {
-							propMap["description"] = propSchema.Description
-						}
-						if len(propSchema.Enum) > 0 {
-							propMap["enum"] = propSchema.Enum
-						}
-						props[propName] = propMap
-					}
-					schema["properties"] = props
-				} else {
-					schema["properties"] = make(map[string]interface{})
-				}
-
-				if len(metadata.Schema.Required) > 0 {
-					schema["required"] = metadata.Schema.Required
-				}
-			} else {
-				// No metadata - empty properties
-				schema["properties"] = make(map[string]interface{})
-			}
-		} else {
-			// Not an ExtendedTool - empty properties
-			schema["properties"] = make(map[string]interface{})
-		}
-
 		schema["additionalProperties"] = true // Allow any properties the LLM wants to send
 
 		toolDefs = append(toolDefs, llm.ToolDefinition{

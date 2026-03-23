@@ -1,3 +1,4 @@
+{{- if .Values.postgres.enabled }}
 # PostgreSQL for pedrocli job store and blog storage
 # Single-pod deployment with a PVC for data persistence
 apiVersion: apps/v1
@@ -83,3 +84,4 @@ spec:
   resources:
     requests:
       storage: {{ .Values.postgres.storageSize }}
+{{- end }}

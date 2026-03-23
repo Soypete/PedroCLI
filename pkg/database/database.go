@@ -8,15 +8,19 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/lib/pq" // PostgreSQL driver
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 )
 
@@ -26,8 +30,9 @@ var migrationsFS embed.FS
 // DB represents a database connection with migration support.
 type DB struct {
 	*sql.DB
+	pool     *pgxpool.Pool
 	driver   string
-	connStr  string
+	schema   string
 	mu       sync.RWMutex
 	migrated bool
 }
@@ -40,23 +45,22 @@ type Config struct {
 	User     string `json:"user"`     // PostgreSQL user
 	Password string `json:"password"` // PostgreSQL password
 	SSLMode  string `json:"ssl_mode"` // PostgreSQL SSL mode
+	Schema   string `json:"schema"`   // PostgreSQL schema (default: pedrocli)
 }
 
 // DefaultConfig returns default database configuration.
 // Reads from DATABASE_URL or individual DB_* environment variables.
+// For Supabase, set DATABASE_URL to your Supabase connection string
+// (e.g. postgres://postgres.<ref>:<password>@aws-0-us-west-1.pooler.supabase.com:6543/postgres).
 func DefaultConfig() *Config {
-	// Check for DATABASE_URL environment variable
+	// Check for DATABASE_URL environment variable (preferred for Supabase)
 	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
-		// TODO: Implement proper DATABASE_URL parsing
-		// For now, return defaults - parsePostgresURL should be implemented
-		return &Config{
-			Host:     "localhost",
-			Port:     5432,
-			Database: "pedrocli",
-			User:     "pedrocli",
-			Password: "pedrocli",
-			SSLMode:  "disable",
+		cfg, err := ParseDatabaseURL(dbURL)
+		if err == nil {
+			return cfg
 		}
+		// Fall through to individual env vars on parse error
+		fmt.Fprintf(os.Stderr, "Warning: failed to parse DATABASE_URL: %v, falling back to DB_* env vars\n", err)
 	}
 
 	// Fall back to individual environment variables
@@ -66,8 +70,55 @@ func DefaultConfig() *Config {
 		Database: getEnv("DB_NAME", "pedrocli"),
 		User:     getEnv("DB_USER", "pedrocli"),
 		Password: getEnv("DB_PASSWORD", "pedrocli"),
-		SSLMode:  getEnv("DB_SSLMODE", "disable"),
+		SSLMode:  getEnv("DB_SSLMODE", "require"),
+		Schema:   getEnv("DB_SCHEMA", "pedrocli"),
 	}
+}
+
+// ParseDatabaseURL parses a PostgreSQL connection URL into a Config.
+// Supports standard postgres:// and postgresql:// URL formats used by Supabase.
+func ParseDatabaseURL(rawURL string) (*Config, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid database URL: %w", err)
+	}
+
+	if u.Scheme != "postgres" && u.Scheme != "postgresql" {
+		return nil, fmt.Errorf("unsupported scheme %q, expected postgres or postgresql", u.Scheme)
+	}
+
+	cfg := &Config{
+		Host:     u.Hostname(),
+		Database: strings.TrimPrefix(u.Path, "/"),
+		SSLMode:  "require", // Default to require for Supabase
+	}
+
+	if u.Port() != "" {
+		port, err := strconv.Atoi(u.Port())
+		if err != nil {
+			return nil, fmt.Errorf("invalid port %q: %w", u.Port(), err)
+		}
+		cfg.Port = port
+	} else {
+		cfg.Port = 5432
+	}
+
+	if u.User != nil {
+		cfg.User = u.User.Username()
+		if pw, ok := u.User.Password(); ok {
+			cfg.Password = pw
+		}
+	}
+
+	// Parse query parameters for sslmode override
+	if sslmode := u.Query().Get("sslmode"); sslmode != "" {
+		cfg.SSLMode = sslmode
+	}
+
+	// Schema from env var (URL doesn't carry schema; set DB_SCHEMA or default)
+	cfg.Schema = getEnv("DB_SCHEMA", "pedrocli")
+
+	return cfg, nil
 }
 
 // getEnv returns an environment variable or default value
@@ -90,41 +141,69 @@ func getEnvInt(key string, defaultValue int) int {
 	return defaultValue
 }
 
-// New creates a new PostgreSQL database connection.
+// New creates a new PostgreSQL database connection backed by pgxpool.
+// pgxpool's AfterConnect hook sets search_path on every connection so that
+// all queries land in the correct schema even through Supabase's PgBouncer
+// (which strips session-level startup parameters).
 func New(cfg *Config) (*DB, error) {
-	// Build PostgreSQL connection string
-	sslMode := cfg.SSLMode
-	if sslMode == "" {
-		sslMode = "disable"
+	schema := cfg.Schema
+	if schema == "" {
+		schema = "pedrocli"
 	}
-	connStr := fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Database, sslMode,
-	)
 
-	db, err := sql.Open("postgres", connStr)
+	// Build the DSN: prefer DATABASE_URL env var, fall back to individual cfg fields.
+	connStr := os.Getenv("DATABASE_URL")
+	if connStr == "" {
+		sslMode := cfg.SSLMode
+		if sslMode == "" {
+			sslMode = "require"
+		}
+		connStr = fmt.Sprintf(
+			"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+			cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Database, sslMode,
+		)
+	}
+
+	poolCfg, err := pgxpool.ParseConfig(connStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
+		return nil, fmt.Errorf("failed to parse pool config: %w", err)
 	}
 
-	// Configure connection pool
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(5 * time.Minute)
+	// AfterConnect runs after every new connection is established.
+	// Setting search_path here guarantees it is applied regardless of PgBouncer
+	// session-reset behaviour.
+	poolCfg.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+		_, err := conn.Exec(ctx, "SET search_path TO "+schema)
+		return err
+	}
 
-	// Verify connection
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// Conservative pool size for Supabase connection limits.
+	poolCfg.MaxConns = 10
+	poolCfg.MaxConnLifetime = 5 * time.Minute
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if err := db.PingContext(ctx); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to ping database: %w", err)
+	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create connection pool: %w", err)
+	}
+
+	// stdlib adapter makes the pgxpool usable as a standard *sql.DB so the rest
+	// of the codebase (store, goose) does not need to change.
+	sqlDB := stdlib.OpenDBFromPool(pool)
+
+	// Ensure the pedrocli schema exists.
+	if _, err := sqlDB.ExecContext(ctx, "CREATE SCHEMA IF NOT EXISTS "+schema); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("failed to create schema %q: %w", schema, err)
 	}
 
 	return &DB{
-		DB:      db,
-		driver:  "postgres",
-		connStr: connStr,
+		DB:     sqlDB,
+		pool:   pool,
+		driver: "pgx",
+		schema: schema,
 	}, nil
 }
 
@@ -134,6 +213,8 @@ func (d *DB) Driver() string {
 }
 
 // Migrate runs all pending database migrations using goose.
+// search_path is set on every connection via the pgxpool AfterConnect hook,
+// so migrations always land in the correct schema.
 func (d *DB) Migrate(ctx context.Context) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -142,15 +223,15 @@ func (d *DB) Migrate(ctx context.Context) error {
 		return nil
 	}
 
-	// Set the embedded filesystem for goose
 	goose.SetBaseFS(migrationsFS)
+	// Use a pedrocli-specific table so we don't conflict with other apps
+	// sharing the same Supabase database (e.g. discord bot, chatbot).
+	goose.SetTableName("pedrocli_goose_version")
 
-	// Set the dialect to postgres
 	if err := goose.SetDialect("postgres"); err != nil {
 		return fmt.Errorf("failed to set goose dialect: %w", err)
 	}
 
-	// Run migrations
 	if err := goose.Up(d.DB, "migrations"); err != nil {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}

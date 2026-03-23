@@ -1,7 +1,10 @@
 # PedroCLI Helm Chart Values
 # Override with: helm upgrade --install pedrocli ./ops/helm/pedrocli \
+#   --set-string pedrocli.env.DATABASE_URL="$DATABASE_URL" \
 #   --set-string pedrocli.env.NOTION_TOKEN="$NOTION_TOKEN" \
 #   --set-string pedrocli.env.CAL_API_KEY="$CAL_API_KEY"
+#
+# Secrets are stored in OpenBao at secret/apps/pedrocli and injected by deploy.sh.
 
 pedrocli:
   image: 100.81.89.62:5000/pedrocli-http:latest
@@ -28,8 +31,9 @@ pedrocli:
       host: "0.0.0.0"
 
   # Environment variables (set via --set-string at deploy time)
-  # These are passed as env vars to the pod
+  # Pulled from OpenBao (secret/apps/pedrocli) by ops/scripts/deploy.sh
   env:
+    DATABASE_URL: ""
     NOTION_TOKEN: ""
     CAL_API_KEY: ""
 
@@ -42,6 +46,8 @@ pedrocli:
       memory: 512Mi
 
 postgres:
+  # enabled: false when using Supabase (DATABASE_URL set). Set true for local/dev.
+  enabled: false
   image: postgres:15-alpine
   user: pedrocli
   password: pedrocli

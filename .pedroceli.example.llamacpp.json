@@ -1,14 +1,14 @@
 {
   "model": {
     "type": "llamacpp",
-    "model_name": "unsloth/gpt-oss-20b-GGUF",
-    "server_url": "http://pedrogpt:8080",
+    "model_path": "/models/qwen2.5-coder-32b-instruct.gguf",
+    "llamacpp_path": "/usr/local/bin/llama-cli",
     "context_size": 32768,
     "usable_context": 24576,
+    "n_gpu_layers": -1,
     "temperature": 0.2,
     "threads": 32
   },
-  "// Note": "pedrogpt is a Tailscale hostname - you must be connected to Tailscale to use this",
   "execution": {
     "run_on_spark": false,
     "spark_ssh": ""

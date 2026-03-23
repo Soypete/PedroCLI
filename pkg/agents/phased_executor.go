@@ -5,37 +5,27 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/soypete/pedro-agentware/middleware"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/llmcontext"
-	"github.com/soypete/pedrocli/pkg/logits"
 	"github.com/soypete/pedrocli/pkg/storage"
 	"github.com/soypete/pedrocli/pkg/toolformat"
 	"github.com/soypete/pedrocli/pkg/tools"
 )
-
-// AllTools is a sentinel value for Tools field indicating all tools are available
-const AllTools = "*"
 
 // Phase represents a single phase in a phased workflow
 type Phase struct {
 	Name         string   // Phase identifier (e.g., "analyze", "plan", "implement")
 	Description  string   // Human-readable description
 	SystemPrompt string   // Custom system prompt for this phase
-	Tools        []string // Tool filtering: []string{AllTools} = all, []string{} = none, []string{"tool1"} = specific
+	Tools        []string // Subset of tools available in this phase (empty = all)
 	MaxRounds    int      // Max inference rounds for this phase (0 = use default)
 	// Validator validates the phase output and returns error if invalid
 	Validator func(result *PhaseResult) error
 	// Optional: allow the phase to produce structured output
 	ExpectsJSON bool
-	// PhaseGenerator dynamically creates new phases based on this phase's result
-	// Used for workflows where the number of phases is determined at runtime
-	// (e.g., generating N sections from an outline)
-	PhaseGenerator func(result *PhaseResult) ([]Phase, error)
 }
 
 // PhaseResult contains the result of executing a phase
@@ -50,48 +40,33 @@ type PhaseResult struct {
 	RoundsUsed  int                    `json:"rounds_used"`
 }
 
-// Checkpoint represents a saved workflow state for resume capability
-type Checkpoint struct {
-	Version         int                     `json:"checkpoint_version"` // Version for future compatibility
-	JobID           string                  `json:"job_id"`
-	CreatedAt       time.Time               `json:"created_at"`
-	CurrentPhase    int                     `json:"current_phase"`    // Index of next phase to execute
-	CompletedPhases []string                `json:"completed_phases"` // Names of completed phases
-	PhaseResults    map[string]*PhaseResult `json:"phase_results"`    // Results of completed phases
-	LastInput       string                  `json:"last_input"`       // Input for next phase
-	TotalPhases     int                     `json:"total_phases"`     // Total number of phases (including generated)
-	GeneratedPhases int                     `json:"generated_phases"` // Number of dynamically generated phases
-}
-
 // PhaseCallback is called after each phase completes
 // Return true to continue, false to stop execution
 type PhaseCallback func(phase Phase, result *PhaseResult) (shouldContinue bool, err error)
 
 // PhasedExecutor handles multi-phase workflow execution
 type PhasedExecutor struct {
-	agent             *BaseAgent
-	contextMgr        *llmcontext.Manager
-	phases            []Phase
-	phaseResults      map[string]*PhaseResult
-	currentPhase      int
-	jobID             string
-	defaultMaxRounds  int
-	phaseCallback     PhaseCallback // Optional callback after each phase
-	initialPhaseCount int           // Number of phases at creation (before dynamic generation)
+	agent            *BaseAgent
+	contextMgr       *llmcontext.Manager
+	phases           []Phase
+	phaseResults     map[string]*PhaseResult
+	currentPhase     int
+	jobID            string
+	defaultMaxRounds int
+	phaseCallback    PhaseCallback // Optional callback after each phase
 }
 
 // NewPhasedExecutor creates a new phased executor
 func NewPhasedExecutor(agent *BaseAgent, contextMgr *llmcontext.Manager, phases []Phase) *PhasedExecutor {
 	return &PhasedExecutor{
-		agent:             agent,
-		contextMgr:        contextMgr,
-		phases:            phases,
-		phaseResults:      make(map[string]*PhaseResult),
-		currentPhase:      0,
-		jobID:             contextMgr.GetJobID(),
-		defaultMaxRounds:  agent.config.Limits.MaxInferenceRuns,
-		phaseCallback:     nil,
-		initialPhaseCount: len(phases), // Track initial count for generated phase tracking
+		agent:            agent,
+		contextMgr:       contextMgr,
+		phases:           phases,
+		phaseResults:     make(map[string]*PhaseResult),
+		currentPhase:     0,
+		jobID:            contextMgr.GetJobID(),
+		defaultMaxRounds: agent.config.Limits.MaxInferenceRuns,
+		phaseCallback:    nil,
 	}
 }
 
@@ -184,35 +159,9 @@ func (pe *PhasedExecutor) Execute(ctx context.Context, initialInput string) erro
 			}
 		}
 
-		// Check if this phase generates additional phases dynamically
-		if phase.PhaseGenerator != nil {
-			generatedPhases, err := phase.PhaseGenerator(result)
-			if err != nil {
-				return fmt.Errorf("phase generator failed for %s: %w", phase.Name, err)
-			}
-
-			if len(generatedPhases) > 0 {
-				fmt.Fprintf(os.Stderr, "   📋 Generated %d dynamic phases from %s\n", len(generatedPhases), phase.Name)
-
-				// Insert generated phases immediately after current phase
-				pe.phases = insertPhases(pe.phases, pe.currentPhase+1, generatedPhases)
-
-				if pe.agent.config.Debug.Enabled {
-					fmt.Fprintf(os.Stderr, "   [DEBUG] Total phases: %d (added %d)\n",
-						len(pe.phases), len(generatedPhases))
-				}
-			}
-		}
-
 		// Use phase output as input for next phase
 		currentInput = pe.buildNextPhaseInput(result)
 		pe.currentPhase++
-
-		// Save checkpoint after phase completion
-		if err := pe.SaveCheckpoint(currentInput); err != nil {
-			fmt.Fprintf(os.Stderr, "  ⚠️ Failed to save checkpoint: %v\n", err)
-			// Continue execution even if checkpoint fails
-		}
 	}
 
 	fmt.Fprintf(os.Stderr, "\n✅ All %d phases completed successfully!\n", len(pe.phases))
@@ -241,8 +190,7 @@ func (pe *PhasedExecutor) executePhase(ctx context.Context, phase Phase, input s
 		maxRounds:    maxRounds,
 		currentRound: 0,
 		jobID:        pe.jobID,
-		result:       result,                      // Pass result so executor can track tool calls
-		callHistory:  middleware.NewCallHistory(), // Track tool calls and failures via middleware
+		result:       result, // Pass result so executor can track tool calls
 	}
 
 	// Execute the inference loop for this phase
@@ -560,141 +508,6 @@ func (pe *PhasedExecutor) savePhaseResults(ctx context.Context) {
 	}
 }
 
-// SaveCheckpoint saves the current execution state for resume capability
-// Saves to disk (CLI) and/or database (webapp) depending on configuration
-func (pe *PhasedExecutor) SaveCheckpoint(lastInput string) error {
-	// Check if checkpointing is enabled
-	if !pe.agent.config.Limits.EnablePhaseCheckpoints {
-		return nil // Silently skip if disabled
-	}
-
-	// Count generated phases (current total - initial count)
-	generatedCount := len(pe.phases) - pe.initialPhaseCount
-
-	checkpoint := Checkpoint{
-		Version:         1,
-		JobID:           pe.jobID,
-		CreatedAt:       time.Now(),
-		CurrentPhase:    pe.currentPhase,
-		CompletedPhases: pe.getCompletedPhaseNames(),
-		PhaseResults:    pe.phaseResults,
-		LastInput:       lastInput,
-		TotalPhases:     len(pe.phases),
-		GeneratedPhases: generatedCount,
-	}
-
-	data, err := json.MarshalIndent(checkpoint, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal checkpoint: %w", err)
-	}
-
-	// Save to disk (for CLI)
-	checkpointPath := filepath.Join(pe.contextMgr.GetJobDir(), "checkpoint.json")
-	if err := os.WriteFile(checkpointPath, data, 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "  ⚠️ Failed to write checkpoint to disk: %v\n", err)
-	}
-
-	// Save to database (for webapp)
-	if pe.agent.jobManager != nil {
-		entry := storage.ConversationEntry{
-			Role:      "system",
-			Content:   fmt.Sprintf("Checkpoint saved: %s", string(data)),
-			Timestamp: time.Now(),
-		}
-		if err := pe.agent.jobManager.AppendConversation(context.Background(), pe.jobID, entry); err != nil {
-			fmt.Fprintf(os.Stderr, "  ⚠️ Failed to save checkpoint to database: %v\n", err)
-		}
-	}
-
-	if pe.agent.config.Debug.Enabled {
-		fmt.Fprintf(os.Stderr, "   [DEBUG] Checkpoint saved: %d/%d phases completed\n",
-			pe.currentPhase, len(pe.phases))
-	}
-
-	return nil
-}
-
-// LoadCheckpoint loads a checkpoint from a job directory
-func LoadCheckpoint(jobDir string) (*Checkpoint, error) {
-	checkpointPath := filepath.Join(jobDir, "checkpoint.json")
-
-	data, err := os.ReadFile(checkpointPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("no checkpoint found: %w", err)
-		}
-		return nil, fmt.Errorf("failed to read checkpoint: %w", err)
-	}
-
-	var checkpoint Checkpoint
-	if err := json.Unmarshal(data, &checkpoint); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal checkpoint: %w", err)
-	}
-
-	return &checkpoint, nil
-}
-
-// CanResume checks if a checkpoint exists in the job directory
-func CanResume(jobDir string) bool {
-	checkpointPath := filepath.Join(jobDir, "checkpoint.json")
-	_, err := os.Stat(checkpointPath)
-	return err == nil
-}
-
-// ResumeFromCheckpoint resumes execution from a saved checkpoint
-func (pe *PhasedExecutor) ResumeFromCheckpoint(ctx context.Context, checkpoint *Checkpoint) error {
-	// Validate checkpoint
-	if checkpoint.JobID != pe.jobID {
-		return fmt.Errorf("checkpoint job ID mismatch: expected %s, got %s", pe.jobID, checkpoint.JobID)
-	}
-
-	if checkpoint.CurrentPhase >= len(pe.phases) {
-		return fmt.Errorf("checkpoint phase index out of bounds: %d >= %d", checkpoint.CurrentPhase, len(pe.phases))
-	}
-
-	// Restore state
-	pe.currentPhase = checkpoint.CurrentPhase
-	pe.phaseResults = checkpoint.PhaseResults
-
-	fmt.Fprintf(os.Stderr, "\n🔄 Resuming from checkpoint: %d/%d phases completed\n",
-		checkpoint.CurrentPhase, len(pe.phases))
-	fmt.Fprintf(os.Stderr, "   Completed phases: %v\n", checkpoint.CompletedPhases)
-
-	// Continue execution from the current phase
-	return pe.Execute(ctx, checkpoint.LastInput)
-}
-
-// getCompletedPhaseNames returns a list of completed phase names
-func (pe *PhasedExecutor) getCompletedPhaseNames() []string {
-	completed := make([]string, 0, pe.currentPhase)
-	for i := 0; i < pe.currentPhase && i < len(pe.phases); i++ {
-		completed = append(completed, pe.phases[i].Name)
-	}
-	return completed
-}
-
-// insertPhases inserts new phases at a specific position in the phase list
-func insertPhases(phases []Phase, position int, newPhases []Phase) []Phase {
-	if position < 0 || position > len(phases) {
-		// Invalid position, append to end
-		return append(phases, newPhases...)
-	}
-
-	// Create new slice with capacity for all phases
-	result := make([]Phase, 0, len(phases)+len(newPhases))
-
-	// Copy phases before insertion point
-	result = append(result, phases[:position]...)
-
-	// Insert new phases
-	result = append(result, newPhases...)
-
-	// Copy remaining phases
-	result = append(result, phases[position:]...)
-
-	return result
-}
-
 // phaseInferenceExecutor handles inference for a single phase
 type phaseInferenceExecutor struct {
 	agent        *BaseAgent
@@ -703,8 +516,7 @@ type phaseInferenceExecutor struct {
 	maxRounds    int
 	currentRound int
 	jobID        string
-	result       *PhaseResult            // Track tool calls in this phase
-	callHistory  *middleware.CallHistory // Track tool calls and failures via middleware
+	result       *PhaseResult // Track tool calls in this phase
 }
 
 // execute runs the inference loop for a phase
@@ -801,26 +613,10 @@ func (pie *phaseInferenceExecutor) execute(ctx context.Context, input string) (s
 			continue
 		}
 
-		// VALIDATE tool calls before execution
-		validCalls, validationErrors := pie.validateToolCalls(toolCalls)
-
-		if len(validationErrors) > 0 {
-			// Build error feedback prompt
-			currentPrompt = "Tool call errors:\n\n"
-			for _, err := range validationErrors {
-				currentPrompt += "❌ " + err + "\n"
-			}
-			currentPrompt += "\nPlease retry with correct tool names and parameters."
-			continue // Loop again for LLM to fix
-		}
-
 		// Filter tools if phase has tool restrictions
 		if len(pie.phase.Tools) > 0 {
-			validCalls = pie.filterToolCalls(validCalls)
+			toolCalls = pie.filterToolCalls(toolCalls)
 		}
-
-		// Use validated calls for the rest of the flow
-		toolCalls = validCalls
 
 		// Save tool calls to context files
 		contextCalls := make([]llmcontext.ToolCall, len(toolCalls))
@@ -896,18 +692,12 @@ func (pie *phaseInferenceExecutor) executeInference(ctx context.Context, systemP
 
 		// Debug: Show filtering results
 		if pie.agent.config.Debug.Enabled {
-			if len(pie.phase.Tools) == 1 && pie.phase.Tools[0] == AllTools {
-				// AllTools sentinel = unrestricted
-				fmt.Fprintf(os.Stderr, "   [DEBUG] Phase %s: all %d tools available (unrestricted)\n",
-					pie.phase.Name, len(toolDefs))
-			} else if len(pie.phase.Tools) == 0 {
-				// Empty array = no tools
-				fmt.Fprintf(os.Stderr, "   [DEBUG] Phase %s: 0 tools allowed (no tool use)\n",
-					pie.phase.Name)
-			} else {
-				// Specific subset
+			if len(pie.phase.Tools) > 0 {
 				fmt.Fprintf(os.Stderr, "   [DEBUG] Phase %s tools: %d/%d allowed (%v)\n",
 					pie.phase.Name, len(toolDefs), len(allToolDefs), pie.phase.Tools)
+			} else {
+				fmt.Fprintf(os.Stderr, "   [DEBUG] Phase %s: all %d tools available (unrestricted)\n",
+					pie.phase.Name, len(toolDefs))
 			}
 		}
 	}
@@ -922,93 +712,10 @@ func (pie *phaseInferenceExecutor) executeInference(ctx context.Context, systemP
 
 	// Apply anti-hallucination logit bias in Validate phase when processing tool results
 	// This prevents the agent from fabricating tool outputs
-	// IMPORTANT: Skip when native tool calling is enabled (conflicts with grammar)
-	if pie.phase.Name == "validate" && strings.HasPrefix(userPrompt, "Tool results:") && !pie.agent.config.Model.EnableTools {
+	if pie.phase.Name == "validate" && strings.HasPrefix(userPrompt, "Tool results:") {
 		req.LogitBias = GetToolResultValidationBias(pie.agent.tokenIDProvider)
 		if pie.agent.config.Debug.Enabled {
 			fmt.Fprintln(os.Stderr, "  🎯 Applied anti-hallucination logit bias")
-		}
-	}
-
-	// Apply multi-action tool bias when tools are available
-	// This encourages correct "action" parameter usage in multi-action tools
-	// IMPORTANT: Skip logit bias when native tool calling is enabled (EnableTools=true)
-	// because llama.cpp grammar constraints conflict with logit bias manipulation
-	if pie.agent.config.Debug.Enabled {
-		fmt.Fprintf(os.Stderr, "   [DEBUG] Checking logit bias: toolDefs=%d, tokenIDProvider=%v, EnableTools=%v\n",
-			len(toolDefs), pie.agent.tokenIDProvider != nil, pie.agent.config.Model.EnableTools)
-	}
-
-	// Only apply logit bias when NOT using native tool calling
-	// Native tool calling already enforces schemas via llama.cpp grammar system
-	if len(toolDefs) > 0 && pie.agent.tokenIDProvider != nil && !pie.agent.config.Model.EnableTools {
-		// Check if we have multi-action tools (search, file, navigate, rss_feed, etc.)
-		hasMultiActionTools := false
-		for _, toolDef := range toolDefs {
-			// Multi-action tools typically have "action" in their parameter names
-			// Parameters is a JSON Schema stored as map[string]interface{}
-			if toolDef.Parameters != nil {
-				// Debug: Show parameter structure
-				if pie.agent.config.Debug.Enabled {
-					if props, ok := toolDef.Parameters["properties"]; ok {
-						fmt.Fprintf(os.Stderr, "   [DEBUG] Tool %s properties type: %T\n", toolDef.Name, props)
-						// Show what keys are in properties
-						if propsMap, ok := props.(map[string]interface{}); ok {
-							keys := make([]string, 0, len(propsMap))
-							for k := range propsMap {
-								keys = append(keys, k)
-							}
-							fmt.Fprintf(os.Stderr, "   [DEBUG] Tool %s properties keys: %v\n", toolDef.Name, keys)
-						}
-					}
-				}
-
-				// Try different type assertions for properties
-				if props, ok := toolDef.Parameters["properties"].(map[string]interface{}); ok {
-					if _, hasAction := props["action"]; hasAction {
-						hasMultiActionTools = true
-						if pie.agent.config.Debug.Enabled {
-							fmt.Fprintf(os.Stderr, "   [DEBUG] Found multi-action tool: %s (via map[string]interface{})\n", toolDef.Name)
-						}
-						break
-					}
-				} else if propsMap, ok := toolDef.Parameters["properties"].(map[string]*logits.JSONSchema); ok {
-					// Properties might be map[string]*logits.JSONSchema from metadata
-					if _, hasAction := propsMap["action"]; hasAction {
-						hasMultiActionTools = true
-						if pie.agent.config.Debug.Enabled {
-							fmt.Fprintf(os.Stderr, "   [DEBUG] Found multi-action tool: %s (via JSONSchema map)\n", toolDef.Name)
-						}
-						break
-					}
-				}
-			}
-		}
-
-		if pie.agent.config.Debug.Enabled {
-			fmt.Fprintf(os.Stderr, "   [DEBUG] hasMultiActionTools=%v\n", hasMultiActionTools)
-		}
-
-		if hasMultiActionTools {
-			// Merge with existing logit bias if present, otherwise create new
-			multiActionBias := GetMultiActionToolBias(pie.agent.tokenIDProvider)
-			if req.LogitBias == nil {
-				req.LogitBias = multiActionBias
-			} else {
-				// Merge biases (multi-action bias takes precedence)
-				for tokenID, bias := range multiActionBias {
-					req.LogitBias[tokenID] = bias
-				}
-			}
-
-			if pie.agent.config.Debug.Enabled {
-				fmt.Fprintf(os.Stderr, "  🎯 Applied multi-action tool logit bias (%d tokens)\n", len(multiActionBias))
-			}
-		}
-	} else if len(toolDefs) > 0 && pie.agent.config.Model.EnableTools {
-		// Native tool calling enabled - logit bias skipped to avoid grammar conflicts
-		if pie.agent.config.Debug.Enabled {
-			fmt.Fprintf(os.Stderr, "   [DEBUG] Skipping logit bias (native tool calling uses grammar constraints)\n")
 		}
 	}
 
@@ -1017,15 +724,8 @@ func (pie *phaseInferenceExecutor) executeInference(ctx context.Context, systemP
 
 // filterToolCalls filters tool calls to only allowed tools for this phase
 func (pie *phaseInferenceExecutor) filterToolCalls(calls []llm.ToolCall) []llm.ToolCall {
-	// Check for AllTools sentinel (unrestricted)
-	if len(pie.phase.Tools) == 1 && pie.phase.Tools[0] == AllTools {
-		// AllTools = unrestricted, return all calls
-		return calls
-	}
-
 	if len(pie.phase.Tools) == 0 {
-		// Empty array = no tools allowed, filter out all
-		return []llm.ToolCall{}
+		return calls
 	}
 
 	allowedSet := make(map[string]bool)
@@ -1050,51 +750,15 @@ func (pie *phaseInferenceExecutor) filterToolCalls(calls []llm.ToolCall) []llm.T
 
 // filterToolDefinitions filters tool definitions to only allowed tools for this phase
 func (pie *phaseInferenceExecutor) filterToolDefinitions(defs []llm.ToolDefinition) []llm.ToolDefinition {
-	// Check for nil vs empty slice - nil means unrestricted
-	if pie.phase.Tools == nil {
-		// nil = unrestricted, return all tools
-		return defs
-	}
-
-	// Check for AllTools sentinel (unrestricted)
-	if len(pie.phase.Tools) == 1 && pie.phase.Tools[0] == AllTools {
-		// AllTools = unrestricted, return all tools
-		return defs
-	}
-
+	// No restrictions if Tools list is empty
 	if len(pie.phase.Tools) == 0 {
-		// Empty array = explicitly no tools allowed
-		return []llm.ToolDefinition{}
+		return defs
 	}
 
 	// Build allowed set for O(1) lookup
 	allowedSet := make(map[string]bool)
 	for _, toolName := range pie.phase.Tools {
 		allowedSet[toolName] = true
-	}
-
-	// Prevent tool call loops by removing:
-	// 1. Tools that have been successfully called
-	// 2. Tools that have failed 3+ times (likely invalid arguments)
-	// This forces the LLM to either use different tools or output PHASE_COMPLETE
-	removedTools := make(map[string]string)
-
-	// Remove successfully called tools
-	for toolName := range pie.callHistory.GetCalledTools() {
-		delete(allowedSet, toolName)
-		removedTools[toolName] = "already called successfully"
-	}
-
-	// Remove tools that have failed repeatedly (3+ failures = give up)
-	for toolName, failCount := range pie.callHistory.GetFailedTools() {
-		if failCount >= 3 {
-			delete(allowedSet, toolName)
-			removedTools[toolName] = fmt.Sprintf("failed %d times", failCount)
-		}
-	}
-
-	if len(removedTools) > 0 && pie.agent.config.Debug.Enabled {
-		fmt.Fprintf(os.Stderr, "   [DEBUG] Removed tools from available set: %v\n", removedTools)
 	}
 
 	// Filter definitions
@@ -1112,30 +776,12 @@ func (pie *phaseInferenceExecutor) filterToolDefinitions(defs []llm.ToolDefiniti
 	if pie.agent.config.Debug.Enabled {
 		fmt.Fprintf(os.Stderr, "   [DEBUG] Filtered tool definitions: %d → %d (phase: %s)\n",
 			len(defs), len(filtered), pie.phase.Name)
-	}
 
-	// Check for tools that genuinely don't exist (not just filtered out)
-	allToolNames := pie.getAllRegisteredToolNames()
-	for _, toolName := range pie.phase.Tools {
-		if toolName == AllTools {
-			continue
-		}
-
-		// Check if tool exists in full registered set
-		if !allToolNames[toolName] {
-			// Tool genuinely doesn't exist - this is an error
-			fmt.Fprintf(os.Stderr, "   ⚠️  Tool %q specified in phase but not registered\n", toolName)
-		} else if !foundTools[toolName] && pie.agent.config.Debug.Enabled {
-			// Tool exists but was filtered - this is expected behavior
-			reason := "filtered"
-			calledTools := pie.callHistory.GetCalledTools()
-			failedTools := pie.callHistory.GetFailedTools()
-			if calledTools[toolName] {
-				reason = "already called successfully"
-			} else if failedTools[toolName] >= 3 {
-				reason = fmt.Sprintf("failed %d times", failedTools[toolName])
+		// Warn about tools in phase spec that don't exist
+		for _, toolName := range pie.phase.Tools {
+			if !foundTools[toolName] {
+				fmt.Fprintf(os.Stderr, "   ⚠️  Tool %q specified in phase but not registered\n", toolName)
 			}
-			fmt.Fprintf(os.Stderr, "   [DEBUG] Tool %q filtered out: %s\n", toolName, reason)
 		}
 	}
 
@@ -1242,14 +888,8 @@ func (pie *phaseInferenceExecutor) executeTools(ctx context.Context, calls []llm
 
 		if result.Success {
 			fmt.Fprintf(os.Stderr, "   ✅ %s\n", call.Name)
-			pie.callHistory.RecordToolCall(call.Name, true)
 		} else {
 			fmt.Fprintf(os.Stderr, "   ❌ %s: %s\n", call.Name, result.Error)
-			pie.callHistory.RecordToolCall(call.Name, false)
-			if pie.agent.config.Debug.Enabled {
-				failedTools := pie.callHistory.GetFailedTools()
-				fmt.Fprintf(os.Stderr, "      [DEBUG] Tool %s has failed %d time(s)\n", call.Name, failedTools[call.Name])
-			}
 		}
 	}
 
@@ -1279,27 +919,16 @@ func (pie *phaseInferenceExecutor) buildFeedbackPrompt(calls []llm.ToolCall, res
 
 	sb.WriteString("Tool results:\n\n")
 
-	allSucceeded := true
 	for i, call := range calls {
 		result := results[i]
 		if result.Success {
 			sb.WriteString(fmt.Sprintf("✅ %s: %s\n", call.Name, truncateOutput(result.Output, 1000)))
 		} else {
 			sb.WriteString(fmt.Sprintf("❌ %s failed: %s\n", call.Name, result.Error))
-			allSucceeded = false
 		}
 	}
 
-	sb.WriteString("\n")
-
-	// For phases like analyze_style that fetch data once, prevent tool call loops
-	if allSucceeded && pie.phase.Name == "analyze_style" {
-		sb.WriteString("The RSS feed has been fetched successfully above. DO NOT call rss_feed again.\n")
-		sb.WriteString("Analyze the blog posts in the feed data and create a style guide.\n")
-		sb.WriteString("When analysis is complete, output your style guide and signal PHASE_COMPLETE.\n")
-	} else {
-		sb.WriteString("Continue with the phase. When complete, indicate with PHASE_COMPLETE.")
-	}
+	sb.WriteString("\nContinue with the phase. When complete, indicate with PHASE_COMPLETE.")
 
 	return sb.String()
 }
@@ -1391,158 +1020,6 @@ func (pie *phaseInferenceExecutor) logConversationWithSuccess(ctx context.Contex
 			fmt.Fprintf(os.Stderr, "   ⚠️ Failed to log tool result: %v\n", err)
 		}
 	}
-}
-
-// validateToolCalls validates tool calls before execution
-// Returns valid calls and error messages for invalid ones
-func (pie *phaseInferenceExecutor) validateToolCalls(calls []llm.ToolCall) ([]llm.ToolCall, []string) {
-	var validated []llm.ToolCall
-	var errors []string
-
-	for _, call := range calls {
-		// Get the actual tool instance
-		var tool tools.Tool
-		var toolExists bool
-
-		if pie.agent.registry != nil {
-			for _, t := range pie.agent.registry.List() {
-				if t.Name() == call.Name {
-					tool = t
-					toolExists = true
-					break
-				}
-			}
-		} else {
-			tool, toolExists = pie.agent.tools[call.Name]
-		}
-
-		if !toolExists {
-			// Check if this might be an action name mistakenly used as tool name
-			if isSearchAction(call.Name) {
-				errors = append(errors, fmt.Sprintf(
-					"Tool '%s' not found. Did you mean: {\"tool\": \"search\", \"args\": {\"action\": \"%s\", ...}}?",
-					call.Name, call.Name))
-			} else if isFileAction(call.Name) {
-				errors = append(errors, fmt.Sprintf(
-					"Tool '%s' not found. Did you mean: {\"tool\": \"file\", \"args\": {\"action\": \"%s\", ...}}?",
-					call.Name, call.Name))
-			} else if isNavigateAction(call.Name) {
-				errors = append(errors, fmt.Sprintf(
-					"Tool '%s' not found. Did you mean: {\"tool\": \"navigate\", \"args\": {\"action\": \"%s\", ...}}?",
-					call.Name, call.Name))
-			} else {
-				errors = append(errors, fmt.Sprintf("Tool '%s' not found", call.Name))
-			}
-			continue
-		}
-
-		// Comprehensive schema-based validation for required parameters
-		requiredParams := pie.getRequiredParameters(tool)
-		var missingParams []string
-
-		for _, paramName := range requiredParams {
-			if val, ok := call.Args[paramName]; !ok || val == "" {
-				missingParams = append(missingParams, paramName)
-			}
-		}
-
-		if len(missingParams) > 0 {
-			// Debug: Show what args were actually provided
-			if pie.agent.config.Debug.Enabled {
-				argsJSON, _ := json.Marshal(call.Args)
-				fmt.Fprintf(os.Stderr, "   [DEBUG] Tool '%s' called with args: %s\n", call.Name, string(argsJSON))
-				fmt.Fprintf(os.Stderr, "   [DEBUG] Required params: %v, Missing: %v\n", requiredParams, missingParams)
-			}
-
-			// Check for common mistakes (using 'type' instead of 'action')
-			if stringSliceContains(missingParams, "action") {
-				if _, hasType := call.Args["type"]; hasType {
-					errors = append(errors, fmt.Sprintf(
-						"Tool '%s' error: parameter is named 'action', not 'type'. Use: {\"tool\": \"%s\", \"args\": {\"action\": \"...\", ...}}",
-						call.Name, call.Name))
-					continue
-				}
-			}
-
-			// Provide detailed error with all missing parameters
-			errors = append(errors, fmt.Sprintf(
-				"Tool '%s' error: missing required parameter(s): %v. Example: {\"tool\": \"%s\", \"args\": {%s}}",
-				call.Name,
-				missingParams,
-				call.Name,
-				buildExampleArgs(missingParams)))
-			continue
-		}
-
-		validated = append(validated, call)
-	}
-
-	return validated, errors
-}
-
-// getRequiredParameters extracts required parameters from tool's schema
-func (pie *phaseInferenceExecutor) getRequiredParameters(tool tools.Tool) []string {
-	// Check if tool implements ExtendedTool interface
-	extTool, ok := tool.(tools.ExtendedTool)
-	if !ok {
-		return nil
-	}
-
-	metadata := extTool.Metadata()
-	if metadata == nil || metadata.Schema == nil {
-		return nil
-	}
-
-	return metadata.Schema.Required
-}
-
-// buildExampleArgs builds an example args JSON snippet for error messages
-func buildExampleArgs(paramNames []string) string {
-	if len(paramNames) == 0 {
-		return ""
-	}
-
-	var parts []string
-	for _, name := range paramNames {
-		parts = append(parts, fmt.Sprintf("\"%s\": \"...\"", name))
-	}
-	return strings.Join(parts, ", ")
-}
-
-// stringSliceContains checks if a string slice contains an item
-func stringSliceContains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
-}
-
-// getAllRegisteredToolNames returns all registered tool names
-func (pie *phaseInferenceExecutor) getAllRegisteredToolNames() map[string]bool {
-	names := make(map[string]bool)
-	if pie.agent.registry != nil {
-		for _, t := range pie.agent.registry.List() {
-			names[t.Name()] = true
-		}
-	} else {
-		for name := range pie.agent.tools {
-			names[name] = true
-		}
-	}
-	return names
-}
-
-// isNavigateAction checks if a name is a navigate action
-func isNavigateAction(name string) bool {
-	actions := []string{"list_directory", "get_file_outline", "get_tree", "analyze_imports"}
-	for _, action := range actions {
-		if name == action {
-			return true
-		}
-	}
-	return false
 }
 
 // Helper functions
