@@ -91,7 +91,7 @@ func (b *BashTool) Execute(ctx context.Context, args map[string]interface{}) (*R
 	}
 
 	// Check if allowed
-	if !b.isAllowed(baseCmd) {
+	if !b.IsAllowed(baseCmd) {
 		return &Result{
 			Success: false,
 			Error:   fmt.Sprintf("command not allowed: %s", baseCmd),
@@ -118,8 +118,8 @@ func (b *BashTool) Execute(ctx context.Context, args map[string]interface{}) (*R
 	}, nil
 }
 
-// isAllowed checks if a command is allowed
-func (b *BashTool) isAllowed(cmd string) bool {
+// IsAllowed checks if a command is allowed
+func (b *BashTool) IsAllowed(cmd string) bool {
 	// If allowedCommands is empty, allow all non-forbidden
 	if len(b.allowedCommands) == 0 {
 		return !b.forbiddenCommands[cmd]

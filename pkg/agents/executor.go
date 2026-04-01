@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/soypete/pedro-agentware/middleware"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/llmcontext"
 	"github.com/soypete/pedrocli/pkg/storage"
@@ -46,6 +47,9 @@ type InferenceExecutor struct {
 	currentRound int
 	systemPrompt string // Custom system prompt (if set)
 
+	// Policy evaluator for tool call validation (middleware)
+	policyEvaluator middleware.PolicyEvaluator
+
 	// Progress callback for streaming updates
 	progressCallback ProgressCallback
 }
@@ -53,12 +57,18 @@ type InferenceExecutor struct {
 // NewInferenceExecutor creates a new inference executor
 func NewInferenceExecutor(agent *BaseAgent, contextMgr *llmcontext.Manager) *InferenceExecutor {
 	return &InferenceExecutor{
-		agent:        agent,
-		contextMgr:   contextMgr,
-		maxRounds:    agent.config.Limits.MaxInferenceRuns,
-		currentRound: 0,
-		systemPrompt: "", // Will use agent's default if empty
+		agent:           agent,
+		contextMgr:      contextMgr,
+		maxRounds:       agent.config.Limits.MaxInferenceRuns,
+		currentRound:    0,
+		systemPrompt:    "",  // Will use agent's default if empty
+		policyEvaluator: nil, // Will be set via SetPolicyEvaluator if needed
 	}
+}
+
+// SetPolicyEvaluator sets the middleware policy evaluator for tool call validation
+func (e *InferenceExecutor) SetPolicyEvaluator(eval middleware.PolicyEvaluator) {
+	e.policyEvaluator = eval
 }
 
 // SetSystemPrompt sets a custom system prompt for this executor
@@ -324,6 +334,17 @@ func (e *InferenceExecutor) validateToolCalls(calls []llm.ToolCall) ([]llm.ToolC
 	var validated []llm.ToolCall
 	var errors []string
 
+	// Create CallerContext for middleware evaluation
+	callerCtx := middleware.CallerContext{
+		Trusted:   true,
+		Role:      "agent",
+		UserID:    "",
+		SessionID: "",
+		Source:    "inference",
+		Phase:     "validation",
+		Metadata:  nil,
+	}
+
 	for _, call := range calls {
 		// Check if tool exists
 		if _, exists := e.agent.tools[call.Name]; !exists {
@@ -355,10 +376,67 @@ func (e *InferenceExecutor) validateToolCalls(calls []llm.ToolCall) ([]llm.ToolC
 			}
 		}
 
+		// If policy evaluator is set, use middleware for additional validation
+		if e.policyEvaluator != nil {
+			decision := e.policyEvaluator.Evaluate(callerCtx, call.Name, call.Args)
+			if decision.IsDenied() {
+				reason := decision.Reason
+				if reason == "" {
+					reason = fmt.Sprintf("policy denied tool '%s'", call.Name)
+				}
+				errors = append(errors, reason)
+				continue
+			}
+
+			// For bash tool, apply allowlist/denylist if not handled by middleware
+			if call.Name == "bash" {
+				if !e.validateBashAllowlistDenylist(call.Args, decision) {
+					errors = append(errors, fmt.Sprintf("bash command not allowed by allowlist/denylist policy"))
+					continue
+				}
+			}
+		}
+
 		validated = append(validated, call)
 	}
 
 	return validated, errors
+}
+
+// validateBashAllowlistDenylist validates bash commands against allowlist/denylist
+// This preserves the existing bash command allowlist/denylist logic from pkg/tools/bash.go
+func (e *InferenceExecutor) validateBashAllowlistDenylist(args map[string]interface{}, decision middleware.Decision) bool {
+	// Check if middleware already handled bash validation (includes allowlist/denylist info)
+	if reason := decision.Reason; reason != "" {
+		// If middleware provided a reason, it has handled the validation
+		return decision.IsAllowed()
+	}
+
+	// Fall back to checking bash tool's own allowlist/denylist
+	// Get the bash tool from agent's tools
+	bashTool, exists := e.agent.tools["bash"]
+	if !exists {
+		// No bash tool available, allow (will fail later if needed)
+		return true
+	}
+
+	// Access the bash tool's allowed/forbidden commands
+	// We need to type assert to get the internal fields
+	bash, ok := bashTool.(*tools.BashTool)
+	if !ok {
+		// Not the expected type, allow through
+		return true
+	}
+
+	// Get command from args
+	cmd, ok := args["command"].(string)
+	if !ok || cmd == "" {
+		// No command to validate, allow
+		return true
+	}
+
+	// Use bash tool's built-in isAllowed method
+	return bash.IsAllowed(cmd)
 }
 
 // isSearchAction checks if a name is a search action
