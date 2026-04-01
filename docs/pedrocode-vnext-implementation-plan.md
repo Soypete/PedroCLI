@@ -4,7 +4,7 @@
 **Owner**: Miriah Peterson  
 **Status**: Proposed  
 **Date**: 2026-04-01  
-**Related ADRs**: ADR-005 (Agent Workflow Refactoring), ADR-009 (Evaluation System), ADR-011 (Middleware Tool Filtering)
+**Related ADRs**: ADR-005 (Agent Workflow Refactoring), ADR-009 (Evaluation System), ADR-011 (Middleware Tool Filtering), ADR-012 (Kairos Memory Consolidation), ADR-013 (vNext Orchestration Architecture)
 
 ---
 
@@ -383,33 +383,549 @@ type TaskResult struct {
 
 ---
 
+### Milestone 10: Kairos Memory Consolidation (ADR-012)
+
+**Goal**: Post-session memory consolidation and resume for session continuity.
+
+**Files to create/modify**:
+- `pkg/memory/store.go` — `MemoryStore` interface
+- `pkg/memory/file_store.go` — file-based implementation (`.pedro/` directory)
+- `pkg/memory/types.go` — `SessionRecord`, `MemoryFact`, `OpenTask`, `ResumePacket`
+- `pkg/memory/consolidator.go` — LLM-based consolidation pipeline
+- `pkg/memory/dreamer.go` — `DreamerWorker` post-session maintenance
+- `pkg/memory/resume.go` — resume loader + validator
+- `pkg/repl/session.go` — load resume on start, run dreamer on close
+
+**Issues**:
+1. Define memory types and `MemoryStore` interface
+2. Implement `FileMemoryStore` with `.pedro/sessions/`, `.pedro/memory/`, `.pedro/resume/`
+3. Implement `Consolidator` — LLM-based artifact → facts + summary extraction
+4. Implement `DreamerWorker` — runs consolidator after session ends (read-only tools only)
+5. Implement resume loader — loads `ResumePacket`, validates against repo state (branch exists, files present)
+6. Wire into REPL session lifecycle — load on start, display handoff, consolidate on close
+7. Add fact TTL and staleness revalidation
+
+**Guardrails (from ADR-012)**:
+- Dreamer worker **never** modifies code
+- Memory is a hint, not source of truth — revalidate before use
+- Every durable fact must reference an evidence artifact
+- Facts have TTL (repo facts: weekly, branch facts: per-session)
+
+See [ADR-012](adr/ADR-012-kairos-memory-consolidation.md) for full design.
+
+---
+
+## Go Interface Definitions
+
+All new interfaces for the orchestration layer. These build on existing types from `pkg/agents/`, `pkg/tools/`, and `pkg/llm/`.
+
+### QueryEngine (`pkg/orchestration/query.go`)
+
+```go
+package orchestration
+
+import (
+    "context"
+    "time"
+)
+
+// QueryEngine is the top-level orchestrator for all user requests.
+type QueryEngine interface {
+    Execute(ctx context.Context, query *Query) (*QueryResult, error)
+    SetMode(mode Mode)
+    GetMode() Mode
+}
+
+type Query struct {
+    ID          string              `json:"id"`
+    Raw         string              `json:"raw"`
+    Intent      QueryIntent         `json:"intent"`
+    Mode        Mode                `json:"mode"`
+    Context     *QueryContext       `json:"context"`
+    Constraints *ExecutionConstraints `json:"constraints"`
+}
+
+type QueryIntent string
+
+const (
+    IntentChat    QueryIntent = "chat"
+    IntentExplore QueryIntent = "explore"
+    IntentPlan    QueryIntent = "plan"
+    IntentBuild   QueryIntent = "build"
+    IntentDebug   QueryIntent = "debug"
+    IntentReview  QueryIntent = "review"
+    IntentTest    QueryIntent = "test"
+)
+
+type QueryContext struct {
+    SessionID    string            `json:"session_id"`
+    WorkDir      string            `json:"work_dir"`
+    Branch       string            `json:"branch"`
+    ResumePacket *ResumePacket     `json:"resume_packet,omitempty"` // From Kairos memory
+    PriorResults []string          `json:"prior_results,omitempty"`
+}
+
+type ExecutionConstraints struct {
+    MaxDuration    time.Duration `json:"max_duration"`
+    MaxInference   int           `json:"max_inference"`
+    MaxSubagents   int           `json:"max_subagents"`
+    RequireApproval bool         `json:"require_approval"`
+}
+
+type QueryResult struct {
+    ID        string              `json:"id"`
+    Status    ResultStatus        `json:"status"`
+    Summary   string              `json:"summary"`
+    Artifacts []Artifact          `json:"artifacts"`
+    Tasks     []TaskRecord        `json:"tasks,omitempty"`
+    Metrics   *ExecutionMetrics   `json:"metrics,omitempty"`
+}
+
+type ResultStatus string
+
+const (
+    StatusSuccess  ResultStatus = "success"
+    StatusPartial  ResultStatus = "partial"
+    StatusFailed   ResultStatus = "failed"
+    StatusCancelled ResultStatus = "cancelled"
+)
+```
+
+### Mode (`pkg/orchestration/modes.go`)
+
+```go
+type Mode string
+
+const (
+    ModeChat   Mode = "chat"
+    ModePlan   Mode = "plan"
+    ModeBuild  Mode = "build"
+    ModeReview Mode = "review"
+)
+
+type ModeConfig struct {
+    Mode             Mode     `json:"mode"`
+    AllowedPhases    []string `json:"allowed_phases"`
+    AllowedTools     []string `json:"allowed_tools"`
+    ForbiddenTools   []string `json:"forbidden_tools"`
+    RequiresApproval bool     `json:"requires_approval"`
+    MaxInferenceRuns int      `json:"max_inference_runs"`
+}
+```
+
+### PhaseEngine (`pkg/orchestration/phases.go`)
+
+```go
+// PhaseEngine manages phase lifecycle, transitions, and enforcement.
+// Wraps the existing PhasedExecutor with planning and conditional transitions.
+type PhaseEngine interface {
+    Plan(ctx context.Context, query *Query) (*ExecutionPlan, error)
+    Execute(ctx context.Context, plan *ExecutionPlan) (*PlanResult, error)
+    RegisterPhaseTemplate(template PhaseTemplate)
+}
+
+type ExecutionPlan struct {
+    ID      string         `json:"id"`
+    QueryID string         `json:"query_id"`
+    Phases  []PlannedPhase `json:"phases"`
+    Mode    Mode           `json:"mode"`
+}
+
+// PlannedPhase extends existing agents.Phase with orchestration metadata.
+type PlannedPhase struct {
+    Name         string   `json:"name"`
+    Description  string   `json:"description"`
+    SystemPrompt string   `json:"system_prompt"`
+    Tools        []string `json:"tools"`
+    MaxRounds    int      `json:"max_rounds"`
+    AgentType    string   `json:"agent_type"`  // Which subagent runs this
+    DependsOn    []string `json:"depends_on"`  // Phase dependencies
+    OnSuccess    string   `json:"on_success"`  // Next phase on success
+    OnFailure    string   `json:"on_failure"`  // Next phase on failure (or "abort")
+    Artifacts    []string `json:"artifacts"`   // Expected output artifact types
+}
+
+type PhaseTemplate struct {
+    Name         string   `json:"name"`
+    Description  string   `json:"description"`
+    DefaultTools []string `json:"default_tools"`
+    MaxRounds    int      `json:"max_rounds"`
+    Category     string   `json:"category"` // "analysis", "execution", "validation"
+}
+
+type PlanResult struct {
+    PlanID      string                    `json:"plan_id"`
+    Success     bool                      `json:"success"`
+    PhaseResults map[string]*PhaseResult  `json:"phase_results"`
+    Artifacts   []Artifact                `json:"artifacts"`
+}
+```
+
+### SubagentManager (`pkg/orchestration/subagents.go`)
+
+```go
+// SubagentManager spawns bounded workers with isolated contexts.
+type SubagentManager interface {
+    Spawn(ctx context.Context, task *TaskEnvelope) (string, error)
+    Wait(ctx context.Context, agentID string) (*SubagentResult, error)
+    SpawnAndWait(ctx context.Context, task *TaskEnvelope) (*SubagentResult, error)
+    List(ctx context.Context) ([]*SubagentStatus, error)
+    Cancel(ctx context.Context, agentID string) error
+}
+
+type TaskEnvelope struct {
+    ID           string                 `json:"id"`
+    AgentType    string                 `json:"agent_type"`
+    Goal         string                 `json:"goal"`
+    Context      map[string]interface{} `json:"context"`
+    ToolsAllowed []string               `json:"tools_allowed"`
+    MaxSteps     int                    `json:"max_steps"`
+    ReturnSchema map[string]string      `json:"return_schema"`
+    ParentID     string                 `json:"parent_id"`
+}
+
+type SubagentResult struct {
+    AgentID    string                 `json:"agent_id"`
+    TaskID     string                 `json:"task_id"`
+    Status     ResultStatus           `json:"status"`
+    Output     map[string]interface{} `json:"output"`
+    Artifacts  []Artifact             `json:"artifacts"`
+    TokensUsed int                    `json:"tokens_used"`
+    RoundsUsed int                    `json:"rounds_used"`
+    Duration   time.Duration          `json:"duration"`
+}
+
+type SubagentStatus struct {
+    AgentID     string       `json:"agent_id"`
+    AgentType   string       `json:"agent_type"`
+    Status      string       `json:"status"` // "running", "completed", "failed"
+    CurrentStep int          `json:"current_step"`
+    MaxSteps    int          `json:"max_steps"`
+}
+```
+
+### ArtifactStore (`pkg/artifacts/store.go`)
+
+```go
+package artifacts
+
+// ArtifactStore manages structured artifacts produced by agents.
+type ArtifactStore interface {
+    Save(ctx context.Context, artifact *Artifact) error
+    Get(ctx context.Context, id string) (*Artifact, error)
+    List(ctx context.Context, filter ArtifactFilter) ([]*Artifact, error)
+    GetByType(ctx context.Context, queryID string, artifactType ArtifactType) ([]*Artifact, error)
+}
+
+type Artifact struct {
+    ID        string                 `json:"id"`
+    QueryID   string                 `json:"query_id"`
+    Type      ArtifactType           `json:"type"`
+    Name      string                 `json:"name"`
+    Data      map[string]interface{} `json:"data"`
+    CreatedBy string                 `json:"created_by"`
+    CreatedAt time.Time              `json:"created_at"`
+    Version   int                    `json:"version"`
+}
+
+type ArtifactType string
+
+const (
+    ArtifactRepoMap     ArtifactType = "repo_map"
+    ArtifactPlan        ArtifactType = "plan"
+    ArtifactDiff        ArtifactType = "diff"
+    ArtifactTestResults ArtifactType = "test_results"
+    ArtifactReview      ArtifactType = "review"
+    ArtifactTaskList    ArtifactType = "task_list"
+    ArtifactSummary     ArtifactType = "summary"
+)
+
+type ArtifactFilter struct {
+    QueryID string       `json:"query_id,omitempty"`
+    Type    ArtifactType `json:"type,omitempty"`
+    AgentID string       `json:"agent_id,omitempty"`
+}
+```
+
+### PermissionEngine (`pkg/permissions/engine.go`)
+
+```go
+package permissions
+
+// PermissionEngine enforces tool and action permissions.
+// Wraps existing middleware.PolicyEvaluator with config-driven policies.
+type PermissionEngine interface {
+    Check(ctx context.Context, req *PermissionRequest) (PermissionDecision, error)
+    LoadPolicy(policy *PermissionPolicy) error
+}
+
+type PermissionPolicy struct {
+    Scope    string                      `json:"scope"`    // "agent", "phase", "global"
+    ScopeID  string                      `json:"scope_id"`
+    Rules    map[string]PermissionAction `json:"rules"`
+    Paths    map[string]PermissionAction `json:"paths"`
+    Commands map[string]PermissionAction `json:"commands"`
+}
+
+type PermissionAction string
+
+const (
+    PermAllow PermissionAction = "allow"
+    PermDeny  PermissionAction = "deny"
+    PermAsk   PermissionAction = "ask"
+)
+
+type PermissionRequest struct {
+    Agent  string `json:"agent"`
+    Phase  string `json:"phase"`
+    Tool   string `json:"tool"`
+    Action string `json:"action"` // "read", "write", "execute", "network"
+    Target string `json:"target"` // File path, command, URL
+}
+
+type PermissionDecision struct {
+    Allowed       bool   `json:"allowed"`
+    Reason        string `json:"reason"`
+    NeedsApproval bool   `json:"needs_approval"`
+}
+```
+
+### ToolRouter (`pkg/tools/router.go`)
+
+```go
+// ToolRouter wraps ToolRegistry with permission-aware dispatch.
+// Extends existing ToolRegistry.Get() + Tool.Execute() with permission checks.
+type ToolRouter interface {
+    Dispatch(ctx context.Context, call *llm.ToolCall, scope PermissionScope) (*Result, error)
+    AvailableTools(scope PermissionScope) []Tool
+}
+
+type PermissionScope struct {
+    AgentType string
+    Phase     string
+    Mode      string
+}
+```
+
+### MetricsCollector (`pkg/telemetry/tracker.go`)
+
+```go
+package telemetry
+
+// MetricsCollector aggregates execution metrics.
+// Unifies existing InferenceResponse.TokensUsed, PhaseResult.RoundsUsed,
+// and storage.CompactionStatsStore into a single tracking system.
+type MetricsCollector interface {
+    Record(ctx context.Context, metrics *ExecutionMetrics) error
+    GetSession(ctx context.Context, sessionID string) ([]*ExecutionMetrics, error)
+    GetSummary(ctx context.Context, sessionID string) (*SessionMetricsSummary, error)
+}
+
+type ExecutionMetrics struct {
+    QueryID       string        `json:"query_id"`
+    TotalTokens   int           `json:"total_tokens"`
+    PromptTokens  int           `json:"prompt_tokens"`
+    OutputTokens  int           `json:"output_tokens"`
+    TotalLatency  time.Duration `json:"total_latency"`
+    ToolCalls     int           `json:"tool_calls"`
+    ToolErrors    int           `json:"tool_errors"`
+    Retries       int           `json:"retries"`
+    PhasesRun     int           `json:"phases_run"`
+    SubagentsUsed int           `json:"subagents_used"`
+    InferenceRuns int           `json:"inference_runs"`
+}
+
+type SessionMetricsSummary struct {
+    SessionID     string        `json:"session_id"`
+    TotalQueries  int           `json:"total_queries"`
+    TotalTokens   int           `json:"total_tokens"`
+    TotalLatency  time.Duration `json:"total_latency"`
+    TotalToolCalls int          `json:"total_tool_calls"`
+}
+```
+
+### MemoryStore (`pkg/memory/store.go`)
+
+```go
+package memory
+
+// MemoryStore handles persistence of session memory and facts.
+// See ADR-012 for full design.
+type MemoryStore interface {
+    SaveSession(ctx context.Context, session SessionRecord) error
+    SaveFacts(ctx context.Context, facts []MemoryFact) error
+    SaveOpenTasks(ctx context.Context, tasks []OpenTask) error
+    SaveResumePacket(ctx context.Context, packet ResumePacket) error
+
+    LoadLatestResumePacket(ctx context.Context, repoID string) (*ResumePacket, error)
+    LoadRelevantFacts(ctx context.Context, repoID string, scope string) ([]MemoryFact, error)
+    MarkStale(ctx context.Context, factIDs []string) error
+}
+
+// Consolidator processes raw session artifacts into structured memory.
+type Consolidator interface {
+    Consolidate(ctx context.Context, input ConsolidationInput) (*ConsolidationResult, error)
+}
+
+// DreamerWorker runs isolated post-session memory maintenance.
+type DreamerWorker interface {
+    Run(ctx context.Context, sessionID string) error
+}
+```
+
+---
+
+## New Package Layout
+
+```
+pkg/
+├── agents/              # EXISTING — gains SubagentManager field in M5
+├── artifacts/           # NEW (M6)
+│   ├── store.go         # ArtifactStore interface
+│   ├── file_store.go    # File-based implementation
+│   ├── types.go         # Artifact, ArtifactType, ArtifactFilter
+│   └── blackboard.go    # Convenience read/write by query + type
+├── memory/              # NEW (M10 — ADR-012)
+│   ├── store.go         # MemoryStore interface
+│   ├── file_store.go    # .pedro/ directory storage
+│   ├── types.go         # SessionRecord, MemoryFact, OpenTask, ResumePacket
+│   ├── consolidator.go  # LLM-based consolidation pipeline
+│   ├── dreamer.go       # Post-session maintenance worker
+│   └── resume.go        # Resume loader + validator
+├── orchestration/       # NEW (M1-M5)
+│   ├── query.go         # QueryEngine interface + DefaultQueryEngine
+│   ├── intent.go        # Intent classification (rule-based + LLM)
+│   ├── modes.go         # Mode, ModeConfig
+│   ├── phases.go        # PhaseEngine, ExecutionPlan, PlannedPhase
+│   ├── phase_registry.go # Reusable PhaseTemplate catalog
+│   ├── subagents.go     # SubagentManager interface + implementation
+│   ├── subagent_explorer.go     # Explorer subagent type
+│   ├── subagent_implementer.go  # Implementer subagent type
+│   ├── subagent_tester.go       # Tester subagent type
+│   ├── subagent_reviewer.go     # Reviewer subagent type
+│   ├── task.go          # TaskEnvelope, TaskResult
+│   └── prompt_layers.go # Layered prompt composition
+├── permissions/         # NEW (M7)
+│   ├── engine.go        # PermissionEngine interface
+│   ├── policy.go        # PermissionPolicy types
+│   ├── evaluator.go     # Default evaluator (wraps middleware)
+│   └── config.go        # Load from .pedrocli.json
+├── telemetry/           # NEW (M9)
+│   ├── tracker.go       # MetricsCollector interface
+│   ├── memory_store.go  # In-memory collector
+│   └── types.go         # ExecutionMetrics, SessionMetricsSummary
+└── tools/               # EXISTING
+    └── router.go        # NEW — ToolRouter (permission-aware dispatch)
+```
+
+---
+
+## Configuration Schema
+
+New sections added to `.pedrocli.json`:
+
+```json
+{
+  "orchestration": {
+    "enabled": true,
+    "default_mode": "build",
+    "intent_classification": "rule_based",
+    "max_subagents": 4,
+    "max_plan_retries": 2
+  },
+  "permissions": {
+    "default": {
+      "read": "allow",
+      "write": "ask",
+      "bash": "ask",
+      "network": "deny"
+    },
+    "agents": {
+      "explorer": { "read": "allow", "write": "deny", "bash": "deny" },
+      "implementer": { "read": "allow", "write": "allow", "bash": "ask" },
+      "tester": { "read": "allow", "write": "deny", "bash": "allow" },
+      "reviewer": { "read": "allow", "write": "deny", "bash": "deny" }
+    },
+    "paths": {
+      "deny": [".env", "*.key", "*.pem", "credentials.*"],
+      "ask": ["go.mod", "go.sum", "Makefile"]
+    }
+  },
+  "memory": {
+    "enabled": false,
+    "storage_dir": ".pedro",
+    "consolidate_on_exit": true,
+    "fact_ttl_days": 7,
+    "max_facts": 100
+  },
+  "telemetry": {
+    "enabled": true,
+    "store": "memory"
+  },
+  "phases": {
+    "templates": {
+      "explore":    { "tools": ["search", "navigate", "file", "git"],                       "max_rounds": 10 },
+      "plan":       { "tools": ["search", "navigate", "file", "context"],                   "max_rounds": 5  },
+      "implement":  { "tools": ["file", "code_edit", "search", "navigate", "bash", "git"],  "max_rounds": 30 },
+      "validate":   { "tools": ["test", "bash", "file", "search"],                          "max_rounds": 15 },
+      "summarize":  { "tools": [],                                                          "max_rounds": 3  }
+    }
+  }
+}
+```
+
+---
+
+## Existing Code Reuse Map
+
+| New Component | Builds On | How |
+|---------------|-----------|-----|
+| `QueryEngine` | `cli.CLIBridge` (`pkg/cli/bridge.go`) | Wraps bridge as pass-through initially |
+| `PhaseEngine` | `PhasedExecutor` (`pkg/agents/phased_executor.go`) | Translates `ExecutionPlan` into `[]Phase` |
+| `SubagentManager` | `BaseAgent` + `InferenceExecutor` + `llmcontext.Manager` | Creates isolated agent instances per task |
+| `ArtifactStore` | `llmcontext.Manager` file patterns (`pkg/llmcontext/`) | Same `/tmp/pedrocli-jobs/` directory structure |
+| `PermissionEngine` | `middleware.PolicyEvaluator` + `repl.ApprovalPrompt` | Wraps existing middleware, adds config-driven policies |
+| `ToolRouter` | `tools.ToolRegistry` (`pkg/tools/registry.go`) | Adds permission check before `registry.Get()` + `tool.Execute()` |
+| `MetricsCollector` | `InferenceResponse.TokensUsed` + `ProgressEvent` | Aggregates existing per-round data |
+| `MemoryStore` | `llmcontext.Manager` file patterns | New `.pedro/` directory, same JSON file approach |
+| `ModeConfig` | `repl.Session.Mode` (`pkg/repl/session.go`) | Extends existing mode string with behavioral constraints |
+| `IntentClassifier` | `BlogOrchestratorAgent.analyzePrompt()` | Same LLM-classification pattern, generalized |
+
+---
+
 ## Milestone Dependency Graph
 
 ```
-M1: Query Engine
- └── M2: Modes (depends on M1 for intent routing)
-      └── M8: Prompt Layers (depends on M2 for mode prompts)
-
-M3: Phase Registry (independent)
- └── M4: Task Envelope (depends on M3 for phase I/O)
-      └── M5: Subagents (depends on M4 for task contracts)
-           └── M6: Artifacts (depends on M5 for subagent outputs)
-
-M7: Permissions (independent, can start anytime after M1)
-
-M9: Telemetry (independent, can start anytime)
+M1: Query Engine ─────────────────────────────┐
+ ├── M2: Modes ───────────────────────────────┤
+ │                                             │
+M3: Phase Registry ──┐                         │
+ └── M4: Task Envelope ──┐                     │
+      └── M5: Subagents ─┤                     │
+           └── M6: Artifacts                   │
+                          └── M8: Prompt Layers │
+                                                │
+M7: Permissions ←── can start after M1 ────────┘
+M9: Telemetry ←── can start anytime
+M10: Kairos Memory ←── can start after M1
 ```
 
+**Parallelizable work:**
+- M2 and M3 can run in parallel after M1
+- M7, M9, and M10 can each start independently after M1
+- M6 and M8 can run in parallel after M5
+
 **Recommended execution order**:
-1. M3 (Phase Registry) — low risk, high reuse
-2. M1 (Query Engine) — enables everything else
-3. M4 (Task Envelope) — structured I/O for all agents
-4. M2 (Modes) — constrains execution
-5. M7 (Permissions) — safety layer
-6. M5 (Subagents) — biggest feature
-7. M6 (Artifacts) — enables subagent coordination
-8. M8 (Prompt Layers) — polish
-9. M9 (Telemetry) — observability
+1. **M3** (Phase Registry) — low risk, high reuse, no dependencies
+2. **M1** (Query Engine) — enables everything else
+3. **M4** (Task Envelope) — structured I/O for all agents
+4. **M2** (Modes) — constrains execution
+5. **M7** (Permissions) — safety layer
+6. **M5** (Subagents) — biggest feature
+7. **M6** (Artifacts) — enables subagent coordination
+8. **M8** (Prompt Layers) — polish
+9. **M9** (Telemetry) — observability
+10. **M10** (Kairos Memory) — session continuity
 
 ---
 
@@ -426,6 +942,37 @@ M9: Telemetry (independent, can start anytime)
 | Permissions | Config-only | Interactive (ask) | Interactive (SSE approval) |
 | Prompt Layers | Yes | Yes | Yes |
 | Telemetry | File-based | File-based + display | File-based + API + UI |
+| Kairos Memory | N/A | Yes (resume + consolidation) | Yes (resume + consolidation) |
+
+---
+
+## Risk Register
+
+| Risk | Mitigation |
+|------|------------|
+| Query engine adds latency | Pass-through mode for simple queries; intent classification is cheap |
+| Subagent context isolation increases memory | Each subagent uses small context; cleanup after completion |
+| Permission system blocks legitimate tool use | Default policies are permissive; `ask` mode for uncertain cases |
+| LLM-based intent classification unreliable | Rule-based fallback; user can override with `/mode` |
+| Memory consolidation produces bad facts | Evidence-required guardrail; TTL expiration; revalidation on resume |
+| Too many new packages | Each milestone is independently useful; can stop at any milestone |
+| Orchestration disabled breaks existing behavior | `orchestration.enabled: false` falls through to existing code path |
+
+---
+
+## Success Criteria
+
+After all milestones:
+
+1. User types query → system auto-classifies intent → correct phases execute → structured result
+2. Explorer subagent maps repo without write access
+3. Implementer subagent writes code in isolation, returns diff
+4. Tester subagent validates changes, returns structured results
+5. Reviewer subagent checks quality, can send work back to implementer
+6. All tool access governed by permissions with GUI approval for `ask`
+7. Token usage and latency tracked per query, visible via `/metrics`
+8. Session produces resume packet; next session shows handoff summary
+9. All existing CLI/HTTP/REPL behavior preserved when `orchestration.enabled: false`
 
 ---
 
@@ -433,9 +980,13 @@ M9: Telemetry (independent, can start anytime)
 
 - [ccunpacked.dev](https://ccunpacked.dev) — Agent loop and phased execution patterns
 - [OpenCode](https://github.com/opencode-ai/opencode) — UX patterns for terminal-based AI coding
-- ADR-005: Agent Workflow Refactoring — existing phased agent design
-- ADR-009: Evaluation System Architecture — testing and validation patterns
-- ADR-011: Middleware Tool Filtering — existing policy evaluation
+- [ADR-005](adr/ADR-005-agent-workflow-refactoring.md) — Agent Workflow Refactoring
+- [ADR-009](adr/ADR-009-evaluation-system-architecture.md) — Evaluation System Architecture
+- [ADR-011](adr/ADR-011-middleware-tool-filtering-adoption.md) — Middleware Tool Filtering
+- [ADR-012](adr/ADR-012-kairos-memory-consolidation.md) — Kairos Memory Consolidation
+- [ADR-013](adr/ADR-013-pedrocode-vnext-orchestration.md) — vNext Orchestration Architecture
 - `pkg/agents/phased_executor.go` — existing phase execution engine
 - `pkg/agents/executor.go` — existing inference loop
 - `pkg/tools/registry.go` — existing tool registry with filtering
+- `pkg/repl/session.go` — existing session lifecycle
+- `pkg/repl/approval.go` — existing GUI approval flow
