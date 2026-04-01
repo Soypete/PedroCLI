@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/soypete/pedro-agentware/middleware"
+	"github.com/soypete/pedrocli/pkg/config"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/llmcontext"
 	"github.com/soypete/pedrocli/pkg/storage"
@@ -489,22 +490,27 @@ func (e *InferenceExecutor) logConversationWithSuccess(ctx context.Context, jobI
 	}
 }
 
-// truncateToolResult truncates tool output based on per-tool limits to prevent context explosion
-func (e *InferenceExecutor) truncateToolResult(toolName string, output string) string {
-	// Use config limits if available, otherwise fall back to defaults
-	limits := e.agent.config.Context.ToolResultLimits
-	if limits == nil {
-		// Default per-tool character limits (roughly 4 chars per token)
+// truncateOutputWithLimit truncates tool output based on per-tool limits from config
+func truncateOutputWithLimit(toolName string, output string, cfg *config.Config) string {
+	if output == "" {
+		return output
+	}
+
+	limits := map[string]int{}
+	if cfg != nil && cfg.Context.ToolResultLimits != nil {
+		limits = cfg.Context.ToolResultLimits
+	}
+	if len(limits) == 0 {
 		limits = map[string]int{
-			"web_search":   500,  // 125 tokens
-			"web_scraper":  800,  // 200 tokens
-			"search":       600,  // 150 tokens
-			"grep":         600,  // 150 tokens
-			"file":         1200, // 300 tokens (code needs more context)
-			"read":         1200, // 300 tokens
-			"rss":          600,  // 150 tokens
-			"static_links": 400,  // 100 tokens
-			"default":      500,  // 125 tokens
+			"web_search":   500,
+			"web_scraper":  800,
+			"search":       600,
+			"grep":         600,
+			"file":         1200,
+			"read":         1200,
+			"rss":          600,
+			"static_links": 400,
+			"default":      500,
 		}
 	}
 
@@ -513,7 +519,7 @@ func (e *InferenceExecutor) truncateToolResult(toolName string, output string) s
 		maxChars = limits["default"]
 	}
 	if maxChars == 0 {
-		maxChars = 500 // Final fallback
+		maxChars = 500
 	}
 
 	return truncateOutput(output, maxChars)
@@ -528,15 +534,31 @@ func (e *InferenceExecutor) buildFeedbackPrompt(calls []llm.ToolCall, results []
 	for i, call := range calls {
 		result := results[i]
 
+		// Apply middleware result filtering if policy evaluator is set
+		if e.policyEvaluator != nil {
+			callerCtx := middleware.CallerContext{Trusted: true}
+			mwResult := &middleware.ToolResult{Content: result.Output}
+			if result.Error != "" {
+				mwResult.Error = fmt.Errorf("%s", result.Error)
+			}
+			filtered := e.policyEvaluator.FilterResult(callerCtx, call.Name, mwResult)
+			result.Output = fmt.Sprintf("%v", filtered.Content)
+			if filtered.Error != nil {
+				result.Error = filtered.Error.Error()
+			}
+		} else {
+			// Fallback truncation to prevent context window explosion when middleware not configured
+			result.Output = truncateOutputWithLimit(call.Name, result.Output, e.agent.config)
+			if result.Error != "" {
+				result.Error = truncateOutput(result.Error, 500)
+			}
+		}
+
 		// Format tool result
 		if result.Success {
-			// Use per-tool truncation limits to prevent context window explosion
-			truncated := e.truncateToolResult(call.Name, result.Output)
-			prompt.WriteString(fmt.Sprintf("✅ %s: %s\n", call.Name, truncated))
+			prompt.WriteString(fmt.Sprintf("✅ %s: %s\n", call.Name, result.Output))
 		} else {
-			// Errors are typically short, but truncate to be safe
-			truncated := truncateOutput(result.Error, 500)
-			prompt.WriteString(fmt.Sprintf("❌ %s failed: %s\n", call.Name, truncated))
+			prompt.WriteString(fmt.Sprintf("❌ %s failed: %s\n", call.Name, result.Error))
 		}
 	}
 
