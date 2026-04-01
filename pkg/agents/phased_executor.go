@@ -947,7 +947,7 @@ func (pie *phaseInferenceExecutor) buildFeedbackPrompt(calls []llm.ToolCall, res
 			}
 		}
 		if result.Success {
-			sb.WriteString(fmt.Sprintf("✅ %s: %s\n", call.Name, truncateOutput(result.Output, 1000)))
+			sb.WriteString(fmt.Sprintf("✅ %s: %s\n", call.Name, result.Output))
 		} else {
 			sb.WriteString(fmt.Sprintf("❌ %s failed: %s\n", call.Name, result.Error))
 		}
