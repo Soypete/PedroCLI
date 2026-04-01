@@ -199,6 +199,7 @@ func (pe *PhasedExecutor) executePhase(ctx context.Context, phase Phase, input s
 		jobID:           pe.jobID,
 		result:          result, // Pass result so executor can track tool calls
 		policyEvaluator: pe.policyEvaluator,
+		callHistory:     middleware.NewCallHistory(),
 	}
 
 	// Execute the inference loop for this phase
@@ -526,10 +527,15 @@ type phaseInferenceExecutor struct {
 	jobID           string
 	result          *PhaseResult // Track tool calls in this phase
 	policyEvaluator middleware.PolicyEvaluator
+	callHistory     *middleware.CallHistory
 }
 
 func (pie *phaseInferenceExecutor) SetPolicyEvaluator(evaluator middleware.PolicyEvaluator) {
 	pie.policyEvaluator = evaluator
+}
+
+func (pie *phaseInferenceExecutor) SetCallHistory(callHistory *middleware.CallHistory) {
+	pie.callHistory = callHistory
 }
 
 // execute runs the inference loop for a phase
@@ -748,14 +754,29 @@ func (pie *phaseInferenceExecutor) filterToolCalls(calls []llm.ToolCall) []llm.T
 
 	filtered := make([]llm.ToolCall, 0)
 	for _, call := range calls {
-		if allowedSet[call.Name] {
-			filtered = append(filtered, call)
-		} else {
+		if !allowedSet[call.Name] {
 			fmt.Fprintf(os.Stderr, "   ⚠️ Tool %s not allowed in phase %s, skipping\n", call.Name, pie.phase.Name)
 			if pie.agent.config.Debug.Enabled {
 				fmt.Fprintf(os.Stderr, "      [DEBUG] This should not happen if tool definitions were filtered correctly\n")
 			}
+			continue
 		}
+
+		// Skip tools already called this phase (prevents loops)
+		if pie.callHistory != nil {
+			toolKey := pie.phase.Name + ":" + call.Name
+			if pie.callHistory.WasToolCalled(toolKey) {
+				fmt.Fprintf(os.Stderr, "   ⚠️ Tool %s already called in phase %s, skipping\n", call.Name, pie.phase.Name)
+				continue
+			}
+			// Skip tools that have failed 3+ times in this phase
+			if pie.callHistory.HasToolFailedTooManyTimes(toolKey) {
+				fmt.Fprintf(os.Stderr, "   ⚠️ Tool %s failed too many times in phase %s, skipping\n", call.Name, pie.phase.Name)
+				continue
+			}
+		}
+
+		filtered = append(filtered, call)
 	}
 
 	return filtered
@@ -779,10 +800,30 @@ func (pie *phaseInferenceExecutor) filterToolDefinitions(defs []llm.ToolDefiniti
 	foundTools := make(map[string]bool)
 
 	for _, def := range defs {
-		if allowedSet[def.Name] {
-			filtered = append(filtered, def)
-			foundTools[def.Name] = true
+		if !allowedSet[def.Name] {
+			continue
 		}
+
+		// Skip tools already called this phase (prevents loops)
+		if pie.callHistory != nil {
+			toolKey := pie.phase.Name + ":" + def.Name
+			if pie.callHistory.WasToolCalled(toolKey) {
+				if pie.agent.config.Debug.Enabled {
+					fmt.Fprintf(os.Stderr, "   [DEBUG] Tool %s already called in phase %s, excluding\n", def.Name, pie.phase.Name)
+				}
+				continue
+			}
+			// Skip tools that have failed 3+ times in this phase
+			if pie.callHistory.HasToolFailedTooManyTimes(toolKey) {
+				if pie.agent.config.Debug.Enabled {
+					fmt.Fprintf(os.Stderr, "   [DEBUG] Tool %s failed too many times in phase %s, excluding\n", def.Name, pie.phase.Name)
+				}
+				continue
+			}
+		}
+
+		filtered = append(filtered, def)
+		foundTools[def.Name] = true
 	}
 
 	// Debug logging
@@ -903,6 +944,12 @@ func (pie *phaseInferenceExecutor) executeTools(ctx context.Context, calls []llm
 			fmt.Fprintf(os.Stderr, "   ✅ %s\n", call.Name)
 		} else {
 			fmt.Fprintf(os.Stderr, "   ❌ %s: %s\n", call.Name, result.Error)
+		}
+
+		// Record tool call in middleware's call history (phase-specific tracking)
+		if pie.callHistory != nil {
+			toolKey := pie.phase.Name + ":" + call.Name
+			pie.callHistory.RecordToolCall(toolKey, result.Success)
 		}
 	}
 
