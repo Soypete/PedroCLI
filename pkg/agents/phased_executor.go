@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/soypete/pedro-agentware/middleware"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/llmcontext"
 	"github.com/soypete/pedrocli/pkg/storage"
@@ -53,7 +54,8 @@ type PhasedExecutor struct {
 	currentPhase     int
 	jobID            string
 	defaultMaxRounds int
-	phaseCallback    PhaseCallback // Optional callback after each phase
+	phaseCallback    PhaseCallback              // Optional callback after each phase
+	policyEvaluator  middleware.PolicyEvaluator // Middleware for tool result filtering
 }
 
 // NewPhasedExecutor creates a new phased executor
@@ -73,6 +75,11 @@ func NewPhasedExecutor(agent *BaseAgent, contextMgr *llmcontext.Manager, phases 
 // SetPhaseCallback sets a callback to be called after each phase completes
 func (pe *PhasedExecutor) SetPhaseCallback(callback PhaseCallback) {
 	pe.phaseCallback = callback
+}
+
+// SetPolicyEvaluator sets the middleware policy evaluator for tool result filtering
+func (pe *PhasedExecutor) SetPolicyEvaluator(eval middleware.PolicyEvaluator) {
+	pe.policyEvaluator = eval
 }
 
 // Execute runs all phases sequentially
@@ -184,13 +191,14 @@ func (pe *PhasedExecutor) executePhase(ctx context.Context, phase Phase, input s
 
 	// Create a phase-specific inference executor
 	executor := &phaseInferenceExecutor{
-		agent:        pe.agent,
-		contextMgr:   pe.contextMgr,
-		phase:        phase,
-		maxRounds:    maxRounds,
-		currentRound: 0,
-		jobID:        pe.jobID,
-		result:       result, // Pass result so executor can track tool calls
+		agent:           pe.agent,
+		contextMgr:      pe.contextMgr,
+		phase:           phase,
+		maxRounds:       maxRounds,
+		currentRound:    0,
+		jobID:           pe.jobID,
+		result:          result, // Pass result so executor can track tool calls
+		policyEvaluator: pe.policyEvaluator,
 	}
 
 	// Execute the inference loop for this phase
@@ -510,13 +518,18 @@ func (pe *PhasedExecutor) savePhaseResults(ctx context.Context) {
 
 // phaseInferenceExecutor handles inference for a single phase
 type phaseInferenceExecutor struct {
-	agent        *BaseAgent
-	contextMgr   *llmcontext.Manager
-	phase        Phase
-	maxRounds    int
-	currentRound int
-	jobID        string
-	result       *PhaseResult // Track tool calls in this phase
+	agent           *BaseAgent
+	contextMgr      *llmcontext.Manager
+	phase           Phase
+	maxRounds       int
+	currentRound    int
+	jobID           string
+	result          *PhaseResult // Track tool calls in this phase
+	policyEvaluator middleware.PolicyEvaluator
+}
+
+func (pie *phaseInferenceExecutor) SetPolicyEvaluator(evaluator middleware.PolicyEvaluator) {
+	pie.policyEvaluator = evaluator
 }
 
 // execute runs the inference loop for a phase
@@ -921,6 +934,18 @@ func (pie *phaseInferenceExecutor) buildFeedbackPrompt(calls []llm.ToolCall, res
 
 	for i, call := range calls {
 		result := results[i]
+		if pie.policyEvaluator != nil {
+			callerCtx := middleware.CallerContext{Trusted: true}
+			mwResult := &middleware.ToolResult{Content: result.Output}
+			if result.Error != "" {
+				mwResult.Error = fmt.Errorf("%s", result.Error)
+			}
+			filtered := pie.policyEvaluator.FilterResult(callerCtx, call.Name, mwResult)
+			result.Output = fmt.Sprintf("%v", filtered.Content)
+			if filtered.Error != nil {
+				result.Error = filtered.Error.Error()
+			}
+		}
 		if result.Success {
 			sb.WriteString(fmt.Sprintf("✅ %s: %s\n", call.Name, truncateOutput(result.Output, 1000)))
 		} else {
