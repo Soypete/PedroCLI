@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/soypete/pedrocli/pkg/cli"
+	"github.com/soypete/pedrocli/pkg/orchestration"
 	"github.com/soypete/pedrocli/pkg/repl"
 )
 
@@ -44,6 +45,16 @@ func runBlogMode(debugMode bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to create session: %w", err)
 	}
+
+	// Initialize QueryEngine for intent classification
+	qeConfig := orchestration.QueryEngineConfig{
+		AgentFactory:     nil,
+		JobManager:       nil,
+		WorkspaceDir:     workdir,
+		DefaultMode:      orchestration.ModeBlog,
+		EnableAutoIntent: true,
+	}
+	session.SetQueryEngine(orchestration.NewDefaultQueryEngine(qeConfig))
 
 	// Create REPL
 	replInstance, err := repl.NewREPL(session)
