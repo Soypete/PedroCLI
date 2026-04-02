@@ -165,9 +165,9 @@ func TestDefaultRegistry_RegisterPhase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetPhase() error = %v", err)
 	}
-
 	if phase == nil {
-		t.Error("expected to find custom phase")
+		t.Fatal("expected to find custom phase")
+		return
 	}
 
 	if phase.Name != "custom" {
@@ -184,8 +184,9 @@ func TestDefaultRegistry_RegisterPhase_Overwrite(t *testing.T) {
 	original, _ := registry.GetPhase("analyze")
 	if original == nil {
 		t.Fatal("expected to find 'analyze' phase in new registry")
+		return
 	}
-	originalTools := len(original.Tools)
+	_ = len(original.Tools) // used in test
 
 	registry.RegisterPhase(PhaseDefinition{
 		Name:        "analyze",
@@ -195,14 +196,16 @@ func TestDefaultRegistry_RegisterPhase_Overwrite(t *testing.T) {
 	})
 
 	updated, _ := registry.GetPhase("analyze")
+	if updated == nil {
+		t.Fatal("expected to find 'analyze' phase after overwrite")
+		return
+	}
 	if updated.Tools[0] != "custom_tool" {
 		t.Errorf("expected tools to be overwritten, got %v", updated.Tools)
 	}
 	if updated.MaxRounds != 99 {
 		t.Errorf("expected MaxRounds 99, got %d", updated.MaxRounds)
 	}
-
-	_ = originalTools
 }
 
 func TestPhaseDefinition_JSONTags(t *testing.T) {
