@@ -254,3 +254,30 @@ func TestCodeEditTool_Execute(t *testing.T) {
 - `pkg/agents/executor.go` - The inference loop (heart of autonomous operation)
 - `pkg/agents/base.go` - Base agent and system prompts
 - `pkg/llmcontext/manager.go` - File-based context management
+
+## Design Documents
+
+For implementation details and context preservation during compaction, see:
+
+### Pedro vNext Orchestration
+- [Overview](../docs/pedro-vnext/README.md) - Milestone navigation
+- [Architecture](../docs/pedro-vnext/architecture/overview.md) - System diagrams
+- [Integration Points](../docs/pedro-vnext/architecture/integration.md) - REPL, HTTP, CLI integration
+
+### Milestones (Implementation Documentation)
+- [M1: Query Engine](../docs/pedro-vnext/milestones/M1-query-engine/) - Intent routing
+- [M2: Execution Modes](../docs/pedro-vnext/milestones/M2-execution-modes/) - chat/plan/build/review
+- [M3: Phase Registry](../docs/pedro-vnext/milestones/M3-phase-registry/) - Reusable phases
+- [M4: Task Envelope](../docs/pedro-vnext/milestones/M4-task-envelope/) - Structured I/O
+- [M5: Subagent Manager](../docs/pedro-vnext/milestones/M5-subagent-manager/) - Child agents
+- [M6: Artifact Store](../docs/pedro-vnext/milestones/M6-artifact-store/) - Structured workspace
+- [M7: Permission Engine](../docs/pedro-vnext/milestones/M7-permission-engine/) - Per-agent permissions
+- [M8: Prompt Architecture](../docs/pedro-vnext/milestones/M8-prompt-architecture/) - Layered prompts
+- [M9: Telemetry](../docs/pedro-vnext/milestones/M9-telemetry/) - Cost tracking
+- [M10: Kairos Memory](../docs/pedro-vnext/milestones/M10-kairos-memory/) - Session continuity
+
+### Technical References
+- [Implementation Plan](../docs/pedrocode-vnext-implementation-plan.md) - Full technical plan
+- [Interface Definitions](../docs/pedrocode-vnext-interfaces.md) - Go interface specs
+- [ADR-012: Memory](../docs/adr/ADR-012-kairos-memory-consolidation.md) - Memory system design
+- [ADR-013: Orchestration](../docs/adr/ADR-013-pedrocode-vnext-orchestration.md) - Architecture
