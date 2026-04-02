@@ -45,6 +45,12 @@ type PhaseResult struct {
 // Return true to continue, false to stop execution
 type PhaseCallback func(phase Phase, result *PhaseResult) (shouldContinue bool, err error)
 
+// SubagentSpawner is an interface for spawning subagents (avoids import cycle)
+type SubagentSpawner interface {
+	Spawn(ctx context.Context, taskID, agentType, goal string, tools []string) (string, error)
+	Wait(ctx context.Context, handleID string) (string, bool, error)
+}
+
 // PhasedExecutor handles multi-phase workflow execution
 type PhasedExecutor struct {
 	agent            *BaseAgent
@@ -56,6 +62,7 @@ type PhasedExecutor struct {
 	defaultMaxRounds int
 	phaseCallback    PhaseCallback              // Optional callback after each phase
 	policyEvaluator  middleware.PolicyEvaluator // Middleware for tool result filtering
+	subagentManager  SubagentSpawner
 }
 
 // NewPhasedExecutor creates a new phased executor
@@ -80,6 +87,24 @@ func (pe *PhasedExecutor) SetPhaseCallback(callback PhaseCallback) {
 // SetPolicyEvaluator sets the middleware policy evaluator for tool result filtering
 func (pe *PhasedExecutor) SetPolicyEvaluator(eval middleware.PolicyEvaluator) {
 	pe.policyEvaluator = eval
+}
+
+// SetSubagentManager sets the subagent manager for spawning child agents
+func (pe *PhasedExecutor) SetSubagentManager(mgr SubagentSpawner) {
+	pe.subagentManager = mgr
+}
+
+// HasSubagentManager returns true if a subagent manager is configured
+func (pe *PhasedExecutor) HasSubagentManager() bool {
+	return pe.subagentManager != nil
+}
+
+// SpawnSubagent spawns a subagent to handle parallel tasks within a phase
+func (pe *PhasedExecutor) SpawnSubagent(ctx context.Context, taskID, agentType, goal string, tools []string) (string, error) {
+	if pe.subagentManager == nil {
+		return "", fmt.Errorf("subagent manager not configured")
+	}
+	return pe.subagentManager.Spawn(ctx, taskID, agentType, goal, tools)
 }
 
 // Execute runs all phases sequentially
