@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/soypete/pedro-agentware/middleware"
 	"github.com/soypete/pedrocli/pkg/agents"
 	"github.com/soypete/pedrocli/pkg/config"
 	"github.com/soypete/pedrocli/pkg/jobs"
@@ -26,8 +27,9 @@ type CLIBridge struct {
 
 // CLIBridgeConfig configures the CLI bridge
 type CLIBridgeConfig struct {
-	Config  *config.Config // App config
-	WorkDir string         // Working directory for tools
+	Config     *config.Config         // App config
+	WorkDir    string                 // Working directory for tools
+	Middleware *middleware.Middleware // Optional middleware for policy evaluation
 }
 
 // NewCLIBridge creates a new CLI bridge using direct tool execution
@@ -143,8 +145,13 @@ func NewCLIBridge(cfg CLIBridgeConfig) (*CLIBridge, error) {
 	}
 	formatter := toolformat.GetFormatterForModel(modelName)
 
-	// Create direct bridge
-	bridge := toolformat.NewDirectBridge(registry, formatter)
+	// Create bridge - use MiddlewareBridge if middleware is provided, otherwise DirectBridge
+	var bridge toolformat.ToolBridge
+	if cfg.Middleware != nil {
+		bridge = toolformat.NewMiddlewareBridge(cfg.Middleware)
+	} else {
+		bridge = toolformat.NewDirectBridge(registry, formatter)
+	}
 	ctx := context.Background()
 
 	return &CLIBridge{

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/soypete/pedro-agentware/middleware"
 )
 
 // ToolBridge provides a unified interface for tool execution
@@ -210,6 +212,80 @@ func (a *MCPClientAdapter) IsHealthy() bool {
 // GetToolNames returns empty list (MCP tools are dynamic)
 func (a *MCPClientAdapter) GetToolNames() []string {
 	return nil
+}
+
+// MiddlewareBridge wraps middleware.Middleware to implement ToolBridge
+type MiddlewareBridge struct {
+	mw *middleware.Middleware
+}
+
+// NewMiddlewareBridge creates a bridge that uses middleware for tool execution
+func NewMiddlewareBridge(mw *middleware.Middleware) *MiddlewareBridge {
+	return &MiddlewareBridge{mw: mw}
+}
+
+// CallTool executes a tool through the middleware, applying policy evaluation
+// and result filtering automatically
+func (b *MiddlewareBridge) CallTool(ctx context.Context, name string, args map[string]interface{}) (*BridgeResult, error) {
+	if b.mw == nil {
+		return &BridgeResult{
+			Success: false,
+			Error:   "middleware not configured",
+		}, nil
+	}
+
+	result, err := b.mw.CallTool(ctx, name, args)
+	if err != nil {
+		return &BridgeResult{
+			Success: false,
+			Error:   err.Error(),
+		}, nil
+	}
+
+	// Extract success from error being nil
+	success := result.Error == nil
+
+	// Extract output string from Content
+	var output string
+	if result.Content != nil {
+		output = fmt.Sprintf("%v", result.Content)
+	}
+
+	// Extract error string
+	var errStr string
+	if result.Error != nil {
+		errStr = result.Error.Error()
+	}
+
+	return &BridgeResult{
+		Success: success,
+		Output:  output,
+		Error:   errStr,
+	}, nil
+}
+
+// IsHealthy returns true if middleware is configured
+func (b *MiddlewareBridge) IsHealthy() bool {
+	return b.mw != nil
+}
+
+// GetToolNames returns the list of available tools from middleware
+func (b *MiddlewareBridge) GetToolNames() []string {
+	if b.mw == nil {
+		return nil
+	}
+
+	tools := b.mw.ListTools()
+	names := make([]string, len(tools))
+	for i, tool := range tools {
+		names[i] = tool.Name
+	}
+	return names
+}
+
+// GetMiddleware returns the underlying middleware for advanced usage
+func (b *MiddlewareBridge) GetMiddleware() *middleware.Middleware {
+	return b.mw
 }
 
 // ExtractJobID extracts a job ID from tool output (common pattern in job-related tools)
