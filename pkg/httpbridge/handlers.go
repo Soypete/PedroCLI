@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/soypete/pedrocli/pkg/cli"
 	"github.com/soypete/pedrocli/pkg/jobs"
+	"github.com/soypete/pedrocli/pkg/orchestration"
 )
 
 // CreateJobRequest represents the job creation request
@@ -937,4 +938,90 @@ func renderJobCard(job *jobs.Job) string {
 // parseUUID parses a UUID string, supporting both with and without dashes
 func parseUUID(s string) (uuid.UUID, error) {
 	return uuid.Parse(s)
+}
+
+// QueryRequest represents a query request to the QueryEngine
+type QueryRequest struct {
+	Input string `json:"input"`
+	Mode  string `json:"mode"` // code, blog, podcast, chat, plan
+}
+
+// QueryResponse represents a query response from the QueryEngine
+type QueryResponse struct {
+	JobID      string `json:"job_id,omitempty"`
+	Success    bool   `json:"success"`
+	Output     string `json:"output,omitempty"`
+	Error      string `json:"error,omitempty"`
+	Intent     string `json:"intent,omitempty"`
+	Mode       string `json:"mode,omitempty"`
+	Finished   bool   `json:"finished"`
+	FinishedAt string `json:"finished_at,omitempty"`
+}
+
+// handleQuery handles POST /api/query - routes through QueryEngine
+func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req QueryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, QueryResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Invalid request: %v", err),
+		})
+		return
+	}
+
+	if req.Input == "" {
+		respondJSON(w, http.StatusBadRequest, QueryResponse{
+			Success: false,
+			Error:   "Input is required",
+		})
+		return
+	}
+
+	// Get QueryEngine from AppContext
+	qe := s.appCtx.QueryEngine
+	if qe == nil {
+		respondJSON(w, http.StatusInternalServerError, QueryResponse{
+			Success: false,
+			Error:   "QueryEngine not initialized",
+		})
+		return
+	}
+
+	// Parse mode if provided
+	mode := orchestration.ParseMode(req.Mode)
+	if req.Mode == "" {
+		mode = orchestration.ModeCode
+	}
+
+	// Execute query
+	result, err := qe.ExecuteWithMode(s.ctx, req.Input, mode)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, QueryResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Query failed: %v", err),
+		})
+		return
+	}
+
+	// Convert to response
+	var finishedAt string
+	if result.FinishedAt != nil {
+		finishedAt = result.FinishedAt.Format(time.RFC3339)
+	}
+
+	respondJSON(w, http.StatusOK, QueryResponse{
+		JobID:      result.JobID,
+		Success:    result.Success,
+		Output:     result.Output,
+		Error:      result.Error,
+		Intent:     string(result.Intent),
+		Mode:       string(result.Mode),
+		Finished:   result.Finished,
+		FinishedAt: finishedAt,
+	})
 }

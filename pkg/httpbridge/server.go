@@ -106,6 +106,9 @@ func (s *Server) setupRoutes() {
 	// Slash command routes
 	s.mux.HandleFunc("/api/commands", s.handleCommands)
 	s.mux.HandleFunc("/api/commands/run", s.handleCommandRun)
+
+	// Query engine route
+	s.mux.HandleFunc("/api/query", s.handleQuery)
 }
 
 // Run starts the HTTP server
