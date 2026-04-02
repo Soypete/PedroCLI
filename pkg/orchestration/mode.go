@@ -1,6 +1,11 @@
 package orchestration
 
-import "context"
+import (
+	"context"
+	"fmt"
+
+	"github.com/soypete/pedrocli/pkg/config"
+)
 
 type Mode string
 
@@ -46,6 +51,83 @@ type ModeEngine interface {
 	Execute(ctx context.Context, input string, mode Mode) (*QueryResult, error)
 	GetDefaultMode() Mode
 	GetModeForIntent(intent IntentType) Mode
+}
+
+type DefaultModeEngine struct {
+	modes   map[Mode]config.ModeConfig
+	current Mode
+}
+
+func NewModeEngine() *DefaultModeEngine {
+	modes := make(map[Mode]config.ModeConfig)
+	for mode := range defaultModeConstraints {
+		modes[mode] = GetModeConfig(mode)
+	}
+	return &DefaultModeEngine{
+		modes:   modes,
+		current: ModeCode,
+	}
+}
+
+func (m *DefaultModeEngine) SetMode(name string) error {
+	mode := ParseMode(name)
+	if _, ok := m.modes[mode]; !ok {
+		return fmt.Errorf("unknown mode: %s", name)
+	}
+	m.current = mode
+	return nil
+}
+
+func (m *DefaultModeEngine) Current() Mode {
+	return m.current
+}
+
+func (m *DefaultModeEngine) IsToolAllowed(toolName string) bool {
+	cfg, ok := m.modes[m.current]
+	if !ok {
+		return true
+	}
+
+	for _, denied := range cfg.DeniedTools {
+		if denied == toolName {
+			return false
+		}
+	}
+
+	if len(cfg.AllowedTools) > 0 {
+		for _, allowed := range cfg.AllowedTools {
+			if allowed == toolName {
+				return true
+			}
+		}
+		return false
+	}
+
+	return true
+}
+
+func (m *DefaultModeEngine) AllowWrites() bool {
+	cfg, ok := m.modes[m.current]
+	if !ok {
+		return true
+	}
+	return cfg.AllowWrites
+}
+
+func (m *DefaultModeEngine) Execute(ctx context.Context, input string, mode Mode) (*QueryResult, error) {
+	oldMode := m.current
+	m.current = mode
+	defer func() { m.current = oldMode }()
+
+	return nil, fmt.Errorf("not implemented: use QueryEngine.ExecuteWithMode instead")
+}
+
+func (m *DefaultModeEngine) GetDefaultMode() Mode {
+	return ModeCode
+}
+
+func (m *DefaultModeEngine) GetModeForIntent(intent IntentType) Mode {
+	return GetModeForIntent(intent)
 }
 
 type intentToModeMap map[IntentType]Mode
