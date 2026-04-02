@@ -6,24 +6,26 @@ import (
 
 	"github.com/soypete/pedrocli/pkg/cli"
 	"github.com/soypete/pedrocli/pkg/config"
+	"github.com/soypete/pedrocli/pkg/orchestration"
 )
 
 // Session represents a REPL session state
 type Session struct {
 	mu sync.RWMutex
 
-	ID              string         // Unique session ID
-	Config          *config.Config // Application config
-	Bridge          *cli.CLIBridge // CLI bridge for tool/agent access
-	CurrentAgent    string         // Current agent mode (build/debug/review/triage/blog/podcast)
-	History         []string       // Command history
-	ActiveJobID     string         // Currently running job ID
-	StartTime       time.Time      // Session start time
-	Mode            string         // Session mode (code/blog/podcast)
-	Logger          *Logger        // Session logger
-	DebugMode       bool           // Debug mode enabled (also keeps logs)
-	InteractiveMode bool           // Interactive mode - ask for approval before writing code
-	JobManager      *JobManager    // Background job manager
+	ID              string                    // Unique session ID
+	Config          *config.Config            // Application config
+	Bridge          *cli.CLIBridge            // CLI bridge for tool/agent access
+	QueryEngine     orchestration.QueryEngine // Query engine for intent classification and routing
+	CurrentAgent    string                    // Current agent mode (build/debug/review/triage/blog/podcast)
+	History         []string                  // Command history
+	ActiveJobID     string                    // Currently running job ID
+	StartTime       time.Time                 // Session start time
+	Mode            string                    // Session mode (code/blog/podcast)
+	Logger          *Logger                   // Session logger
+	DebugMode       bool                      // Debug mode enabled (also keeps logs)
+	InteractiveMode bool                      // Interactive mode - ask for approval before writing code
+	JobManager      *JobManager               // Background job manager
 }
 
 // NewSession creates a new REPL session
@@ -112,6 +114,20 @@ func (s *Session) IsInteractive() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.InteractiveMode
+}
+
+// SetQueryEngine sets the query engine for intent classification
+func (s *Session) SetQueryEngine(qe orchestration.QueryEngine) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.QueryEngine = qe
+}
+
+// GetQueryEngine returns the query engine
+func (s *Session) GetQueryEngine() orchestration.QueryEngine {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.QueryEngine
 }
 
 // getDefaultAgentForMode returns the default agent for a given mode

@@ -10,6 +10,7 @@ import (
 	"github.com/soypete/pedrocli/pkg/database"
 	"github.com/soypete/pedrocli/pkg/jobs"
 	"github.com/soypete/pedrocli/pkg/llm"
+	"github.com/soypete/pedrocli/pkg/orchestration"
 	"github.com/soypete/pedrocli/pkg/storage"
 	"github.com/soypete/pedrocli/pkg/storage/blog"
 	"github.com/soypete/pedrocli/pkg/tools"
@@ -17,11 +18,12 @@ import (
 
 // AppContext holds all the shared dependencies for the HTTP server
 type AppContext struct {
-	Config     *config.Config
-	Backend    llm.Backend
-	JobManager jobs.JobManager
-	Database   *database.DB
-	WorkDir    string
+	Config      *config.Config
+	Backend     llm.Backend
+	JobManager  jobs.JobManager
+	Database    *database.DB
+	WorkDir     string
+	QueryEngine orchestration.QueryEngine
 
 	// Workspace manager for HTTP bridge jobs
 	WorkspaceManager *WorkspaceManager
@@ -149,6 +151,17 @@ func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, erro
 	if cfg.CalCom.Enabled {
 		appCtx.CalComTool = tools.NewCalComTool(cfg, nil) // nil tokenManager for now
 	}
+
+	// Initialize QueryEngine
+	agentFactory := orchestration.NewAppContextAgentFactory(appCtx)
+	qeConfig := orchestration.QueryEngineConfig{
+		AgentFactory:     agentFactory,
+		JobManager:       nil, // Not needed for HTTP - uses jobManager from AppContext
+		WorkspaceDir:     workDir,
+		DefaultMode:      orchestration.ModeCode,
+		EnableAutoIntent: true,
+	}
+	appCtx.QueryEngine = orchestration.NewDefaultQueryEngine(qeConfig)
 
 	return appCtx, nil
 }
