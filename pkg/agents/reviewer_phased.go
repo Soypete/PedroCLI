@@ -9,6 +9,7 @@ import (
 	"github.com/soypete/pedrocli/pkg/jobs"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/llmcontext"
+	"github.com/soypete/pedrocli/pkg/phases"
 	"github.com/soypete/pedrocli/pkg/tools"
 )
 
@@ -54,14 +55,22 @@ func NewReviewerPhasedAgent(cfg *config.Config, backend llm.Backend, jobMgr jobs
 
 // GetPhases returns the workflow phases for the reviewer agent
 func (r *ReviewerPhasedAgent) GetPhases() []Phase {
+	registry := phases.DefaultRegistry()
+
+	gatherPhase, _ := registry.GetPhase("gather")
+	securityPhase, _ := registry.GetPhase("security")
+	qualityPhase, _ := registry.GetPhase("quality")
+	compilePhase, _ := registry.GetPhase("compile")
+	publishPhase, _ := registry.GetPhase("publish")
+
 	return []Phase{
 		{
-			Name:         "gather",
-			Description:  "Fetch PR details, checkout branch, get diff and LSP diagnostics",
+			Name:         gatherPhase.Name,
+			Description:  gatherPhase.Description,
 			SystemPrompt: reviewerGatherPrompt,
-			Tools:        []string{"github", "git", "lsp", "search", "navigate", "file"},
-			MaxRounds:    10,
-			ExpectsJSON:  false,
+			Tools:        gatherPhase.Tools,
+			MaxRounds:    gatherPhase.MaxRounds,
+			ExpectsJSON:  gatherPhase.ExpectsJSON,
 			Validator: func(result *PhaseResult) error {
 				if result.Output == "" {
 					return fmt.Errorf("gather phase produced no output")
@@ -70,34 +79,34 @@ func (r *ReviewerPhasedAgent) GetPhases() []Phase {
 			},
 		},
 		{
-			Name:         "security",
-			Description:  "Analyze for security vulnerabilities and issues",
+			Name:         securityPhase.Name,
+			Description:  securityPhase.Description,
 			SystemPrompt: reviewerSecurityPrompt,
-			Tools:        []string{"search", "file", "lsp", "context"},
-			MaxRounds:    8,
-			ExpectsJSON:  true,
+			Tools:        securityPhase.Tools,
+			MaxRounds:    securityPhase.MaxRounds,
+			ExpectsJSON:  securityPhase.ExpectsJSON,
 			Validator: func(result *PhaseResult) error {
 				return nil
 			},
 		},
 		{
-			Name:         "quality",
-			Description:  "Review code quality, performance, and maintainability",
+			Name:         qualityPhase.Name,
+			Description:  qualityPhase.Description,
 			SystemPrompt: reviewerQualityPrompt,
-			Tools:        []string{"search", "file", "lsp", "navigate", "context"},
-			MaxRounds:    10,
-			ExpectsJSON:  true,
+			Tools:        qualityPhase.Tools,
+			MaxRounds:    qualityPhase.MaxRounds,
+			ExpectsJSON:  qualityPhase.ExpectsJSON,
 			Validator: func(result *PhaseResult) error {
 				return nil
 			},
 		},
 		{
-			Name:         "compile",
-			Description:  "Compile all findings into structured review",
+			Name:         compilePhase.Name,
+			Description:  compilePhase.Description,
 			SystemPrompt: reviewerCompilePrompt,
-			Tools:        []string{"context"},
-			MaxRounds:    5,
-			ExpectsJSON:  true,
+			Tools:        compilePhase.Tools,
+			MaxRounds:    compilePhase.MaxRounds,
+			ExpectsJSON:  compilePhase.ExpectsJSON,
 			Validator: func(result *PhaseResult) error {
 				if result.Output == "" {
 					return fmt.Errorf("compile phase produced no review")
@@ -106,11 +115,11 @@ func (r *ReviewerPhasedAgent) GetPhases() []Phase {
 			},
 		},
 		{
-			Name:         "publish",
-			Description:  "Post review to GitHub (optional)",
+			Name:         publishPhase.Name,
+			Description:  publishPhase.Description,
 			SystemPrompt: reviewerPublishPrompt,
-			Tools:        []string{"github"},
-			MaxRounds:    3,
+			Tools:        publishPhase.Tools,
+			MaxRounds:    publishPhase.MaxRounds,
 			Validator: func(result *PhaseResult) error {
 				return nil
 			},

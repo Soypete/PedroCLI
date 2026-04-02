@@ -9,6 +9,7 @@ import (
 	"github.com/soypete/pedrocli/pkg/jobs"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/llmcontext"
+	"github.com/soypete/pedrocli/pkg/phases"
 	"github.com/soypete/pedrocli/pkg/tools"
 )
 
@@ -54,17 +55,24 @@ func NewBuilderPhasedAgent(cfg *config.Config, backend llm.Backend, jobMgr jobs.
 
 // GetPhases returns the workflow phases for the builder agent
 func (b *BuilderPhasedAgent) GetPhases() []Phase {
+	registry := phases.DefaultRegistry()
+
+	analyzePhase, _ := registry.GetPhase("analyze")
+	planPhase, _ := registry.GetPhase("plan")
+	implementPhase, _ := registry.GetPhase("implement")
+	validatePhase, _ := registry.GetPhase("validate")
+	deliverPhase, _ := registry.GetPhase("deliver")
+
 	return []Phase{
 		{
-			Name:         "analyze",
-			Description:  "Analyze the request, evaluate repo state, gather requirements",
+			Name:         analyzePhase.Name,
+			Description:  analyzePhase.Description,
 			SystemPrompt: builderAnalyzePrompt,
-			Tools:        []string{"search", "navigate", "file", "git", "github", "lsp", "bash"},
-			MaxRounds:    10,
-			ExpectsJSON:  true,
+			Tools:        append(analyzePhase.Tools, "github", "bash"),
+			MaxRounds:    analyzePhase.MaxRounds,
+			ExpectsJSON:  analyzePhase.ExpectsJSON,
 			Validator: func(result *PhaseResult) error {
 				if result.Data == nil || result.Data["analysis"] == nil {
-					// Allow text-based analysis too
 					if result.Output == "" {
 						return fmt.Errorf("analysis phase produced no output")
 					}
@@ -73,12 +81,12 @@ func (b *BuilderPhasedAgent) GetPhases() []Phase {
 			},
 		},
 		{
-			Name:         "plan",
-			Description:  "Create a detailed implementation plan with numbered steps",
+			Name:         planPhase.Name,
+			Description:  planPhase.Description,
 			SystemPrompt: builderPlanPrompt,
-			Tools:        []string{"search", "navigate", "file", "context", "bash"},
-			MaxRounds:    5,
-			ExpectsJSON:  true,
+			Tools:        append(planPhase.Tools, "bash"),
+			MaxRounds:    planPhase.MaxRounds,
+			ExpectsJSON:  planPhase.ExpectsJSON,
 			Validator: func(result *PhaseResult) error {
 				if result.Output == "" {
 					return fmt.Errorf("plan phase produced no output")
@@ -87,32 +95,31 @@ func (b *BuilderPhasedAgent) GetPhases() []Phase {
 			},
 		},
 		{
-			Name:         "implement",
-			Description:  "Write code following the plan, chunk by chunk",
+			Name:         implementPhase.Name,
+			Description:  implementPhase.Description,
 			SystemPrompt: builderImplementPrompt,
-			Tools:        []string{"file", "code_edit", "search", "navigate", "git", "bash", "lsp", "context"},
-			MaxRounds:    30, // More rounds for implementation
+			Tools:        append(implementPhase.Tools, "navigate"),
+			MaxRounds:    implementPhase.MaxRounds,
 			Validator: func(result *PhaseResult) error {
-				// Implementation should produce some file modifications
 				return nil
 			},
 		},
 		{
-			Name:         "validate",
-			Description:  "Run tests, linter, verify the implementation works",
+			Name:         validatePhase.Name,
+			Description:  validatePhase.Description,
 			SystemPrompt: builderValidatePrompt,
-			Tools:        []string{"test", "bash", "file", "code_edit", "lsp", "search", "navigate"},
-			MaxRounds:    15, // Allow iterations to fix failing tests
+			Tools:        validatePhase.Tools,
+			MaxRounds:    validatePhase.MaxRounds,
 			Validator: func(result *PhaseResult) error {
 				return nil
 			},
 		},
 		{
-			Name:         "deliver",
-			Description:  "Commit changes and create draft PR",
+			Name:         deliverPhase.Name,
+			Description:  deliverPhase.Description,
 			SystemPrompt: builderDeliverPrompt,
-			Tools:        []string{"git", "github"},
-			MaxRounds:    5,
+			Tools:        deliverPhase.Tools,
+			MaxRounds:    deliverPhase.MaxRounds,
 			Validator: func(result *PhaseResult) error {
 				return nil
 			},

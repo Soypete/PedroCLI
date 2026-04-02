@@ -9,6 +9,7 @@ import (
 	"github.com/soypete/pedrocli/pkg/jobs"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/llmcontext"
+	"github.com/soypete/pedrocli/pkg/phases"
 	"github.com/soypete/pedrocli/pkg/tools"
 )
 
@@ -57,14 +58,23 @@ func NewDebuggerPhasedAgent(cfg *config.Config, backend llm.Backend, jobMgr jobs
 
 // GetPhases returns the workflow phases for the debugger agent
 func (d *DebuggerPhasedAgent) GetPhases() []Phase {
+	registry := phases.DefaultRegistry()
+
+	reproducePhase, _ := registry.GetPhase("reproduce")
+	investigatePhase, _ := registry.GetPhase("investigate")
+	isolatePhase, _ := registry.GetPhase("isolate")
+	fixPhase, _ := registry.GetPhase("fix")
+	verifyPhase, _ := registry.GetPhase("verify")
+	commitPhase, _ := registry.GetPhase("commit")
+
 	return []Phase{
 		{
-			Name:         "reproduce",
-			Description:  "Reproduce the issue consistently",
+			Name:         reproducePhase.Name,
+			Description:  reproducePhase.Description,
 			SystemPrompt: debuggerReproducePrompt,
-			Tools:        []string{"test", "bash", "file", "search"},
-			MaxRounds:    8,
-			ExpectsJSON:  true,
+			Tools:        reproducePhase.Tools,
+			MaxRounds:    reproducePhase.MaxRounds,
+			ExpectsJSON:  reproducePhase.ExpectsJSON,
 			Validator: func(result *PhaseResult) error {
 				if result.Output == "" {
 					return fmt.Errorf("reproduce phase produced no output")
@@ -73,53 +83,53 @@ func (d *DebuggerPhasedAgent) GetPhases() []Phase {
 			},
 		},
 		{
-			Name:         "investigate",
-			Description:  "Gather evidence about the root cause",
+			Name:         investigatePhase.Name,
+			Description:  investigatePhase.Description,
 			SystemPrompt: debuggerInvestigatePrompt,
-			Tools:        []string{"search", "file", "lsp", "git", "navigate", "context"},
-			MaxRounds:    12,
-			ExpectsJSON:  false,
+			Tools:        investigatePhase.Tools,
+			MaxRounds:    investigatePhase.MaxRounds,
+			ExpectsJSON:  investigatePhase.ExpectsJSON,
 			Validator: func(result *PhaseResult) error {
 				return nil
 			},
 		},
 		{
-			Name:         "isolate",
-			Description:  "Narrow down to the exact root cause",
+			Name:         isolatePhase.Name,
+			Description:  isolatePhase.Description,
 			SystemPrompt: debuggerIsolatePrompt,
-			Tools:        []string{"file", "lsp", "search", "bash", "context"},
-			MaxRounds:    10,
-			ExpectsJSON:  true,
+			Tools:        isolatePhase.Tools,
+			MaxRounds:    isolatePhase.MaxRounds,
+			ExpectsJSON:  isolatePhase.ExpectsJSON,
 			Validator: func(result *PhaseResult) error {
 				return nil
 			},
 		},
 		{
-			Name:         "fix",
-			Description:  "Implement a targeted fix",
+			Name:         fixPhase.Name,
+			Description:  fixPhase.Description,
 			SystemPrompt: debuggerFixPrompt,
-			Tools:        []string{"file", "code_edit", "search", "lsp"},
-			MaxRounds:    10,
+			Tools:        fixPhase.Tools,
+			MaxRounds:    fixPhase.MaxRounds,
 			Validator: func(result *PhaseResult) error {
 				return nil
 			},
 		},
 		{
-			Name:         "verify",
-			Description:  "Verify the fix works and doesn't break anything",
+			Name:         verifyPhase.Name,
+			Description:  verifyPhase.Description,
 			SystemPrompt: debuggerVerifyPrompt,
-			Tools:        []string{"test", "bash", "lsp", "file", "code_edit"},
-			MaxRounds:    15, // Allow iterations for fix adjustments
+			Tools:        verifyPhase.Tools,
+			MaxRounds:    verifyPhase.MaxRounds,
 			Validator: func(result *PhaseResult) error {
 				return nil
 			},
 		},
 		{
-			Name:         "commit",
-			Description:  "Commit the fix with a clear message",
+			Name:         commitPhase.Name,
+			Description:  commitPhase.Description,
 			SystemPrompt: debuggerCommitPrompt,
-			Tools:        []string{"git"},
-			MaxRounds:    3,
+			Tools:        commitPhase.Tools,
+			MaxRounds:    commitPhase.MaxRounds,
 			Validator: func(result *PhaseResult) error {
 				return nil
 			},
