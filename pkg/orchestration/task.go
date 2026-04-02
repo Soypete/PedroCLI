@@ -15,13 +15,15 @@ type TaskEnvelope struct {
 	ToolsAllowed []string          `json:"tools_allowed,omitempty"`
 	MaxSteps     int               `json:"max_steps,omitempty"`
 	ReturnSchema map[string]string `json:"return_schema,omitempty"`
+	Timeout      time.Duration     `json:"timeout,omitempty"`
 }
 
 type TaskContext struct {
-	Workspace  string                 `json:"workspace"`
-	WorkingDir string                 `json:"working_dir"`
-	Files      []string               `json:"files,omitempty"`
-	Metadata   map[string]interface{} `json:"metadata,omitempty"`
+	Workspace    string                 `json:"workspace"`
+	WorkingDir   string                 `json:"working_dir"`
+	Files        []string               `json:"files,omitempty"`
+	ContextFiles []string               `json:"context_files,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 }
 
 type TaskResult struct {
@@ -73,6 +75,10 @@ func (e *TaskEnvelope) SetMetadata(key string, value interface{}) {
 		e.Context.Metadata = make(map[string]interface{})
 	}
 	e.Context.Metadata[key] = value
+}
+
+func (e *TaskEnvelope) SetTimeout(timeout time.Duration) {
+	e.Timeout = timeout
 }
 
 func (e *TaskEnvelope) Validate() error {

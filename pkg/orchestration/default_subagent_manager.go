@@ -19,27 +19,38 @@ import (
 )
 
 type DefaultSubagentManager struct {
-	config        *config.Config
-	backend       llm.Backend
-	jobManager    *jobs.Manager
-	toolRegistry  *tools.ToolRegistry
-	parentJobDir  string
-	mu            sync.RWMutex
-	activeHandles map[string]*SubagentHandle
-	results       map[string]*TaskResult
-	workspaceDir  string
+	config         *config.Config
+	backend        llm.Backend
+	jobManager     *jobs.Manager
+	toolRegistry   *tools.ToolRegistry
+	parentJobDir   string
+	workspaceDir   string
+	defaultTimeout time.Duration
+
+	mu             sync.RWMutex
+	activeHandles  map[string]*SubagentHandle
+	results        map[string]*TaskResult
+	subagentCancel map[string]context.CancelFunc
+	subagentTasks  map[string]*TaskEnvelope
 }
 
 func NewDefaultSubagentManager(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager, toolRegistry *tools.ToolRegistry, parentJobDir, workspaceDir string) *DefaultSubagentManager {
+	return NewDefaultSubagentManagerWithTimeout(cfg, backend, jobMgr, toolRegistry, parentJobDir, workspaceDir, 5*time.Minute)
+}
+
+func NewDefaultSubagentManagerWithTimeout(cfg *config.Config, backend llm.Backend, jobMgr *jobs.Manager, toolRegistry *tools.ToolRegistry, parentJobDir, workspaceDir string, timeout time.Duration) *DefaultSubagentManager {
 	return &DefaultSubagentManager{
-		config:        cfg,
-		backend:       backend,
-		jobManager:    jobMgr,
-		toolRegistry:  toolRegistry,
-		parentJobDir:  parentJobDir,
-		workspaceDir:  workspaceDir,
-		activeHandles: make(map[string]*SubagentHandle),
-		results:       make(map[string]*TaskResult),
+		config:         cfg,
+		backend:        backend,
+		jobManager:     jobMgr,
+		toolRegistry:   toolRegistry,
+		parentJobDir:   parentJobDir,
+		workspaceDir:   workspaceDir,
+		defaultTimeout: timeout,
+		activeHandles:  make(map[string]*SubagentHandle),
+		results:        make(map[string]*TaskResult),
+		subagentCancel: make(map[string]context.CancelFunc),
+		subagentTasks:  make(map[string]*TaskEnvelope),
 	}
 }
 
@@ -61,10 +72,16 @@ func (m *DefaultSubagentManager) Spawn(ctx context.Context, task TaskEnvelope) (
 
 	m.mu.Lock()
 	m.activeHandles[subagentID] = &handle
+	m.subagentTasks[subagentID] = &subagentTask
+	m.mu.Unlock()
+
+	subagentCtx, cancelSubagent := context.WithCancel(ctx)
+	m.mu.Lock()
+	m.subagentCancel[subagentID] = cancelSubagent
 	m.mu.Unlock()
 
 	go func() {
-		result := m.executeSubagent(ctx, subagentID, subagentDir, &subagentTask)
+		result := m.executeSubagent(subagentCtx, subagentID, subagentDir, &subagentTask)
 
 		m.mu.Lock()
 		if h, ok := m.activeHandles[subagentID]; ok {
@@ -75,6 +92,7 @@ func (m *DefaultSubagentManager) Spawn(ctx context.Context, task TaskEnvelope) (
 			}
 		}
 		m.results[subagentID] = result
+		delete(m.subagentCancel, subagentID)
 		m.mu.Unlock()
 	}()
 
@@ -132,7 +150,15 @@ func (m *DefaultSubagentManager) Wait(ctx context.Context, handle SubagentHandle
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
-	timeout := time.After(5 * time.Minute)
+	timeoutDuration := m.defaultTimeout
+
+	m.mu.RLock()
+	if task, ok := m.subagentTasks[handle.ID]; ok && task.Timeout > 0 {
+		timeoutDuration = task.Timeout
+	}
+	m.mu.RUnlock()
+
+	timeout := time.After(timeoutDuration)
 
 	for {
 		select {
@@ -182,6 +208,11 @@ func (m *DefaultSubagentManager) WaitAll(ctx context.Context, handles []Subagent
 func (m *DefaultSubagentManager) Cancel(handle SubagentHandle) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if cancelFunc, ok := m.subagentCancel[handle.ID]; ok {
+		cancelFunc()
+		delete(m.subagentCancel, handle.ID)
+	}
 
 	if h, ok := m.activeHandles[handle.ID]; ok {
 		h.MarkCancelled()
