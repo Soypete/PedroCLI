@@ -5,11 +5,14 @@ import "context"
 type Mode string
 
 const (
-	ModeCode    Mode = "code"
-	ModeBlog    Mode = "blog"
-	ModePodcast Mode = "podcast"
-	ModeChat    Mode = "chat"
-	ModePlan    Mode = "plan"
+	ModeCode            Mode = "code"
+	ModeBlog            Mode = "blog"
+	ModePodcast         Mode = "podcast"
+	ModeChat            Mode = "chat"
+	ModePlan            Mode = "plan"
+	ModeBuild           Mode = "build"
+	ModeReview          Mode = "review"
+	ModeTechnicalWriter Mode = "technical_writer"
 )
 
 func (m Mode) String() string {
@@ -28,6 +31,12 @@ func ParseMode(s string) Mode {
 		return ModeChat
 	case "plan":
 		return ModePlan
+	case "build":
+		return ModeBuild
+	case "review":
+		return ModeReview
+	case "technical_writer":
+		return ModeTechnicalWriter
 	default:
 		return ModeCode
 	}
@@ -42,14 +51,15 @@ type ModeEngine interface {
 type intentToModeMap map[IntentType]Mode
 
 var defaultIntentToMode = intentToModeMap{
-	IntentBuild:   ModeCode,
-	IntentDebug:   ModeCode,
-	IntentReview:  ModeCode,
-	IntentTriage:  ModeCode,
-	IntentChat:    ModeChat,
-	IntentPlan:    ModePlan,
-	IntentBlog:    ModeBlog,
-	IntentPodcast: ModePodcast,
+	IntentBuild:           ModeCode,
+	IntentDebug:           ModeCode,
+	IntentReview:          ModeCode,
+	IntentTriage:          ModeCode,
+	IntentChat:            ModeChat,
+	IntentPlan:            ModePlan,
+	IntentBlog:            ModeBlog,
+	IntentPodcast:         ModePodcast,
+	IntentTechnicalWriter: ModeTechnicalWriter,
 }
 
 func GetModeForIntent(intent IntentType) Mode {
@@ -60,7 +70,7 @@ func GetModeForIntent(intent IntentType) Mode {
 }
 
 func GetSupportedModes() []Mode {
-	return []Mode{ModeCode, ModeBlog, ModePodcast, ModeChat, ModePlan}
+	return []Mode{ModeCode, ModeBlog, ModePodcast, ModeChat, ModePlan, ModeBuild, ModeReview, ModeTechnicalWriter}
 }
 
 func GetSupportedIntents() []IntentType {
@@ -73,5 +83,6 @@ func GetSupportedIntents() []IntentType {
 		IntentTriage,
 		IntentBlog,
 		IntentPodcast,
+		IntentTechnicalWriter,
 	}
 }

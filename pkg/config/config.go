@@ -41,6 +41,10 @@ type Config struct {
 	Vision VisionConfig `json:"vision"`
 	// Cal.com scheduling configuration
 	CalCom CalComConfig `json:"calcom,omitempty"`
+	// Execution modes configuration (M2)
+	Modes ModeConfigMap `json:"modes,omitempty"`
+	// Orchestration configuration
+	Orchestration *OrchestrationConfig `json:"orchestration,omitempty"`
 }
 
 // ModelConfig contains model configuration
@@ -296,6 +300,33 @@ type CalComConfig struct {
 	Enabled bool   `json:"enabled"`
 	APIKey  string `json:"api_key,omitempty"`  // Cal.com API key (prefer env var CAL_API_KEY)
 	BaseURL string `json:"base_url,omitempty"` // Optional: custom API URL for self-hosted Cal.com
+}
+
+// ModeConfigMap maps mode names to their configuration
+type ModeConfigMap map[string]ModeConfig
+
+// ModeConfig defines tool permissions for a specific mode
+type ModeConfig struct {
+	// AllowedTools lists tools permitted in this mode
+	AllowedTools []string `json:"allowed_tools,omitempty"`
+	// DeniedTools lists tools explicitly forbidden in this mode
+	DeniedTools []string `json:"denied_tools,omitempty"`
+	// AllowWrites whether this mode allows file writes
+	AllowWrites bool `json:"allow_writes"`
+	// AgentTypes allowed in this mode
+	AgentTypes []string `json:"agent_types,omitempty"`
+	// Description describes this mode's purpose
+	Description string `json:"description,omitempty"`
+	// MaxInferenceRuns limits iterations in this mode (0 = use default)
+	MaxInferenceRuns int `json:"max_inference_runs,omitempty"`
+	// SystemPrompt custom prompt for this mode
+	SystemPrompt string `json:"system_prompt,omitempty"`
+}
+
+// OrchestrationConfig contains orchestration layer settings
+type OrchestrationConfig struct {
+	Enabled     bool   `json:"enabled"`
+	DefaultMode string `json:"default_mode,omitempty"`
 }
 
 // OAuthConfig contains OAuth client credentials for external services

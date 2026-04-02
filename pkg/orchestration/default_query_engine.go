@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"github.com/soypete/pedrocli/pkg/agents"
+	"github.com/soypete/pedrocli/pkg/config"
+	"github.com/soypete/pedrocli/pkg/jobs"
+	"github.com/soypete/pedrocli/pkg/llm"
 )
 
 type DefaultQueryEngine struct {
@@ -19,14 +22,15 @@ func NewDefaultQueryEngine(cfg QueryEngineConfig) *DefaultQueryEngine {
 		config: cfg,
 		intentRank: intentClassifier{
 			keywords: map[IntentType][]string{
-				IntentBuild:   {"build", "implement", "add", "create", "new feature", "write code", "make"},
-				IntentDebug:   {"debug", "fix", "bug", "error", "issue", "crash", "broken", "fails", "doesn't work"},
-				IntentReview:  {"review", "review code", "pr review", "check", "look at", "audit"},
-				IntentTriage:  {"triage", "diagnose", "investigate", "analyze", "find cause", "understand"},
-				IntentPlan:    {"plan", "design", "architecture", "how to", "approach", "roadmap"},
-				IntentChat:    {"explain", "what is", "how does", "tell me about", "describe"},
-				IntentBlog:    {"blog", "post", "article", "write about", "draft"},
-				IntentPodcast: {"podcast", "episode", "outline", "script", "interview"},
+				IntentBuild:           {"build", "implement", "add", "create", "new feature", "write code", "make"},
+				IntentDebug:           {"debug", "fix", "bug", "error", "issue", "crash", "broken", "fails", "doesn't work"},
+				IntentReview:          {"review", "review code", "pr review", "check", "look at", "audit"},
+				IntentTriage:          {"triage", "diagnose", "investigate", "analyze", "find cause", "understand"},
+				IntentPlan:            {"plan", "design", "architecture", "how to", "approach", "roadmap"},
+				IntentChat:            {"explain", "what is", "how does", "tell me about", "describe"},
+				IntentBlog:            {"blog", "post", "article", "write about", "draft"},
+				IntentPodcast:         {"podcast", "episode", "outline", "script", "interview"},
+				IntentTechnicalWriter: {"write", "document", "tutorial", "guide", "explain", "documentation", "technical article"},
 			},
 		},
 	}
@@ -64,6 +68,8 @@ func (e *DefaultQueryEngine) Execute(ctx context.Context, req QueryRequest) (*Qu
 		return e.executeBlog(ctx, input, mode, now)
 	case IntentPodcast:
 		return e.executePodcast(ctx, input, mode, now)
+	case IntentTechnicalWriter:
+		return e.executeTechnicalWriter(ctx, input, mode, now)
 	case IntentChat, IntentPlan:
 		return &QueryResult{
 			Success:    true,
@@ -253,6 +259,34 @@ func (e *DefaultQueryEngine) executePodcast(ctx context.Context, input string, m
 	}, nil
 }
 
+func (e *DefaultQueryEngine) executeTechnicalWriter(ctx context.Context, input string, mode Mode, now time.Time) (*QueryResult, error) {
+	agent := e.config.AgentFactory.NewTechnicalWriterAgent()
+	job, err := agent.Execute(ctx, map[string]interface{}{
+		"content": input,
+		"title":   "",
+		"type":    "technical",
+	})
+	if err != nil {
+		return &QueryResult{
+			Success:    false,
+			Error:      fmt.Sprintf("technical writer failed: %v", err),
+			Intent:     IntentTechnicalWriter,
+			Mode:       mode,
+			Finished:   true,
+			FinishedAt: &now,
+		}, nil
+	}
+	return &QueryResult{
+		JobID:      job.ID,
+		Success:    true,
+		Output:     fmt.Sprintf("Technical writer job %s started", job.ID),
+		Intent:     IntentTechnicalWriter,
+		Mode:       mode,
+		Finished:   false,
+		FinishedAt: nil,
+	}, nil
+}
+
 type intentClassifier struct {
 	keywords map[IntentType][]string
 }
@@ -288,8 +322,13 @@ func NewAppContextAgentFactory(appCtx interface {
 	NewReviewerAgent() *agents.ReviewerPhasedAgent
 	NewTriagerAgent() *agents.TriagerAgent
 	NewDynamicBlogAgent() *agents.DynamicBlogAgent
-}) AgentFactory {
-	return &concreteAgentFactory{appCtx: appCtx}
+}, cfg *config.Config, backend llm.Backend, jobManager jobs.JobManager) AgentFactory {
+	return &concreteAgentFactory{
+		appCtx:     appCtx,
+		cfg:        cfg,
+		backend:    backend,
+		jobManager: jobManager,
+	}
 }
 
 type concreteAgentFactory struct {
@@ -300,6 +339,9 @@ type concreteAgentFactory struct {
 		NewTriagerAgent() *agents.TriagerAgent
 		NewDynamicBlogAgent() *agents.DynamicBlogAgent
 	}
+	cfg        *config.Config
+	backend    llm.Backend
+	jobManager jobs.JobManager
 }
 
 func (f *concreteAgentFactory) NewBuilderAgent() AgentExecutor {
@@ -320,4 +362,8 @@ func (f *concreteAgentFactory) NewTriagerAgent() AgentExecutor {
 
 func (f *concreteAgentFactory) NewDynamicBlogAgent() AgentExecutor {
 	return f.appCtx.NewDynamicBlogAgent()
+}
+
+func (f *concreteAgentFactory) NewTechnicalWriterAgent() AgentExecutor {
+	return agents.NewTechnicalWriterAgent(f.cfg, f.backend, f.jobManager)
 }

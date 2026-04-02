@@ -129,6 +129,9 @@ func (r *ReviewerAgent) Execute(ctx context.Context, input map[string]interface{
 		executor := NewInferenceExecutor(r.BaseAgent, contextMgr)
 		executor.SetSystemPrompt(r.buildCodingSystemPrompt())
 
+		// Apply mode constraints (M2)
+		ApplyModeConstraintsToExecutor(executor, "reviewer", r.config.Modes)
+
 		// Execute the inference loop
 		err = executor.Execute(bgCtx, userPrompt)
 		if err != nil {

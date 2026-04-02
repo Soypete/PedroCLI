@@ -94,6 +94,8 @@ func (a *ScriptCreatorAgent) Execute(ctx context.Context, input map[string]inter
 		executor := NewInferenceExecutor(a.BaseAgent, contextMgr)
 		executor.SetSystemPrompt(a.buildPodcastSystemPrompt())
 
+		ApplyModeConstraintsToExecutor(executor, "podcast", a.config.Modes)
+
 		err = executor.Execute(bgCtx, userPrompt)
 		if err != nil {
 			a.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
@@ -185,6 +187,8 @@ func (a *NewsReviewerAgent) Execute(ctx context.Context, input map[string]interf
 		executor := NewInferenceExecutor(a.BaseAgent, contextMgr)
 		executor.SetSystemPrompt(a.buildPodcastSystemPrompt())
 
+		ApplyModeConstraintsToExecutor(executor, "podcast", a.config.Modes)
+
 		err = executor.Execute(bgCtx, userPrompt)
 		if err != nil {
 			a.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
@@ -267,6 +271,8 @@ func (a *LinkAdderAgent) Execute(ctx context.Context, input map[string]interface
 		executor := NewInferenceExecutor(a.BaseAgent, contextMgr)
 		executor.SetSystemPrompt(a.buildPodcastSystemPrompt())
 
+		ApplyModeConstraintsToExecutor(executor, "podcast", a.config.Modes)
+
 		err = executor.Execute(bgCtx, userPrompt)
 		if err != nil {
 			a.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
@@ -285,115 +291,15 @@ func (a *LinkAdderAgent) Execute(ctx context.Context, input map[string]interface
 
 func (a *LinkAdderAgent) buildPrompt(input map[string]interface{}) string {
 	url := input["url"].(string)
-	prompt := a.promptMgr.GetPrompt("podcast", "add_notion_link")
-	prompt += fmt.Sprintf("\n\n## Link to Add\nURL: %s\n", url)
+	prompt := a.promptMgr.GetPrompt("podcast", "add_link")
+	prompt += fmt.Sprintf("\n\n## Link Information\nURL: %s\n", url)
 
 	if title, ok := input["title"].(string); ok && title != "" {
 		prompt += fmt.Sprintf("Title: %s\n", title)
 	}
+
 	if notes, ok := input["notes"].(string); ok && notes != "" {
 		prompt += fmt.Sprintf("Notes: %s\n", notes)
-	}
-	if database, ok := input["database"].(string); ok && database != "" {
-		prompt += fmt.Sprintf("Target Database: %s\n", database)
-	}
-
-	return prompt
-}
-
-// GuestAdderAgent adds guests to the database
-type GuestAdderAgent struct {
-	*PodcastBaseAgent
-}
-
-// NewGuestAdderAgent creates a new guest adder agent
-func NewGuestAdderAgent(cfg *config.Config, backend llm.Backend, jobMgr jobs.JobManager) *GuestAdderAgent {
-	base := NewPodcastBaseAgent(
-		"add_guest",
-		"Add guest information to the podcast guests database",
-		cfg,
-		backend,
-		jobMgr,
-	)
-	return &GuestAdderAgent{
-		PodcastBaseAgent: base,
-	}
-}
-
-// Execute executes the guest adder agent
-func (a *GuestAdderAgent) Execute(ctx context.Context, input map[string]interface{}) (*jobs.Job, error) {
-	name, ok := input["name"].(string)
-	if !ok {
-		return nil, fmt.Errorf("missing 'name' in input")
-	}
-
-	description := fmt.Sprintf("Add guest: %s", name)
-	job, err := a.jobManager.Create(ctx, "add_guest", description, input)
-	if err != nil {
-		return nil, err
-	}
-
-	a.jobManager.Update(ctx, job.ID, jobs.StatusRunning, nil, nil)
-
-	go func() {
-		bgCtx := context.Background()
-		contextMgr, err := llmcontext.NewManager(job.ID, a.config.Debug.Enabled, a.config.Model.ContextSize)
-		if err != nil {
-			a.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
-			return
-		}
-		defer contextMgr.Cleanup()
-
-		// Configure context manager with model and stats tracking
-		contextMgr.SetModelName(a.config.Model.ModelName)
-		if a.compactionStatsStore != nil {
-			contextMgr.SetStatsStore(a.compactionStatsStore)
-		}
-
-		userPrompt := a.buildPrompt(input)
-		executor := NewInferenceExecutor(a.BaseAgent, contextMgr)
-		executor.SetSystemPrompt(a.buildPodcastSystemPrompt())
-
-		err = executor.Execute(bgCtx, userPrompt)
-		if err != nil {
-			a.jobManager.Update(bgCtx, job.ID, jobs.StatusFailed, nil, err)
-			return
-		}
-
-		output := map[string]interface{}{
-			"status":  "completed",
-			"job_dir": contextMgr.GetJobDir(),
-		}
-		a.jobManager.Update(bgCtx, job.ID, jobs.StatusCompleted, output, nil)
-	}()
-
-	return job, nil
-}
-
-func (a *GuestAdderAgent) buildPrompt(input map[string]interface{}) string {
-	name := input["name"].(string)
-	prompt := a.promptMgr.GetPrompt("podcast", "add_guest")
-	prompt += fmt.Sprintf("\n\n## Guest Information\nName: %s\n", name)
-
-	if title, ok := input["title"].(string); ok && title != "" {
-		prompt += fmt.Sprintf("Title/Role: %s\n", title)
-	}
-	if org, ok := input["organization"].(string); ok && org != "" {
-		prompt += fmt.Sprintf("Organization: %s\n", org)
-	}
-	if bio, ok := input["bio"].(string); ok && bio != "" {
-		prompt += fmt.Sprintf("Bio: %s\n", bio)
-	}
-	if email, ok := input["email"].(string); ok && email != "" {
-		prompt += fmt.Sprintf("Email: %s\n", email)
-	}
-	if topics, ok := input["topics"].([]interface{}); ok && len(topics) > 0 {
-		prompt += "Topics of Expertise:\n"
-		for _, t := range topics {
-			if topic, ok := t.(string); ok {
-				prompt += fmt.Sprintf("- %s\n", topic)
-			}
-		}
 	}
 
 	return prompt
