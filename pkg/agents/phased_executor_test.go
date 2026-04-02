@@ -1,10 +1,13 @@
 package agents
 
 import (
+	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/soypete/pedrocli/pkg/artifacts"
 	"github.com/soypete/pedrocli/pkg/config"
 	"github.com/soypete/pedrocli/pkg/llm"
 )
@@ -711,6 +714,115 @@ func TestFilterToolDefinitions(t *testing.T) {
 				if !gotNames[name] {
 					t.Errorf("expected tool %q in filtered results", name)
 				}
+			}
+		})
+	}
+}
+
+func TestPhasedExecutor_ArtifactStore(t *testing.T) {
+	tests := []struct {
+		name    string
+		setup   func(ctx context.Context, store artifacts.ArtifactStore) error
+		run     func(ctx context.Context, store artifacts.ArtifactStore) error
+		wantErr bool
+	}{
+		{
+			name:  "put and get artifact",
+			setup: nil,
+			run: func(ctx context.Context, store artifacts.ArtifactStore) error {
+				art := artifacts.NewArtifact("art-1", artifacts.ArtifactPlan, "plan.md", "# Plan", "builder")
+				if err := store.Put(ctx, art); err != nil {
+					return err
+				}
+				got, err := store.Get(ctx, "art-1")
+				if err != nil {
+					return err
+				}
+				if got.ID != "art-1" {
+					return fmt.Errorf("expected ID art-1, got %s", got.ID)
+				}
+				return nil
+			},
+			wantErr: false,
+		},
+		{
+			name:  "get non-existent artifact",
+			setup: nil,
+			run: func(ctx context.Context, store artifacts.ArtifactStore) error {
+				_, err := store.Get(ctx, "nonexistent")
+				return err
+			},
+			wantErr: true,
+		},
+		{
+			name: "list artifacts with filter",
+			setup: func(ctx context.Context, store artifacts.ArtifactStore) error {
+				store.Put(ctx, artifacts.NewArtifact("art-1", artifacts.ArtifactPlan, "plan1.md", "# Plan 1", "builder"))
+				store.Put(ctx, artifacts.NewArtifact("art-2", artifacts.ArtifactContext, "code.go", "package main", "builder"))
+				store.Put(ctx, artifacts.NewArtifact("art-3", artifacts.ArtifactPlan, "plan2.md", "# Plan 2", "debugger"))
+				return nil
+			},
+			run: func(ctx context.Context, store artifacts.ArtifactStore) error {
+				list, err := store.List(ctx, &artifacts.ArtifactFilter{Type: artifacts.ArtifactPlan})
+				if err != nil {
+					return err
+				}
+				if len(list) != 2 {
+					return fmt.Errorf("expected 2 plan artifacts, got %d", len(list))
+				}
+				return nil
+			},
+			wantErr: false,
+		},
+		{
+			name: "get by name",
+			setup: func(ctx context.Context, store artifacts.ArtifactStore) error {
+				store.Put(ctx, artifacts.NewArtifact("art-1", artifacts.ArtifactRepoMap, "repo.json", "{}", "builder"))
+				return nil
+			},
+			run: func(ctx context.Context, store artifacts.ArtifactStore) error {
+				got, err := store.GetByName(ctx, "repo.json")
+				if err != nil {
+					return err
+				}
+				if got.Name != "repo.json" {
+					return fmt.Errorf("expected name repo.json, got %s", got.Name)
+				}
+				return nil
+			},
+			wantErr: false,
+		},
+		{
+			name:  "artifact store not configured",
+			setup: nil,
+			run: func(ctx context.Context, store artifacts.ArtifactStore) error {
+				if store != nil {
+					return fmt.Errorf("expected nil store")
+				}
+				return nil
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			var store artifacts.ArtifactStore
+
+			if tt.name != "artifact store not configured" {
+				store = artifacts.NewInMemoryStore()
+			}
+
+			if tt.setup != nil {
+				if err := tt.setup(ctx, store); err != nil {
+					t.Fatalf("setup failed: %v", err)
+				}
+			}
+
+			err := tt.run(ctx, store)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("run() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

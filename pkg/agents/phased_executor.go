@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/soypete/pedro-agentware/middleware"
+	"github.com/soypete/pedrocli/pkg/artifacts"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/llmcontext"
 	"github.com/soypete/pedrocli/pkg/storage"
@@ -63,6 +64,7 @@ type PhasedExecutor struct {
 	phaseCallback    PhaseCallback              // Optional callback after each phase
 	policyEvaluator  middleware.PolicyEvaluator // Middleware for tool result filtering
 	subagentManager  SubagentSpawner
+	artifactStore    artifacts.ArtifactStore // M6: Artifact store for passing data between phases
 }
 
 // NewPhasedExecutor creates a new phased executor
@@ -105,6 +107,48 @@ func (pe *PhasedExecutor) SpawnSubagent(ctx context.Context, taskID, agentType, 
 		return "", fmt.Errorf("subagent manager not configured")
 	}
 	return pe.subagentManager.Spawn(ctx, taskID, agentType, goal, tools)
+}
+
+// SetArtifactStore sets the artifact store for passing data between phases (M6)
+func (pe *PhasedExecutor) SetArtifactStore(store artifacts.ArtifactStore) {
+	pe.artifactStore = store
+}
+
+// HasArtifactStore returns true if an artifact store is configured
+func (pe *PhasedExecutor) HasArtifactStore() bool {
+	return pe.artifactStore != nil
+}
+
+// PutArtifact stores an artifact for access by later phases
+func (pe *PhasedExecutor) PutArtifact(ctx context.Context, artifact *artifacts.Artifact) error {
+	if pe.artifactStore == nil {
+		return fmt.Errorf("artifact store not configured")
+	}
+	return pe.artifactStore.Put(ctx, artifact)
+}
+
+// GetArtifact retrieves an artifact by ID
+func (pe *PhasedExecutor) GetArtifact(ctx context.Context, id string) (*artifacts.Artifact, error) {
+	if pe.artifactStore == nil {
+		return nil, fmt.Errorf("artifact store not configured")
+	}
+	return pe.artifactStore.Get(ctx, id)
+}
+
+// GetArtifactByName retrieves an artifact by name
+func (pe *PhasedExecutor) GetArtifactByName(ctx context.Context, name string) (*artifacts.Artifact, error) {
+	if pe.artifactStore == nil {
+		return nil, fmt.Errorf("artifact store not configured")
+	}
+	return pe.artifactStore.GetByName(ctx, name)
+}
+
+// ListArtifacts lists artifacts matching the given filter
+func (pe *PhasedExecutor) ListArtifacts(ctx context.Context, filter *artifacts.ArtifactFilter) ([]*artifacts.Artifact, error) {
+	if pe.artifactStore == nil {
+		return nil, fmt.Errorf("artifact store not configured")
+	}
+	return pe.artifactStore.List(ctx, filter)
 }
 
 // Execute runs all phases sequentially
