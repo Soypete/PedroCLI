@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/soypete/pedrocli/pkg/agents"
+	"github.com/soypete/pedrocli/pkg/artifacts"
 	"github.com/soypete/pedrocli/pkg/config"
 	"github.com/soypete/pedrocli/pkg/database"
 	"github.com/soypete/pedrocli/pkg/jobs"
@@ -53,6 +54,9 @@ type AppContext struct {
 
 	// Scheduling tools
 	CalComTool tools.Tool
+
+	// Artifact store for M6
+	ArtifactStore artifacts.ArtifactStore
 }
 
 // NewAppContext creates and initializes the application context with database-backed job manager.
@@ -94,6 +98,9 @@ func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, erro
 	// Create blog storage (database-backed)
 	blogStorage := blog.NewDatabaseStorage(db.DB)
 
+	// Create artifact store (M6)
+	artifactStore := artifacts.NewInMemoryStore()
+
 	// Migrate existing file-based jobs to database
 	migrated, err := jobManager.MigrateFromFiles(ctx, "/tmp/pedrocli-jobs")
 	if err != nil {
@@ -124,6 +131,7 @@ func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, erro
 		WorkspaceManager:     workspaceManager,
 		CompactionStatsStore: compactionStatsStore,
 		BlogStorage:          blogStorage,
+		ArtifactStore:        artifactStore,
 		CodeTools:            codeTools,
 	}
 
