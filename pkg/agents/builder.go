@@ -100,6 +100,9 @@ func (b *BuilderAgent) Execute(ctx context.Context, input map[string]interface{}
 		executor := NewInferenceExecutor(b.BaseAgent, contextMgr)
 		executor.SetSystemPrompt(b.buildCodingSystemPrompt())
 
+		// Apply mode constraints (M2)
+		ApplyModeConstraintsToExecutor(executor, "builder", b.config.Modes)
+
 		// Execute the inference loop
 		err = executor.Execute(bgCtx, userPrompt)
 		if err != nil {

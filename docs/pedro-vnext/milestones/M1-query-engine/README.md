@@ -37,8 +37,9 @@ The Query Engine:
 
 <!-- Important choices made during implementation - fill in as we code -->
 
-1. **Decision**: TODO - Reason
-2. **Decision**: TODO - Reason
+1. **CLI does not need QueryEngine** - The CLI uses explicit subcommands (`build`, `debug`, `review`, `triage`, `blog`) which explicitly specify the agent to use. This removes the need for intent classification since the user directly chooses the mode. This is intentional design - CLI is for power users who know what they want, while REPL/HTTP are for natural language interaction.
+
+2. **No subagent scaffolding in M1** - The QueryEngine routes to top-level agents only (Builder, Debugger, Reviewer, Triager, Blog). Subagent creation (e.g., a "research" subagent for blog) is deferred to M5: Subagent Manager. This keeps M1 focused on the core routing problem.
 
 ## Files Changed
 

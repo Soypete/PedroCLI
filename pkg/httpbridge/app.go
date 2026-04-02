@@ -153,7 +153,7 @@ func NewAppContextWithDB(cfg *config.Config, db *database.DB) (*AppContext, erro
 	}
 
 	// Initialize QueryEngine
-	agentFactory := orchestration.NewAppContextAgentFactory(appCtx)
+	agentFactory := orchestration.NewAppContextAgentFactory(appCtx, cfg, backend, jobManager)
 	qeConfig := orchestration.QueryEngineConfig{
 		AgentFactory:     agentFactory,
 		JobManager:       nil, // Not needed for HTTP - uses jobManager from AppContext

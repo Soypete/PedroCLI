@@ -120,6 +120,9 @@ func (a *DynamicBlogAgent) runDynamic(ctx context.Context, contextMgr *llmcontex
 	executor := NewInferenceExecutor(a.BaseAgent, contextMgr)
 	executor.SetSystemPrompt(blogDynamicSystemPrompt)
 
+	// Apply mode constraints (M2)
+	ApplyModeConstraintsToExecutor(executor, "dynamic_blog", a.config.Modes)
+
 	// Build initial prompt
 	initialPrompt := a.buildInitialPrompt(prompt, title, shouldPublish)
 

@@ -351,6 +351,9 @@ Use the code introspection tools if writing about implementation details.`, a.cu
 	executor := NewInferenceExecutor(a.baseAgent, contextMgr)
 	executor.SetSystemPrompt(systemPrompt)
 
+	// Apply mode constraints (M2)
+	ApplyModeConstraintsToExecutor(executor, "blog_content", a.config.Modes)
+
 	// Track tool usage with progress callback
 	executor.SetProgressCallback(func(event ProgressEvent) {
 		if event.Type == ProgressEventToolCall {

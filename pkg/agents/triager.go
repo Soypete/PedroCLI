@@ -124,6 +124,9 @@ func (t *TriagerAgent) Execute(ctx context.Context, input map[string]interface{}
 		executor := NewInferenceExecutor(t.BaseAgent, contextMgr)
 		executor.SetSystemPrompt(t.buildCodingSystemPrompt())
 
+		// Apply mode constraints (M2)
+		ApplyModeConstraintsToExecutor(executor, "triager", t.config.Modes)
+
 		// Execute the inference loop
 		err = executor.Execute(bgCtx, userPrompt)
 		if err != nil {

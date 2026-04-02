@@ -100,6 +100,9 @@ func (d *DebuggerAgent) Execute(ctx context.Context, input map[string]interface{
 		executor := NewInferenceExecutor(d.BaseAgent, contextMgr)
 		executor.SetSystemPrompt(d.buildCodingSystemPrompt())
 
+		// Apply mode constraints (M2)
+		ApplyModeConstraintsToExecutor(executor, "debugger", d.config.Modes)
+
 		// Execute the inference loop
 		err = executor.Execute(bgCtx, userPrompt)
 		if err != nil {

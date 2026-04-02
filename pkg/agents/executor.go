@@ -48,6 +48,11 @@ type InferenceExecutor struct {
 	currentRound int
 	systemPrompt string // Custom system prompt (if set)
 
+	// Mode constraints (M2)
+	allowedTools []string
+	deniedTools  []string
+	allowWrites  bool
+
 	// Policy evaluator for tool call validation (middleware)
 	policyEvaluator middleware.PolicyEvaluator
 
@@ -80,6 +85,56 @@ func (e *InferenceExecutor) SetSystemPrompt(prompt string) {
 // SetProgressCallback sets a callback for progress events
 func (e *InferenceExecutor) SetProgressCallback(callback ProgressCallback) {
 	e.progressCallback = callback
+}
+
+// SetModeConstraints sets tool constraints based on execution mode (M2)
+func (e *InferenceExecutor) SetModeConstraints(allowedTools, deniedTools []string, allowWrites bool) {
+	e.allowedTools = allowedTools
+	e.deniedTools = deniedTools
+	e.allowWrites = allowWrites
+}
+
+// SetMaxRounds sets the maximum number of inference rounds
+func (e *InferenceExecutor) SetMaxRounds(maxRounds int) {
+	if maxRounds > 0 {
+		e.maxRounds = maxRounds
+	}
+}
+
+// isToolAllowed checks if a tool is allowed to execute based on mode constraints
+func (e *InferenceExecutor) isToolAllowed(toolName string) bool {
+	// Check denied tools first
+	for _, denied := range e.deniedTools {
+		if denied == toolName {
+			return false
+		}
+	}
+
+	// If allowedTools is specified, tool must be in that list
+	if len(e.allowedTools) > 0 {
+		for _, allowed := range e.allowedTools {
+			if allowed == toolName {
+				return true
+			}
+		}
+		return false
+	}
+
+	// No constraints, allow all
+	return true
+}
+
+// checkWritePermission checks if a write operation is allowed
+func (e *InferenceExecutor) checkWritePermission(toolName string) error {
+	if !e.allowWrites {
+		writeTools := []string{"file", "code_edit", "write", "create", "edit"}
+		for _, wt := range writeTools {
+			if toolName == wt {
+				return fmt.Errorf("write operations not allowed in this mode")
+			}
+		}
+	}
+	return nil
 }
 
 // emitProgress emits a progress event if callback is set
@@ -287,6 +342,36 @@ func (e *InferenceExecutor) executeToolsWithLogging(ctx context.Context, calls [
 
 	for i, call := range calls {
 		fmt.Fprintf(os.Stderr, "  🔧 Executing tool: %s\n", call.Name)
+
+		// Check mode-based tool constraints (M2)
+		if !e.isToolAllowed(call.Name) {
+			result := &tools.Result{
+				Success: false,
+				Error:   fmt.Sprintf("tool '%s' is not allowed in this execution mode", call.Name),
+			}
+			results[i] = result
+			e.emitProgress(ProgressEventToolResult, fmt.Sprintf("Tool %s blocked by mode constraints", call.Name), map[string]interface{}{
+				"tool":    call.Name,
+				"success": false,
+				"error":   result.Error,
+			})
+			continue
+		}
+
+		// Check write permission
+		if err := e.checkWritePermission(call.Name); err != nil {
+			result := &tools.Result{
+				Success: false,
+				Error:   err.Error(),
+			}
+			results[i] = result
+			e.emitProgress(ProgressEventToolResult, fmt.Sprintf("Tool %s blocked by write permission", call.Name), map[string]interface{}{
+				"tool":    call.Name,
+				"success": false,
+				"error":   result.Error,
+			})
+			continue
+		}
 
 		// Emit tool call event
 		e.emitProgress(ProgressEventToolCall, fmt.Sprintf("Calling tool: %s", call.Name), map[string]interface{}{

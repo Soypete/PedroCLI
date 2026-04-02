@@ -10,15 +10,16 @@ import (
 type IntentType string
 
 const (
-	IntentChat    IntentType = "chat"
-	IntentPlan    IntentType = "plan"
-	IntentBuild   IntentType = "build"
-	IntentDebug   IntentType = "debug"
-	IntentReview  IntentType = "review"
-	IntentTriage  IntentType = "triage"
-	IntentBlog    IntentType = "blog"
-	IntentPodcast IntentType = "podcast"
-	IntentUnknown IntentType = "unknown"
+	IntentChat            IntentType = "chat"
+	IntentPlan            IntentType = "plan"
+	IntentBuild           IntentType = "build"
+	IntentDebug           IntentType = "debug"
+	IntentReview          IntentType = "review"
+	IntentTriage          IntentType = "triage"
+	IntentBlog            IntentType = "blog"
+	IntentPodcast         IntentType = "podcast"
+	IntentTechnicalWriter IntentType = "technical_writer"
+	IntentUnknown         IntentType = "unknown"
 )
 
 type QueryRequest struct {
@@ -58,6 +59,7 @@ type AgentFactory interface {
 	NewReviewerAgent() AgentExecutor
 	NewTriagerAgent() AgentExecutor
 	NewDynamicBlogAgent() AgentExecutor
+	NewTechnicalWriterAgent() AgentExecutor
 }
 
 type QueryEngineConfig struct {
