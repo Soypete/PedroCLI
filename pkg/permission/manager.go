@@ -35,6 +35,15 @@ type PermissionManager struct {
 	// Skill permissions
 	skillPermissions map[string]Permission
 
+	// Agent-specific permissions (M7: per-agent tool access)
+	agentPermissions map[string]map[string]Permission
+
+	// Default permissions for agents
+	defaultAgentPermissions map[string]Permission
+
+	// Path-based restrictions (M7: deny certain file paths)
+	pathRestrictions []PathRestriction
+
 	// Session-level overrides (temporary "allow for this session")
 	sessionOverrides map[string]Permission
 
@@ -45,15 +54,24 @@ type PermissionManager struct {
 	onAsk func(tool, description string) bool
 }
 
+// PathRestriction represents a path-based permission restriction
+type PathRestriction struct {
+	Pattern   string
+	Action    Permission // allow or deny
+	ToolMatch string     // optional: restrict to specific tool (e.g., "bash", "file_write")
+}
+
 // NewPermissionManager creates a new permission manager
 func NewPermissionManager() *PermissionManager {
 	return &PermissionManager{
-		toolPermissions:  make(map[string]Permission),
-		patterns:         make(map[string]Permission),
-		bashCommands:     make(map[string]Permission),
-		skillPermissions: make(map[string]Permission),
-		sessionOverrides: make(map[string]Permission),
-		interactive:      true,
+		toolPermissions:         make(map[string]Permission),
+		patterns:                make(map[string]Permission),
+		bashCommands:            make(map[string]Permission),
+		skillPermissions:        make(map[string]Permission),
+		agentPermissions:        make(map[string]map[string]Permission),
+		defaultAgentPermissions: make(map[string]Permission),
+		sessionOverrides:        make(map[string]Permission),
+		interactive:             true,
 	}
 }
 
@@ -97,6 +115,30 @@ func (m *PermissionManager) SetSkillPermission(pattern string, perm Permission) 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.skillPermissions[pattern] = perm
+}
+
+// SetAgentPermission sets a permission for a specific agent and tool combination (M7)
+func (m *PermissionManager) SetAgentPermission(agent string, tool string, perm Permission) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.agentPermissions[agent] == nil {
+		m.agentPermissions[agent] = make(map[string]Permission)
+	}
+	m.agentPermissions[agent][tool] = perm
+}
+
+// SetDefaultAgentPermission sets the default permission for an agent (M7)
+func (m *PermissionManager) SetDefaultAgentPermission(agent string, perm Permission) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.defaultAgentPermissions[agent] = perm
+}
+
+// SetPathRestriction adds a path-based permission restriction (M7)
+func (m *PermissionManager) SetPathRestriction(restriction PathRestriction) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.pathRestrictions = append(m.pathRestrictions, restriction)
 }
 
 // SetSessionOverride sets a temporary session-level override
@@ -145,6 +187,92 @@ func (m *PermissionManager) Check(tool string, args ...string) Permission {
 
 	// Default to allow
 	return PermissionAllow
+}
+
+// CheckAgentTool checks if a tool is allowed for a specific agent (M7)
+func (m *PermissionManager) CheckAgentTool(agent string, tool string, args ...string) Permission {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// Check session overrides first (applies to all agents)
+	if perm, ok := m.sessionOverrides[tool]; ok {
+		return perm
+	}
+
+	// Check agent-specific permissions
+	if agentPerms, ok := m.agentPermissions[agent]; ok {
+		if perm, ok := agentPerms[tool]; ok {
+			return perm
+		}
+	}
+
+	// Check agent default permission
+	if defaultPerm, ok := m.defaultAgentPermissions[agent]; ok {
+		return defaultPerm
+	}
+
+	// Fall back to global tool permissions
+	return m.checkToolPermissionLocked(tool)
+}
+
+// checkToolPermissionLocked checks tool permissions (must hold read lock)
+func (m *PermissionManager) checkToolPermissionLocked(tool string) Permission {
+	// Check direct tool permission
+	if perm, ok := m.toolPermissions[tool]; ok {
+		return perm
+	}
+
+	// Check pattern-based permissions
+	for pattern, perm := range m.patterns {
+		if matchGlob(pattern, tool) {
+			return perm
+		}
+	}
+
+	return PermissionAllow
+}
+
+// CheckPath checks if an operation is allowed on a specific path (M7)
+func (m *PermissionManager) CheckPath(tool string, path string) Permission {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for _, restriction := range m.pathRestrictions {
+		// Check if restriction applies to this tool (if ToolMatch is set)
+		if restriction.ToolMatch != "" && restriction.ToolMatch != tool {
+			continue
+		}
+
+		// Check if path matches the pattern
+		if matchGlob(restriction.Pattern, path) {
+			return restriction.Action
+		}
+	}
+
+	// No restrictions matched - allow
+	return PermissionAllow
+}
+
+// CheckAgentToolAndPath checks agent + tool + path permissions (M7)
+func (m *PermissionManager) CheckAgentToolAndPath(agent string, tool string, path string, args ...string) Permission {
+	// First check agent+tool permission
+	perm := m.CheckAgentTool(agent, tool, args...)
+	if perm == PermissionDeny {
+		return perm
+	}
+
+	// Then check path restriction
+	if path != "" {
+		pathPerm := m.CheckPath(tool, path)
+		if pathPerm == PermissionDeny {
+			return PermissionDeny
+		}
+		if pathPerm == PermissionAsk {
+			return PermissionAsk
+		}
+	}
+
+	return perm
 }
 
 // CheckSkill checks if a skill is allowed to be loaded

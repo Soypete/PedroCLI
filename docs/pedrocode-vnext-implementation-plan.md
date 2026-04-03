@@ -295,11 +295,22 @@ type TaskResult struct {
 
 **Goal**: Granular per-agent, per-tool, per-path permission enforcement.
 
-**Files to create/modify**:
+**Status**: ✅ COMPLETED (2026-04)
+
+**What was built**:
+- Extended existing `pkg/permission/manager.go` with:
+  - Agent-specific permissions: `agentPermissions`, `defaultAgentPermissions`
+  - Path-based restrictions: `pathRestrictions` with `PathRestriction` struct
+  - New methods: `SetAgentPermission()`, `SetDefaultAgentPermission()`, `SetPathRestriction()`
+  - New check methods: `CheckAgentTool()`, `CheckPath()`, `CheckAgentToolAndPath()`
+- CLI-only (no external MCP support) - per user requirement
+
+**Files modified**:
+- `pkg/permission/manager.go` - Added agent and path permission features
+
+**Original plan (not used)**:
 - `pkg/orchestration/permissions.go` — permission engine
 - `pkg/orchestration/permissions_config.go` — config loading
-- `pkg/agents/executor.go` — check permissions before tool execution
-- `.pedrocli.json` — permission configuration
 
 **Permission model**:
 ```json
