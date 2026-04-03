@@ -12,6 +12,7 @@ import (
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/llmcontext"
 	"github.com/soypete/pedrocli/pkg/storage"
+	"github.com/soypete/pedrocli/pkg/telemetry"
 	"github.com/soypete/pedrocli/pkg/toolformat"
 	"github.com/soypete/pedrocli/pkg/tools"
 )
@@ -58,6 +59,10 @@ type InferenceExecutor struct {
 
 	// Progress callback for streaming updates
 	progressCallback ProgressCallback
+
+	// M9: Telemetry collector
+	telemetryCollector telemetry.TelemetryCollector
+	jobID              string
 }
 
 // NewInferenceExecutor creates a new inference executor
@@ -85,6 +90,34 @@ func (e *InferenceExecutor) SetSystemPrompt(prompt string) {
 // SetProgressCallback sets a callback for progress events
 func (e *InferenceExecutor) SetProgressCallback(callback ProgressCallback) {
 	e.progressCallback = callback
+}
+
+// SetTelemetryCollector sets the telemetry collector for M9
+func (e *InferenceExecutor) SetTelemetryCollector(collector telemetry.TelemetryCollector, jobID string) {
+	e.telemetryCollector = collector
+	e.jobID = jobID
+}
+
+// recordInferenceTelemetry records inference metrics to telemetry collector (M9)
+func (e *InferenceExecutor) recordInferenceTelemetry(response *llm.InferenceResponse, latency time.Duration, success bool) {
+	if e.telemetryCollector == nil || e.jobID == "" {
+		return
+	}
+
+	e.telemetryCollector.Record(telemetry.TelemetryEvent{
+		JobID:     e.jobID,
+		AgentID:   e.agent.name,
+		Round:     e.currentRound,
+		EventType: telemetry.EventInference,
+		Data: map[string]interface{}{
+			"prompt_tokens":     response.TokensUsed / 2, // Approximate
+			"completion_tokens": response.TokensUsed / 2, // Approximate
+			"total_tokens":      response.TokensUsed,
+			"llm_latency":       latency.String(),
+			"model":             e.agent.config.Model.ModelName,
+			"success":           success,
+		},
+	})
 }
 
 // SetModeConstraints sets tool constraints based on execution mode (M2)
@@ -192,11 +225,19 @@ func (e *InferenceExecutor) Execute(ctx context.Context, initialPrompt string) e
 		e.logConversation(ctx, jobID, "user", currentPrompt, "", nil, nil)
 
 		// Execute one inference round (with custom system prompt if set)
+		startTime := time.Now()
 		response, err := e.agent.executeInferenceWithSystemPrompt(ctx, e.contextMgr, currentPrompt, e.systemPrompt)
+		llmLatency := time.Since(startTime)
+
 		if err != nil {
 			e.emitProgress(ProgressEventError, "Inference failed", err)
+			// M9: Record failed inference
+			e.recordInferenceTelemetry(response, llmLatency, false)
 			return fmt.Errorf("inference failed: %w", err)
 		}
+
+		// M9: Record successful inference
+		e.recordInferenceTelemetry(response, llmLatency, true)
 
 		// Emit LLM response event
 		e.emitProgress(ProgressEventLLMResponse, "Received LLM response", map[string]interface{}{

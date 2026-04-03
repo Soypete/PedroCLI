@@ -14,6 +14,7 @@ import (
 	"github.com/soypete/pedrocli/pkg/llmcontext"
 	"github.com/soypete/pedrocli/pkg/prompts"
 	"github.com/soypete/pedrocli/pkg/storage"
+	"github.com/soypete/pedrocli/pkg/telemetry"
 	"github.com/soypete/pedrocli/pkg/toolformat"
 	"github.com/soypete/pedrocli/pkg/tools"
 )
@@ -70,6 +71,9 @@ type PhasedExecutor struct {
 	// M8: Layered prompts
 	mode              string // Current execution mode (chat, plan, build, review)
 	useLayeredPrompts bool   // Whether to use layered prompt composition
+
+	// M9: Telemetry collector
+	telemetryCollector telemetry.TelemetryCollector
 }
 
 // NewPhasedExecutor creates a new phased executor
@@ -199,6 +203,66 @@ func (pe *PhasedExecutor) GetArtifactByName(ctx context.Context, name string) (*
 	return pe.artifactStore.GetByName(ctx, name)
 }
 
+// SetTelemetryCollector sets the telemetry collector (M9)
+func (pe *PhasedExecutor) SetTelemetryCollector(collector telemetry.TelemetryCollector) {
+	pe.telemetryCollector = collector
+}
+
+// HasTelemetryCollector returns true if telemetry is configured
+func (pe *PhasedExecutor) HasTelemetryCollector() bool {
+	return pe.telemetryCollector != nil
+}
+
+// recordPhaseTelemetry records phase completion to telemetry (M9)
+func (pe *PhasedExecutor) recordPhaseTelemetry(phaseName string, duration time.Duration, rounds int, totalTokens int, success bool, errMsg string) {
+	if pe.telemetryCollector == nil {
+		return
+	}
+
+	pe.telemetryCollector.Record(telemetry.TelemetryEvent{
+		JobID:     pe.jobID,
+		AgentID:   pe.agent.name,
+		Phase:     phaseName,
+		EventType: telemetry.EventPhaseComplete,
+		Data: map[string]interface{}{
+			"phase_name":   phaseName,
+			"duration":     duration.String(),
+			"rounds":       rounds,
+			"total_tokens": totalTokens,
+			"success":      success,
+			"error":        errMsg,
+		},
+	})
+}
+
+// recordJobTelemetry records job completion to telemetry (M9)
+func (pe *PhasedExecutor) recordJobTelemetry(status string, duration time.Duration, totalRounds, totalPhases, totalTokens int, toolCalls int, estimatedCost float64) {
+	if pe.telemetryCollector == nil {
+		return
+	}
+
+	pe.telemetryCollector.Record(telemetry.TelemetryEvent{
+		JobID:     pe.jobID,
+		AgentID:   pe.agent.name,
+		EventType: telemetry.EventJobComplete,
+		Data: map[string]interface{}{
+			"status":           status,
+			"duration":         duration.String(),
+			"total_rounds":     totalRounds,
+			"total_phases":     totalPhases,
+			"total_tokens":     totalTokens,
+			"total_tool_calls": toolCalls,
+			"estimated_cost":   estimatedCost,
+		},
+	})
+}
+
+// estimateTokensPerRound returns estimated tokens per inference round
+func (pe *PhasedExecutor) estimateTokensPerRound() int {
+	// Rough estimate: average ~1000 tokens per round (prompt + completion)
+	return 1000
+}
+
 // ListArtifacts lists artifacts matching the given filter
 func (pe *PhasedExecutor) ListArtifacts(ctx context.Context, filter *artifacts.ArtifactFilter) ([]*artifacts.Artifact, error) {
 	if pe.artifactStore == nil {
@@ -317,6 +381,11 @@ func (pe *PhasedExecutor) Execute(ctx context.Context, initialInput string) erro
 		pe.storePhaseArtifact(ctx, phase.Name, result)
 
 		fmt.Fprintf(os.Stderr, "   ✅ Phase %s completed in %d rounds\n", phase.Name, result.RoundsUsed)
+
+		// M9: Record phase telemetry
+		duration := result.CompletedAt.Sub(result.StartedAt)
+		totalTokens := result.RoundsUsed * pe.estimateTokensPerRound()
+		pe.recordPhaseTelemetry(phase.Name, duration, result.RoundsUsed, totalTokens, true, "")
 
 		// Call phase callback if set (for interactive stepwise mode)
 		if pe.phaseCallback != nil {

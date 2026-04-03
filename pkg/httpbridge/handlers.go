@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -66,6 +68,139 @@ func (s *Server) handleJobsWithID(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+// handleJobTelemetry handles /api/jobs/:id/telemetry (GET)
+func (s *Server) handleJobTelemetry(w http.ResponseWriter, r *http.Request) {
+	// Extract job ID from path - /api/jobs/<id>/telemetry
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/jobs/"), "/")
+	if len(parts) < 1 || parts[0] == "" {
+		http.Error(w, "Job ID required", http.StatusBadRequest)
+		return
+	}
+	jobID := parts[0]
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get job to find job directory
+	job, err := s.appCtx.JobManager.Get(r.Context(), jobID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Job not found: %v", err), http.StatusNotFound)
+		return
+	}
+
+	// Load telemetry from job directory
+	telemetryPath := filepath.Join(job.ContextDir, "telemetry.jsonl")
+	if _, err := os.Stat(telemetryPath); os.IsNotExist(err) {
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"job_id":  jobID,
+			"events":  []interface{}{},
+			"summary": nil,
+			"message": "No telemetry recorded for this job",
+		})
+		return
+	}
+
+	// Read telemetry file
+	data, err := os.ReadFile(telemetryPath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to read telemetry: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Parse events
+	var events []map[string]interface{}
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		if line == "" {
+			continue
+		}
+		var event map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &event); err == nil {
+			events = append(events, event)
+		}
+	}
+
+	// Calculate summary
+	summary := calculateTelemetrySummary(events)
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"job_id":  jobID,
+		"events":  events,
+		"summary": summary,
+	})
+}
+
+// calculateTelemetrySummary aggregates telemetry events into a summary
+func calculateTelemetrySummary(events []map[string]interface{}) map[string]interface{} {
+	summary := map[string]interface{}{
+		"total_tokens":      0,
+		"prompt_tokens":     0,
+		"completion_tokens": 0,
+		"total_rounds":      0,
+		"total_phases":      0,
+		"tool_calls":        0,
+		"tool_failures":     0,
+		"estimated_cost":    0.0,
+	}
+
+	var totalLLMLatency float64
+	var phases []string
+
+	for _, e := range events {
+		eventType, _ := e["event_type"].(string)
+		data, _ := e["data"].(map[string]interface{})
+
+		switch eventType {
+		case "inference":
+			if data != nil {
+				if tt, ok := data["total_tokens"].(float64); ok {
+					summary["total_tokens"] = summary["total_tokens"].(int) + int(tt)
+				}
+				if pt, ok := data["prompt_tokens"].(float64); ok {
+					summary["prompt_tokens"] = summary["prompt_tokens"].(int) + int(pt)
+				}
+				if ct, ok := data["completion_tokens"].(float64); ok {
+					summary["completion_tokens"] = summary["completion_tokens"].(int) + int(ct)
+				}
+				if latency, ok := data["llm_latency"].(string); ok {
+					if d, err := time.ParseDuration(latency); err == nil {
+						totalLLMLatency += d.Seconds()
+					}
+				}
+				summary["total_rounds"] = summary["total_rounds"].(int) + 1
+			}
+		case "tool_call":
+			summary["tool_calls"] = summary["tool_calls"].(int) + 1
+			if data != nil {
+				if success, ok := data["success"].(bool); ok && !success {
+					summary["tool_failures"] = summary["tool_failures"].(int) + 1
+				}
+			}
+		case "phase_complete":
+			summary["total_phases"] = summary["total_phases"].(int) + 1
+			if phase, ok := data["phase_name"].(string); ok {
+				phases = append(phases, phase)
+			}
+		case "job_complete":
+			if cost, ok := data["estimated_cost"].(float64); ok {
+				summary["estimated_cost"] = cost
+			}
+		}
+	}
+
+	// Estimate cost if not set by job_complete
+	if summary["estimated_cost"].(float64) == 0.0 && summary["total_tokens"].(int) > 0 {
+		// Rough estimate: $1 per 1M tokens
+		summary["estimated_cost"] = float64(summary["total_tokens"].(int)) / 1_000_000.0
+	}
+
+	summary["phases"] = phases
+	summary["llm_latency_seconds"] = totalLLMLatency
+
+	return summary
 }
 
 // handleCreateJob creates a new job using agent factories

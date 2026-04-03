@@ -73,6 +73,7 @@ func (s *Server) setupRoutes() {
 	// API routes
 	s.mux.HandleFunc("/api/jobs", s.handleJobs)
 	s.mux.HandleFunc("/api/jobs/", s.handleJobsWithID)
+	s.mux.HandleFunc("/api/jobs/*/telemetry", s.handleJobTelemetry)
 	s.mux.HandleFunc("/api/stream/jobs/", s.handleJobStream)
 	s.mux.HandleFunc("/api/blog", s.handleBlog)
 	s.mux.HandleFunc("/api/blog/orchestrate", s.handleBlogOrchestrate)
