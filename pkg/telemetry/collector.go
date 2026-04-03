@@ -173,7 +173,9 @@ func (c *FileTelemetryCollector) Record(event TelemetryEvent) {
 		return
 	}
 
-	c.file.Write(append(data, '\n'))
+	if _, err := c.file.Write(append(data, '\n')); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to write telemetry: %v\n", err)
+	}
 	c.inMemory.Record(event)
 	c.events = append(c.events, event)
 }

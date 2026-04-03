@@ -7,11 +7,8 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
-	"io/fs"
 	"net/url"
 	"os"
-	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -238,133 +235,6 @@ func (d *DB) Migrate(ctx context.Context) error {
 
 	d.migrated = true
 	return nil
-}
-
-// createMigrationsTable creates the migrations tracking table if it doesn't exist.
-// TODO: This is part of the old custom migration system, now using goose
-//
-//nolint:unused // Kept for reference, may be used in future
-func (d *DB) createMigrationsTable(ctx context.Context) error {
-	query := `
-		CREATE TABLE IF NOT EXISTS schema_migrations (
-			version VARCHAR(255) PRIMARY KEY,
-			applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)
-	`
-	_, err := d.ExecContext(ctx, query)
-	return err
-}
-
-// getMigrationFiles returns a sorted list of migration file names.
-//
-//nolint:unused // Part of old custom migration system
-func (d *DB) getMigrationFiles() ([]string, error) {
-	var migrations []string
-
-	err := fs.WalkDir(migrationsFS, "migrations", func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() {
-			return nil
-		}
-		if strings.HasSuffix(entry.Name(), ".sql") {
-			migrations = append(migrations, entry.Name())
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	sort.Strings(migrations)
-	return migrations, nil
-}
-
-// getAppliedMigrations returns a map of already applied migration names.
-//
-//nolint:unused // Part of old custom migration system
-func (d *DB) getAppliedMigrations(ctx context.Context) (map[string]bool, error) {
-	applied := make(map[string]bool)
-
-	rows, err := d.QueryContext(ctx, "SELECT version FROM schema_migrations")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var version string
-		if err := rows.Scan(&version); err != nil {
-			return nil, err
-		}
-		applied[version] = true
-	}
-
-	return applied, rows.Err()
-}
-
-// applyMigration applies a single migration file.
-//
-//nolint:unused // Part of old custom migration system
-func (d *DB) applyMigration(ctx context.Context, filename string) error {
-	content, err := migrationsFS.ReadFile(filepath.Join("migrations", filename))
-	if err != nil {
-		return fmt.Errorf("failed to read migration file: %w", err)
-	}
-
-	// Parse goose migration format to extract only the "Up" section
-	sql := string(content)
-	upSQL := extractGooseUpSection(sql)
-
-	tx, err := d.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	// Execute migration
-	if _, err := tx.ExecContext(ctx, upSQL); err != nil {
-		return fmt.Errorf("failed to execute migration: %w", err)
-	}
-
-	// Record migration
-	if _, err := tx.ExecContext(ctx, "INSERT INTO schema_migrations (version) VALUES ($1)", filename); err != nil {
-		return fmt.Errorf("failed to record migration: %w", err)
-	}
-
-	return tx.Commit()
-}
-
-// extractGooseUpSection extracts only the "Up" section from a goose migration file.
-//
-//nolint:unused // Part of old custom migration system
-func extractGooseUpSection(content string) string {
-	lines := strings.Split(content, "\n")
-	var upLines []string
-	inUpSection := false
-
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-
-		// Start of Up section
-		if strings.HasPrefix(trimmed, "-- +goose Up") {
-			inUpSection = true
-			continue
-		}
-
-		// Start of Down section - stop collecting
-		if strings.HasPrefix(trimmed, "-- +goose Down") {
-			break
-		}
-
-		// Collect lines in Up section
-		if inUpSection {
-			upLines = append(upLines, line)
-		}
-	}
-
-	return strings.Join(upLines, "\n")
 }
 
 // NewUUID generates a new UUID.

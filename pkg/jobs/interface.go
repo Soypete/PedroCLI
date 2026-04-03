@@ -10,7 +10,7 @@ import (
 
 // JobManager defines the interface for job management operations.
 // This interface allows for multiple implementations:
-// - File-based manager (legacy, deprecated)
+// - File-based manager (legacy)
 // - Database-backed manager (recommended)
 type JobManager interface {
 	// Create creates a new job and returns it.
