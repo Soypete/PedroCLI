@@ -189,6 +189,9 @@ func (r *ReviewerPhasedAgent) Execute(ctx context.Context, input map[string]inte
 		// Create phased executor
 		executor := NewPhasedExecutor(r.BaseAgent, contextMgr, r.GetPhases())
 
+		// M8: Enable layered prompts with review mode
+		executor.SetMode("review")
+
 		// Set up artifact store for passing data between phases (M6)
 		artifactStore := artifacts.NewInMemoryStore()
 		executor.SetArtifactStore(artifactStore)

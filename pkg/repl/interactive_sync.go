@@ -68,6 +68,16 @@ func (r *REPL) executePhasedAgentSync(ctx context.Context, agentName string, pro
 	artifactStore := artifacts.NewInMemoryStore()
 	executor.SetArtifactStore(artifactStore)
 
+	// M8: Enable layered prompts with mode from session
+	mode := "build"
+	if agentName == "debugger" {
+		mode = "build"
+	} else if agentName == "reviewer" {
+		mode = "review"
+	}
+	executor.SetMode(mode)
+	executor.EnableLayeredPrompts(true)
+
 	// Execute synchronously
 	if err := executor.Execute(ctx, prompt); err != nil {
 		return fmt.Errorf("execution failed: %w", err)

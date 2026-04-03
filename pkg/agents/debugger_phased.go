@@ -195,6 +195,9 @@ func (d *DebuggerPhasedAgent) Execute(ctx context.Context, input map[string]inte
 		// Create phased executor
 		executor := NewPhasedExecutor(d.BaseAgent, contextMgr, d.GetPhases())
 
+		// M8: Enable layered prompts with build mode (debugger uses build for fixes)
+		executor.SetMode("build")
+
 		// Set up artifact store for passing data between phases (M6)
 		artifactStore := artifacts.NewInMemoryStore()
 		executor.SetArtifactStore(artifactStore)

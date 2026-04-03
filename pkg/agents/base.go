@@ -117,6 +117,33 @@ func (a *BaseAgent) buildSystemPrompt() string {
 	return a.buildStaticSystemPrompt()
 }
 
+// BuildLayeredPrompt builds a layered prompt using PromptBuilder (M8)
+func (a *BaseAgent) BuildLayeredPrompt(mode string, task string) string {
+	pb := prompts.NewPromptBuilder()
+
+	// Layer 1: Identity
+	pb.SetIdentity(prompts.DefaultIdentityPrompt)
+
+	// Layer 2: Mode constraints
+	if mode != "" {
+		if constraints, ok := prompts.DefaultModeConstraints[mode]; ok {
+			pb.SetMode(mode, constraints.String())
+		}
+	}
+
+	// Layer 4: Task
+	if task != "" {
+		pb.SetTask(task)
+	}
+
+	// Build with tool section
+	toolSection := ""
+	if a.toolPromptGen != nil {
+		toolSection = a.toolPromptGen.GenerateToolSection()
+	}
+	return pb.BuildWithToolSection(toolSection)
+}
+
 // buildDynamicSystemPrompt builds a system prompt with dynamically generated tool descriptions
 func (a *BaseAgent) buildDynamicSystemPrompt() string {
 	toolSection := a.toolPromptGen.GenerateToolSection()

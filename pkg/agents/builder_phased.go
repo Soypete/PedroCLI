@@ -199,6 +199,9 @@ func (b *BuilderPhasedAgent) Execute(ctx context.Context, input map[string]inter
 		// Create phased executor
 		executor := NewPhasedExecutor(b.BaseAgent, contextMgr, b.GetPhases())
 
+		// M8: Enable layered prompts with build mode
+		executor.SetMode("build")
+
 		// Set up artifact store for passing data between phases (M6)
 		artifactStore := artifacts.NewInMemoryStore()
 		executor.SetArtifactStore(artifactStore)

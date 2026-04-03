@@ -12,6 +12,7 @@ import (
 	"github.com/soypete/pedrocli/pkg/artifacts"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/llmcontext"
+	"github.com/soypete/pedrocli/pkg/prompts"
 	"github.com/soypete/pedrocli/pkg/storage"
 	"github.com/soypete/pedrocli/pkg/toolformat"
 	"github.com/soypete/pedrocli/pkg/tools"
@@ -65,6 +66,10 @@ type PhasedExecutor struct {
 	policyEvaluator  middleware.PolicyEvaluator // Middleware for tool result filtering
 	subagentManager  SubagentSpawner
 	artifactStore    artifacts.ArtifactStore // M6: Artifact store for passing data between phases
+
+	// M8: Layered prompts
+	mode              string // Current execution mode (chat, plan, build, review)
+	useLayeredPrompts bool   // Whether to use layered prompt composition
 }
 
 // NewPhasedExecutor creates a new phased executor
@@ -84,6 +89,57 @@ func NewPhasedExecutor(agent *BaseAgent, contextMgr *llmcontext.Manager, phases 
 // SetPhaseCallback sets a callback to be called after each phase completes
 func (pe *PhasedExecutor) SetPhaseCallback(callback PhaseCallback) {
 	pe.phaseCallback = callback
+}
+
+// SetMode sets the execution mode for layered prompts (M8)
+func (pe *PhasedExecutor) SetMode(mode string) {
+	pe.mode = mode
+	pe.useLayeredPrompts = mode != ""
+}
+
+// EnableLayeredPrompts enables layered prompt composition
+func (pe *PhasedExecutor) EnableLayeredPrompts(enabled bool) {
+	pe.useLayeredPrompts = enabled
+}
+
+// GetMode returns the current execution mode
+func (pe *PhasedExecutor) GetMode() string {
+	return pe.mode
+}
+
+// SystemPromptProvider is implemented by types that can provide system prompt info
+type SystemPromptProvider interface {
+	GetPhaseName() string
+	GetTools() []string
+}
+
+// buildLayeredPrompt builds a layered prompt using PromptBuilder (M8)
+func (pe *PhasedExecutor) buildLayeredPrompt(phaseName string, tools []string) string {
+	pb := prompts.NewPromptBuilder()
+
+	// Layer 1: Identity
+	pb.SetIdentity(prompts.DefaultIdentityPrompt)
+
+	// Layer 2: Mode constraints
+	if pe.mode != "" {
+		if constraints, ok := prompts.DefaultModeConstraints[pe.mode]; ok {
+			pb.SetMode(pe.mode, constraints.String())
+		}
+	}
+
+	// Layer 3: Phase
+	if phaseName != "" {
+		pb.SetPhase(
+			phaseName,
+			prompts.GetPhaseGoal(phaseName),
+			strings.Join(tools, ", "),
+		)
+	}
+
+	// Layer 6: Output schema (based on phase)
+	pb.SetOutputSchema(prompts.GetDefaultOutputSchema(phaseName))
+
+	return pb.Build()
 }
 
 // SetPolicyEvaluator sets the middleware policy evaluator for tool result filtering
@@ -298,15 +354,17 @@ func (pe *PhasedExecutor) executePhase(ctx context.Context, phase Phase, input s
 
 	// Create a phase-specific inference executor
 	executor := &phaseInferenceExecutor{
-		agent:           pe.agent,
-		contextMgr:      pe.contextMgr,
-		phase:           phase,
-		maxRounds:       maxRounds,
-		currentRound:    0,
-		jobID:           pe.jobID,
-		result:          result, // Pass result so executor can track tool calls
-		policyEvaluator: pe.policyEvaluator,
-		callHistory:     middleware.NewCallHistory(),
+		agent:             pe.agent,
+		contextMgr:        pe.contextMgr,
+		phase:             phase,
+		maxRounds:         maxRounds,
+		currentRound:      0,
+		jobID:             pe.jobID,
+		result:            result, // Pass result so executor can track tool calls
+		policyEvaluator:   pe.policyEvaluator,
+		callHistory:       middleware.NewCallHistory(),
+		mode:              pe.mode,
+		useLayeredPrompts: pe.useLayeredPrompts,
 	}
 
 	// Execute the inference loop for this phase
@@ -635,6 +693,10 @@ type phaseInferenceExecutor struct {
 	result          *PhaseResult // Track tool calls in this phase
 	policyEvaluator middleware.PolicyEvaluator
 	callHistory     *middleware.CallHistory
+
+	// M8: Layered prompts
+	mode              string
+	useLayeredPrompts bool
 }
 
 func (pie *phaseInferenceExecutor) SetPolicyEvaluator(evaluator middleware.PolicyEvaluator) {
@@ -643,6 +705,35 @@ func (pie *phaseInferenceExecutor) SetPolicyEvaluator(evaluator middleware.Polic
 
 func (pie *phaseInferenceExecutor) SetCallHistory(callHistory *middleware.CallHistory) {
 	pie.callHistory = callHistory
+}
+
+// buildLayeredPrompt builds a layered prompt (M8)
+func (pie *phaseInferenceExecutor) buildLayeredPrompt() string {
+	pb := prompts.NewPromptBuilder()
+
+	// Layer 1: Identity
+	pb.SetIdentity(prompts.DefaultIdentityPrompt)
+
+	// Layer 2: Mode constraints
+	if pie.mode != "" {
+		if constraints, ok := prompts.DefaultModeConstraints[pie.mode]; ok {
+			pb.SetMode(pie.mode, constraints.String())
+		}
+	}
+
+	// Layer 3: Phase
+	if pie.phase.Name != "" {
+		pb.SetPhase(
+			pie.phase.Name,
+			prompts.GetPhaseGoal(pie.phase.Name),
+			strings.Join(pie.phase.Tools, ", "),
+		)
+	}
+
+	// Layer 6: Output schema
+	pb.SetOutputSchema(prompts.GetDefaultOutputSchema(pie.phase.Name))
+
+	return pb.Build()
 }
 
 // execute runs the inference loop for a phase
@@ -669,6 +760,12 @@ func (pie *phaseInferenceExecutor) execute(ctx context.Context, input string) (s
 
 		// Execute inference with phase-specific system prompt
 		systemPrompt := pie.phase.SystemPrompt
+
+		// M8: Use layered prompts if enabled and no explicit system prompt
+		if systemPrompt == "" && pie.useLayeredPrompts {
+			systemPrompt = pie.buildLayeredPrompt()
+		}
+
 		if systemPrompt == "" {
 			systemPrompt = pie.agent.buildSystemPrompt()
 		}
