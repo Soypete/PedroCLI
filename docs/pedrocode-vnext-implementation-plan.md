@@ -230,7 +230,30 @@ type TaskResult struct {
 
 **Goal**: Structured shared workspace for agent artifacts, replacing ad-hoc string passing.
 
-**Files to create/modify**:
+**Status**: ✅ COMPLETED (2026-04)
+
+**What was built**:
+- `pkg/artifacts/store.go` — `ArtifactStore` interface + `InMemoryArtifactStore` implementation
+- `pkg/artifacts/types.go` — `Artifact`, `ArtifactType`, `ArtifactFilter` types
+- `pkg/agents/phased_executor.go` — Added `SetArtifactStore()`, `PutArtifact()`, `GetArtifactByName()`, `storePhaseArtifact()` methods
+- Wired artifact store into: `BuilderPhasedAgent`, `DebuggerPhasedAgent`, `ReviewerPhasedAgent`, REPL, HTTP bridge
+
+**Key decisions**:
+- Used existing `pkg/artifacts/` package (not `pkg/orchestration/artifacts`)
+- In-memory store per job (not persisted to disk)
+- Automatic phase artifact storage: each phase output is stored as artifact after completion
+- Artifact types match phase names for easy lookup
+
+**Files modified**:
+- `pkg/agents/builder_phased.go` - Creates artifact store, calls SetArtifactStore
+- `pkg/agents/debugger_phased.go` - Creates artifact store, calls SetArtifactStore  
+- `pkg/agents/reviewer_phased.go` - Creates artifact store, calls SetArtifactStore
+- `pkg/agents/phased_executor.go` - Added artifact store integration methods
+- `pkg/repl/interactive_sync.go` - Creates artifact store for REPL execution
+- `docs/pedro-vnext/README.md` - Updated M6 status to Completed
+- `docs/pedro-vnext/milestones/M6-artifact-store/README.md` - Updated with integration details
+
+**Original plan (not used)**:
 - `pkg/orchestration/artifacts.go` — artifact store
 - `pkg/llmcontext/manager.go` — integrate artifact storage
 - `pkg/agents/phased_executor.go` — read/write artifacts between phases

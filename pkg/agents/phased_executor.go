@@ -151,6 +151,41 @@ func (pe *PhasedExecutor) ListArtifacts(ctx context.Context, filter *artifacts.A
 	return pe.artifactStore.List(ctx, filter)
 }
 
+// storePhaseArtifact stores the phase result as an artifact for later phases to consume
+func (pe *PhasedExecutor) storePhaseArtifact(ctx context.Context, phaseName string, result *PhaseResult) {
+	if pe.artifactStore == nil || result == nil {
+		return
+	}
+
+	// Determine artifact type based on phase name
+	artifactType := artifacts.ArtifactType(phaseName)
+	artifactName := fmt.Sprintf("%s_output", phaseName)
+
+	// Extract content from phase result
+	content := result.Output
+	if content == "" && result.Data != nil {
+		// Try to serialize Data as content
+		if dataBytes, err := json.Marshal(result.Data); err == nil {
+			content = string(dataBytes)
+		}
+	}
+
+	artifact := &artifacts.Artifact{
+		ID:        fmt.Sprintf("%s-%s", pe.jobID, phaseName),
+		Type:      artifactType,
+		Name:      artifactName,
+		Content:   content,
+		Size:      int64(len(content)),
+		CreatedBy: phaseName,
+		CreatedAt: time.Now(),
+	}
+
+	if err := pe.artifactStore.Put(ctx, artifact); err != nil {
+		// Log but don't fail - artifact storage is best-effort
+		fmt.Fprintf(os.Stderr, "   [WARN] Failed to store artifact for phase %s: %v\n", phaseName, err)
+	}
+}
+
 // Execute runs all phases sequentially
 func (pe *PhasedExecutor) Execute(ctx context.Context, initialInput string) error {
 	// Check if a phase callback is provided via context
@@ -221,6 +256,9 @@ func (pe *PhasedExecutor) Execute(ctx context.Context, initialInput string) erro
 
 		pe.phaseResults[phase.Name] = result
 		pe.savePhaseResults(ctx)
+
+		// Store phase output as artifact for later phases (M6)
+		pe.storePhaseArtifact(ctx, phase.Name, result)
 
 		fmt.Fprintf(os.Stderr, "   ✅ Phase %s completed in %d rounds\n", phase.Name, result.RoundsUsed)
 

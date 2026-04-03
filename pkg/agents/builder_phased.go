@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 
+	"github.com/soypete/pedrocli/pkg/artifacts"
 	"github.com/soypete/pedrocli/pkg/config"
 	"github.com/soypete/pedrocli/pkg/jobs"
 	"github.com/soypete/pedrocli/pkg/llm"
@@ -197,6 +198,10 @@ func (b *BuilderPhasedAgent) Execute(ctx context.Context, input map[string]inter
 
 		// Create phased executor
 		executor := NewPhasedExecutor(b.BaseAgent, contextMgr, b.GetPhases())
+
+		// Set up artifact store for passing data between phases (M6)
+		artifactStore := artifacts.NewInMemoryStore()
+		executor.SetArtifactStore(artifactStore)
 
 		// Execute all phases
 		err = executor.Execute(bgCtx, initialPrompt)

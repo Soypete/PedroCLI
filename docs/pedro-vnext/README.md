@@ -15,7 +15,7 @@ PedroCode vNext evolves from a GUI chat interface with tools into a **phased, mu
 | [M3: Phase Registry](./milestones/M3-phase-registry/) | Completed | Reusable phase catalog |
 | [M4: Task Envelope](./milestones/M4-task-envelope/) | Completed | Structured I/O between agents |
 | [M5: Subagent Manager](./milestones/M5-subagent-manager/) | Completed | Spawn child agents with bounded execution |
-| [M6: Artifact Store](./milestones/M6-artifact-store/) | Planned | Structured shared workspace |
+| [M6: Artifact Store](./milestones/M6-artifact-store/) | Completed | Structured shared workspace |
 | [M7: Permission Engine](./milestones/M7-permission-engine/) | Planned | Per-agent, per-tool permissions |
 | [M8: Prompt Architecture](./milestones/M8-prompt-architecture/) | Planned | Layered prompt composition |
 | [M9: Telemetry](./milestones/M9-telemetry/) | Planned | Token/cost tracking |

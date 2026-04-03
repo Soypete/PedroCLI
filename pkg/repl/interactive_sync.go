@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/soypete/pedrocli/pkg/agents"
+	"github.com/soypete/pedrocli/pkg/artifacts"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/llmcontext"
 	"github.com/soypete/pedrocli/pkg/tools"
@@ -62,6 +63,10 @@ func (r *REPL) executePhasedAgentSync(ctx context.Context, agentName string, pro
 	// Create phased executor
 	executor := agents.NewPhasedExecutor(baseAgent.BaseAgent, contextMgr, phases)
 	executor.SetPhaseCallback(callback)
+
+	// Set up artifact store for passing data between phases (M6)
+	artifactStore := artifacts.NewInMemoryStore()
+	executor.SetArtifactStore(artifactStore)
 
 	// Execute synchronously
 	if err := executor.Execute(ctx, prompt); err != nil {
