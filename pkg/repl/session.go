@@ -1,11 +1,14 @@
 package repl
 
 import (
+	"context"
+	"log"
 	"sync"
 	"time"
 
 	"github.com/soypete/pedrocli/pkg/cli"
 	"github.com/soypete/pedrocli/pkg/config"
+	"github.com/soypete/pedrocli/pkg/memory"
 	"github.com/soypete/pedrocli/pkg/orchestration"
 )
 
@@ -26,11 +29,14 @@ type Session struct {
 	DebugMode       bool                      // Debug mode enabled (also keeps logs)
 	InteractiveMode bool                      // Interactive mode - ask for approval before writing code
 	JobManager      *JobManager               // Background job manager
+
+	MemoryStore   memory.MemoryStore    // Memory store for session persistence
+	ResumePacket  *memory.ResumePacket  // Resume packet from previous session (if any)
+	DreamerWorker *memory.DreamerWorker // Post-session consolidation worker
 }
 
 // NewSession creates a new REPL session
 func NewSession(id string, cfg *config.Config, bridge *cli.CLIBridge, mode string, debugMode bool) (*Session, error) {
-	// Create logger (debug mode also keeps logs)
 	logger, err := NewLogger(id, debugMode, debugMode)
 	if err != nil {
 		return nil, err
@@ -47,13 +53,85 @@ func NewSession(id string, cfg *config.Config, bridge *cli.CLIBridge, mode strin
 		Mode:            mode,
 		Logger:          logger,
 		DebugMode:       debugMode,
-		InteractiveMode: true,            // DEFAULT: Interactive mode on
-		JobManager:      NewJobManager(), // Background job manager
+		InteractiveMode: true,
+		JobManager:      NewJobManager(),
 	}, nil
 }
 
-// Close closes the session and cleans up resources
+// SetMemoryStore sets the memory store for session persistence
+func (s *Session) SetMemoryStore(store memory.MemoryStore) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.MemoryStore = store
+}
+
+// GetMemoryStore returns the memory store
+func (s *Session) GetMemoryStore() memory.MemoryStore {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.MemoryStore
+}
+
+// SetDreamerWorker sets the dreamer worker for post-session consolidation
+func (s *Session) SetDreamerWorker(worker *memory.DreamerWorker) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.DreamerWorker = worker
+}
+
+// GetDreamerWorker returns the dreamer worker
+func (s *Session) GetDreamerWorker() *memory.DreamerWorker {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.DreamerWorker
+}
+
+// LoadResume loads the resume packet from previous session
+func (s *Session) LoadResume(ctx context.Context, repoID string) error {
+	store := s.GetMemoryStore()
+	if store == nil {
+		return nil
+	}
+
+	loader := memory.NewResumeLoader(store, s.Config.Project.Workdir)
+	resume, err := loader.LoadResume(ctx, repoID)
+	if err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	s.ResumePacket = resume
+	s.mu.Unlock()
+
+	return nil
+}
+
+// GetResumePacket returns the current resume packet
+func (s *Session) GetResumePacket() *memory.ResumePacket {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.ResumePacket
+}
+
+// Close closes the session, runs dreamer consolidation, and cleans up resources
 func (s *Session) Close() error {
+	s.mu.RLock()
+	dreamer := s.DreamerWorker
+	sessionID := s.ID
+	s.mu.RUnlock()
+
+	if dreamer != nil && sessionID != "" {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+			if err := dreamer.Run(ctx, sessionID); err != nil {
+				log.Printf("[Session] Dreamer consolidation failed: %v", err)
+			} else {
+				log.Printf("[Session] Dreamer consolidation completed for session %s", sessionID)
+			}
+		}()
+	}
+
 	if s.Logger != nil {
 		return s.Logger.Close()
 	}

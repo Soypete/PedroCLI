@@ -1,6 +1,6 @@
 # M10: Kairos Memory Consolidation
 
-> Status: Planned | Started: TBD | Completed: TBD
+> Status: Completed | Started: 2026-04-02 | Completed: 2026-04-02
 
 ## Problem
 
@@ -49,10 +49,12 @@ A separate maintenance component that runs after the session ends:
 
 ## Key Decisions
 
-<!-- Important choices made during implementation - fill in as we code -->
-
-1. **Decision**: TODO - Reason
-2. **Decision**: TODO - Reason
+1. **File-based storage**: Used JSON/JSONL files in `.pedro/` directory for MVP simplicity. SQLite can be added later if needed for querying/deduplication.
+2. **Lazy initialization**: Memory store is optional - only created when explicitly needed. Session can work without memory.
+3. **Async consolidation**: Dreamer runs in background goroutine on session close with 5-minute timeout. Doesn't block session exit.
+4. **Validation on load**: Resume packets are validated on load - branch exists, files present, tests pass. Validation errors stored in packet.
+5. **Evidence required**: All facts must reference artifact IDs that support them. Facts without evidence are not stored.
+6. **Staleness tracking**: Facts older than 7 days are marked as low confidence for revalidation.
 
 ## Files Changed
 

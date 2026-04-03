@@ -19,7 +19,7 @@ PedroCode vNext evolves from a GUI chat interface with tools into a **phased, mu
 | [M7: Permission Engine](./milestones/M7-permission-engine/) | Completed | Per-agent, per-tool, per-path permissions |
 | [M8: Prompt Architecture](./milestones/M8-prompt-architecture/) | Completed | Layered prompt composition |
 | [M9: Telemetry](./milestones/M9-telemetry/) | Completed | Token/cost tracking |
-| [M10: Kairos Memory](./milestones/M10-kairos-memory/) | Planned | Session continuity and consolidation |
+| [M10: Kairos Memory](./milestones/M10-kairos-memory/) | Completed | Session continuity and consolidation |
 
 ## Architecture
 
