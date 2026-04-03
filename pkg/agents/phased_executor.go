@@ -117,35 +117,6 @@ type SystemPromptProvider interface {
 	GetTools() []string
 }
 
-// buildLayeredPrompt builds a layered prompt using PromptBuilder (M8)
-func (pe *PhasedExecutor) buildLayeredPrompt(phaseName string, tools []string) string {
-	pb := prompts.NewPromptBuilder()
-
-	// Layer 1: Identity
-	pb.SetIdentity(prompts.DefaultIdentityPrompt)
-
-	// Layer 2: Mode constraints
-	if pe.mode != "" {
-		if constraints, ok := prompts.DefaultModeConstraints[pe.mode]; ok {
-			pb.SetMode(pe.mode, constraints.String())
-		}
-	}
-
-	// Layer 3: Phase
-	if phaseName != "" {
-		pb.SetPhase(
-			phaseName,
-			prompts.GetPhaseGoal(phaseName),
-			strings.Join(tools, ", "),
-		)
-	}
-
-	// Layer 6: Output schema (based on phase)
-	pb.SetOutputSchema(prompts.GetDefaultOutputSchema(phaseName))
-
-	return pb.Build()
-}
-
 // SetPolicyEvaluator sets the middleware policy evaluator for tool result filtering
 func (pe *PhasedExecutor) SetPolicyEvaluator(eval middleware.PolicyEvaluator) {
 	pe.policyEvaluator = eval
@@ -231,28 +202,6 @@ func (pe *PhasedExecutor) recordPhaseTelemetry(phaseName string, duration time.D
 			"total_tokens": totalTokens,
 			"success":      success,
 			"error":        errMsg,
-		},
-	})
-}
-
-// recordJobTelemetry records job completion to telemetry (M9)
-func (pe *PhasedExecutor) recordJobTelemetry(status string, duration time.Duration, totalRounds, totalPhases, totalTokens int, toolCalls int, estimatedCost float64) {
-	if pe.telemetryCollector == nil {
-		return
-	}
-
-	pe.telemetryCollector.Record(telemetry.TelemetryEvent{
-		JobID:     pe.jobID,
-		AgentID:   pe.agent.name,
-		EventType: telemetry.EventJobComplete,
-		Data: map[string]interface{}{
-			"status":           status,
-			"duration":         duration.String(),
-			"total_rounds":     totalRounds,
-			"total_phases":     totalPhases,
-			"total_tokens":     totalTokens,
-			"total_tool_calls": toolCalls,
-			"estimated_cost":   estimatedCost,
 		},
 	})
 }

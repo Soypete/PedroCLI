@@ -17,15 +17,6 @@ const (
 	LayerOutputContract
 )
 
-var layerNames = map[Layer]string{
-	LayerIdentity:       "Identity",
-	LayerMode:           "Mode",
-	LayerPhase:          "Phase",
-	LayerTask:           "Task",
-	LayerSkills:         "Skills",
-	LayerOutputContract: "Output Contract",
-}
-
 type LayerData struct {
 	Identity        string
 	Mode            string
