@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
+	"os/signal"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/soypete/pedrocli/pkg/agents"
@@ -15,6 +19,7 @@ import (
 	depcheck "github.com/soypete/pedrocli/pkg/init"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/storage/blog"
+	"github.com/soypete/pedrocli/pkg/tools"
 )
 
 const version = "0.2.0-dev"
@@ -133,7 +138,7 @@ func main() {
 	case "triage":
 		triageCommand(cfg, subcommandArgs)
 	case "blog":
-		blogCommand(cfg, subcommandArgs)
+		blogCommand(cfg, subcommandArgs, verbose)
 	case "run":
 		runSlashCommand(cfg, subcommandArgs)
 	case "commands":
@@ -472,14 +477,26 @@ func triageCommand(cfg *config.Config, args []string) {
 	callAgent(cfg, "triager", arguments)
 }
 
-func blogCommand(cfg *config.Config, args []string) {
+func blogCommand(cfg *config.Config, args []string, globalVerbose bool) {
 	fs := flag.NewFlagSet("blog", flag.ExitOnError)
 	title := fs.String("title", "", "Blog post title (optional for orchestrate)")
 	content := fs.String("content", "", "Blog post content/dictation (for simple posts)")
 	prompt := fs.String("prompt", "", "Complex blog prompt for orchestration (use this for multi-step posts)")
 	file := fs.String("file", "", "Transcription file for 7-phase BlogContentAgent workflow")
-	publish := fs.Bool("publish", false, "Auto-publish to Notion after generation")
+	blogVerbose := fs.Bool("verbose", false, "Run in foreground with verbose output (for testing)")
+	listModels := fs.Bool("list", false, "List available models from configured endpoint (for debugging)")
 	fs.Parse(args)
+
+	// List models if requested
+	if *listModels {
+		listAvailableModels(cfg.Model.ServerURL)
+		return
+	}
+
+	// Use global verbose flag if blog-specific verbose not set
+	verbose := *blogVerbose || globalVerbose
+	runInBackground := !verbose
+	fmt.Printf("DEBUG: blogVerbose=%v, globalVerbose=%v, verbose=%v, background=%v\n", *blogVerbose, globalVerbose, verbose, runInBackground)
 
 	// Determine input source for 7-phase workflow
 	var transcription string
@@ -515,14 +532,50 @@ func blogCommand(cfg *config.Config, args []string) {
 		os.Exit(1)
 	}
 
-	// Run 7-phase BlogContentAgent workflow
-	runBlogContentAgent(cfg, transcription, postTitle, *publish)
+	// Run 7-phase BlogContentAgent workflow (background by default)
+	runBlogContentAgent(cfg, transcription, postTitle, runInBackground, verbose)
 }
 
-// runBlogContentAgent executes the 7-phase blog creation workflow
-func runBlogContentAgent(cfg *config.Config, transcription string, title string, publish bool) {
+func listAvailableModels(endpoint string) {
+	url := strings.TrimSuffix(endpoint, "/") + "/v1/models"
+	resp, err := http.Get(url)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to connect to %s: %v\n", endpoint, err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
 
-	// Setup LLM backend
+	if resp.StatusCode != http.StatusOK {
+		fmt.Fprintf(os.Stderr, "Error: API returned status %d\n", resp.StatusCode)
+		os.Exit(1)
+	}
+
+	var result struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to parse response: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("Available models:")
+	for _, m := range result.Data {
+		fmt.Printf("  - %s\n", m.ID)
+	}
+}
+
+func runBlogContentAgent(cfg *config.Config, transcription, title string, background, verbose bool) {
+	if verbose {
+		runBlogForeground(cfg, transcription, title)
+	} else {
+		runBlogInBackground(cfg, transcription, title)
+	}
+}
+
+func runBlogForeground(cfg *config.Config, transcription, title string) {
+	// Setup LLM backend from config
 	var backend llm.Backend
 	switch cfg.Model.Type {
 	case "ollama":
@@ -539,9 +592,7 @@ func runBlogContentAgent(cfg *config.Config, transcription string, title string,
 		os.Exit(1)
 	}
 
-	// Setup storage backend - CLI always uses temporary file storage
-	// Database storage is only used by the HTTP server
-	fmt.Println("📁 Using temporary file storage (/tmp/pedrocli-blog/)")
+	// Setup storage
 	storage, err := blog.NewFileStorage("/tmp/pedrocli-blog")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: Failed to create file storage: %v\n", err)
@@ -560,15 +611,23 @@ func runBlogContentAgent(cfg *config.Config, transcription string, title string,
 		}
 	}
 
-	// Create and execute agent
+	// Create blog tools setup with registry for dynamic prompts
+	workDir := cfg.Project.Workdir
+	if workDir == "" {
+		workDir = "."
+	}
+	blogTools := tools.NewBlogToolsSetup(cfg, workDir)
+
+	// Create and execute agent with registry
 	agent := agents.NewBlogContentAgent(agents.BlogContentAgentConfig{
 		Backend:       backend,
 		Storage:       storage,
-		WorkingDir:    cfg.Project.Workdir,
+		WorkingDir:    workDir,
 		MaxIterations: 10,
 		Transcription: transcription,
 		Title:         title,
 		Config:        cfg,
+		Registry:      blogTools.Registry,
 	})
 
 	fmt.Println("\n🚀 Starting BlogContentAgent workflow...")
@@ -600,20 +659,117 @@ func runBlogContentAgent(cfg *config.Config, transcription string, title string,
 	fmt.Println(strings.Repeat("=", 80) + "\n")
 	fmt.Println(post.EditorOutput)
 
-	// Print storage location
-	switch storage.(type) {
-	case *blog.DatabaseStorage:
-		fmt.Printf("\n💾 Saved to database with ID: %s\n", post.ID)
-		fmt.Println("📚 Version history available in blog_post_versions table")
-	case *blog.FileStorage:
-		fmt.Printf("\n💾 Saved to file storage with ID: %s\n", post.ID)
-		fmt.Println("📁 Location: ./blog_output/posts/")
-		fmt.Printf("   - Markdown: ./blog_output/posts/%s.md\n", post.ID)
-		fmt.Printf("   - Metadata: ./blog_output/posts/%s.meta.json\n", post.ID)
-		fmt.Printf("   - Versions: ./blog_output/versions/%s/\n", post.ID)
+	fmt.Printf("\n💾 Saved to file storage with ID: %s\n", post.ID)
+	fmt.Println("\n✅ Workflow complete!")
+}
+
+func runBlogInBackground(cfg *config.Config, transcription, title string) {
+	jobID := fmt.Sprintf("blog-%d", time.Now().Unix())
+	jobDir := fmt.Sprintf("/tmp/pedrocli-jobs/%s", jobID)
+	if err := os.MkdirAll(jobDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to create job directory: %v\n", err)
+		os.Exit(1)
 	}
 
-	fmt.Println("\n✅ Workflow complete!")
+	// Save job metadata
+	jobMeta := map[string]interface{}{
+		"id":         jobID,
+		"type":       "blog",
+		"title":      title,
+		"status":     "running",
+		"started_at": time.Now().Format(time.RFC3339),
+		"job_dir":    jobDir,
+	}
+	metaJSON, _ := json.Marshal(jobMeta)
+	os.WriteFile(jobDir+"/meta.json", metaJSON, 0644)
+
+	fmt.Printf("📝 Blog job started in background: %s\n", jobID)
+	fmt.Printf("   Job directory: %s\n", jobDir)
+	fmt.Println("   Use -verbose flag to run in foreground")
+
+	// Run in goroutine - user should use nohup/& for persistent background
+	go func() {
+		var backend llm.Backend
+		switch cfg.Model.Type {
+		case "ollama":
+			backend = llm.NewOllamaClient(cfg)
+		case "llamacpp":
+			backend = llm.NewServerClient(llm.ServerClientConfig{
+				BaseURL:     cfg.Model.ServerURL,
+				ModelName:   cfg.Model.ModelName,
+				ContextSize: cfg.Model.ContextSize,
+				EnableTools: true,
+			})
+		}
+
+		storage, err := blog.NewFileStorage("/tmp/pedrocli-blog")
+		if err != nil {
+			return
+		}
+		defer storage.Close()
+
+		if title == "" {
+			title = "Untitled Blog Post"
+			if len(transcription) > 0 {
+				firstLine := transcription[:min(len(transcription), 100)]
+				if len(firstLine) > 10 {
+					title = firstLine[:min(len(firstLine), 60)] + "..."
+				}
+			}
+		}
+
+		// Create blog tools setup with registry for dynamic prompts
+		workDir := cfg.Project.Workdir
+		if workDir == "" {
+			workDir = "."
+		}
+		blogTools := tools.NewBlogToolsSetup(cfg, workDir)
+
+		agent := agents.NewBlogContentAgent(agents.BlogContentAgentConfig{
+			Backend:       backend,
+			Storage:       storage,
+			WorkingDir:    workDir,
+			MaxIterations: 10,
+			Transcription: transcription,
+			Title:         title,
+			Config:        cfg,
+			Registry:      blogTools.Registry,
+		})
+
+		err = agent.Execute(context.Background())
+
+		status := "completed"
+		if err != nil {
+			status = "failed"
+		}
+		jobMeta["status"] = status
+		jobMeta["completed_at"] = time.Now().Format(time.RFC3339)
+		if err != nil {
+			jobMeta["error"] = err.Error()
+		}
+		metaJSON, _ = json.Marshal(jobMeta)
+		os.WriteFile(jobDir+"/meta.json", metaJSON, 0644)
+
+		if err == nil {
+			post := agent.GetCurrentPost()
+			os.WriteFile(jobDir+"/output.md", []byte(post.FinalContent), 0644)
+		}
+	}()
+
+	// Don't wait - exit immediately for true background operation
+	// Use 'nohup' or '&' from shell for persistent background jobs
+	fmt.Println("   Job is running... use 'pedrocli status' to check progress")
+	os.Exit(0)
+
+	// Handle signals
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		fmt.Println("\n⚠️  Blog job is still running in background")
+		fmt.Printf("   Job ID: %s\n", jobID)
+		os.Exit(0)
+	}()
 }
 
 func statusCommand(cfg *config.Config, args []string) {
@@ -728,7 +884,7 @@ func runSlashCommand(cfg *config.Config, args []string) {
 
 		// For blog agent, pass expanded prompt as transcription
 		if cmd.Agent == "blog" {
-			runBlogContentAgent(cfg, expanded, "", false)
+			runBlogContentAgent(cfg, expanded, "", false, false)
 		} else {
 			// For other agents, pass expanded prompt as description
 			callAgent(cfg, agentTool, map[string]interface{}{

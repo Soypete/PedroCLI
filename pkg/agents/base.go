@@ -318,8 +318,14 @@ func (a *BaseAgent) executeInferenceWithSystemPrompt(ctx context.Context, contex
 	}
 
 	// Add tools if native tool calling is enabled
-	if a.config.Model.EnableTools && a.registry != nil {
+	// Check both registry (preferred) and tools map (fallback for backward compatibility)
+	hasTools := a.registry != nil || len(a.tools) > 0
+	if a.config.Model.EnableTools && hasTools {
 		req.Tools = a.convertToolsToDefinitions()
+
+		// Note: Cannot use both custom grammar AND tools API with llama.cpp
+		// The native tools API provides JSON schemas, so grammar is not needed
+		// Grammar is only used when tools API is disabled
 	}
 
 	// Perform inference

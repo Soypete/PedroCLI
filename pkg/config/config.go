@@ -56,6 +56,7 @@ type ModelConfig struct {
 	UsableContext int     `json:"usable_context,omitempty"` // Auto-calculated if not provided
 	Temperature   float64 `json:"temperature"`
 	MaxTokens     int     `json:"max_tokens,omitempty"`
+	Timeout       int     `json:"timeout_seconds,omitempty"` // HTTP client timeout in seconds
 
 	// HTTP-based backends (llamacpp-server, ollama, vllm, lmstudio)
 	ServerURL string `json:"server_url,omitempty"` // e.g., "http://localhost:8081"

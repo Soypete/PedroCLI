@@ -1,6 +1,8 @@
 package llm
 
 import (
+	"time"
+
 	"github.com/soypete/pedrocli/pkg/config"
 )
 
@@ -35,8 +37,9 @@ func NewLlamaCppClientFromModel(cfg *config.Config, modelCfg config.ModelConfig)
 		ModelName:   modelName,
 		ContextSize: modelCfg.ContextSize,
 		EnableTools: modelCfg.EnableTools,
-		APIPath:     "/v1/chat/completions", // OpenAI-compatible endpoint
-		MaxRetries:  modelCfg.MaxRetries,    // Pass retry config
+		APIPath:     "/v1/chat/completions",                        // OpenAI-compatible endpoint
+		MaxRetries:  modelCfg.MaxRetries,                           // Pass retry config
+		Timeout:     time.Duration(modelCfg.Timeout) * time.Second, // Convert seconds to duration
 	})
 
 	return &LlamaCppClient{

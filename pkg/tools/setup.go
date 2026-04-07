@@ -69,3 +69,69 @@ func (s *CodeToolsSetup) RegisterWithAgent(agent interface {
 	// Set registry for dynamic prompts and schemas
 	agent.SetRegistry(s.Registry)
 }
+
+// BlogToolsSetup holds a registry and tools for blog content agents.
+type BlogToolsSetup struct {
+	Registry      *ToolRegistry
+	WebSearchTool *WebSearchTool
+	ScraperTool   *WebScraperTool
+	SearchTool    *SearchTool
+	NavigateTool  *NavigateTool
+	FileTool      *FileTool
+	RSSTool       *RSSFeedTool
+	CalendarTool  *CalendarTool
+	StaticLinks   *StaticLinksTool
+}
+
+// NewBlogToolsSetup creates a consistent set of blog research tools with registry.
+func NewBlogToolsSetup(cfg *config.Config, workDir string) *BlogToolsSetup {
+	registry := NewToolRegistry()
+
+	setup := &BlogToolsSetup{
+		Registry:      registry,
+		WebSearchTool: NewWebSearchTool(),
+		ScraperTool:   NewWebScraperTool(),
+		SearchTool:    NewSearchTool(workDir),
+		NavigateTool:  NewNavigateTool(workDir),
+		FileTool:      NewFileTool(),
+	}
+
+	if cfg != nil && cfg.Blog.Enabled {
+		setup.RSSTool = NewRSSFeedTool(cfg)
+		setup.CalendarTool = NewCalendarTool(cfg, nil)
+		setup.StaticLinks = NewStaticLinksTool(cfg)
+	}
+
+	// Register all tools with the registry for proper schemas
+	_ = registry.Register(setup.WebSearchTool)
+	_ = registry.Register(setup.ScraperTool)
+	_ = registry.Register(setup.SearchTool)
+	_ = registry.Register(setup.NavigateTool)
+	_ = registry.Register(setup.FileTool)
+	if setup.RSSTool != nil {
+		_ = registry.Register(setup.RSSTool)
+	}
+	if setup.CalendarTool != nil {
+		_ = registry.Register(setup.CalendarTool)
+	}
+	if setup.StaticLinks != nil {
+		_ = registry.Register(setup.StaticLinks)
+	}
+
+	return setup
+}
+
+// GetTools returns all tools as a list for direct tool execution
+func (s *BlogToolsSetup) GetTools() []Tool {
+	tools := []Tool{s.WebSearchTool, s.ScraperTool, s.SearchTool, s.NavigateTool, s.FileTool}
+	if s.RSSTool != nil {
+		tools = append(tools, s.RSSTool)
+	}
+	if s.CalendarTool != nil {
+		tools = append(tools, s.CalendarTool)
+	}
+	if s.StaticLinks != nil {
+		tools = append(tools, s.StaticLinks)
+	}
+	return tools
+}
