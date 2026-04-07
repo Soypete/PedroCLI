@@ -68,6 +68,10 @@ func NewServerClient(cfg ServerClientConfig) *ServerClient {
 
 // Infer performs inference using OpenAI-compatible chat completions API
 func (c *ServerClient) Infer(ctx context.Context, req *InferenceRequest) (*InferenceResponse, error) {
+	startTime := time.Now()
+
+	debugEnabled := os.Getenv("DEBUG") != "" || strings.Contains(os.Args[0], "debug")
+
 	// Build chat messages
 	messages := []map[string]string{
 		{"role": "system", "content": req.SystemPrompt},
@@ -81,6 +85,11 @@ func (c *ServerClient) Infer(ctx context.Context, req *InferenceRequest) (*Infer
 		"temperature": req.Temperature,
 		"max_tokens":  req.MaxTokens,
 		"stream":      false,
+	}
+
+	if debugEnabled {
+		reqJSON, _ := json.MarshalIndent(reqBody, "", "  ")
+		fmt.Fprintf(os.Stderr, "[DEBUG] === REQUEST (t=0ms) ===\n%s\n", reqJSON)
 	}
 
 	// Add tools if enabled (native tool calling)
@@ -136,14 +145,15 @@ func (c *ServerClient) Infer(ctx context.Context, req *InferenceRequest) (*Infer
 
 		// Execute request
 		resp, err = c.httpClient.Do(httpReq)
+		attemptDuration := time.Since(startTime)
 		if err != nil {
 			lastErr = err
 			// Check if error is retryable (network errors, timeouts)
 			if attempt < c.maxRetries && isRetryableError(err) {
 				backoff := time.Duration(1<<uint(attempt)) * time.Second // 1s, 2s, 4s
-				if os.Getenv("DEBUG") != "" {
-					fmt.Fprintf(os.Stderr, "[DEBUG] Request failed (attempt %d/%d): %v. Retrying in %v...\n",
-						attempt+1, c.maxRetries+1, err, backoff)
+				if debugEnabled {
+					fmt.Fprintf(os.Stderr, "[DEBUG] Request FAILED (t=%v, attempt %d/%d): %v. Retrying in %v...\n",
+						attemptDuration, attempt+1, c.maxRetries+1, err, backoff)
 				}
 				time.Sleep(backoff)
 				continue
@@ -153,6 +163,10 @@ func (c *ServerClient) Infer(ctx context.Context, req *InferenceRequest) (*Infer
 
 		// Check status code
 		if resp.StatusCode == http.StatusOK {
+			if debugEnabled {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Request SUCCESS (t=%v, attempt %d/%d)\n",
+					attemptDuration, attempt+1, c.maxRetries+1)
+			}
 			// Success!
 			break
 		}
@@ -165,9 +179,9 @@ func (c *ServerClient) Infer(ctx context.Context, req *InferenceRequest) (*Infer
 		if resp.StatusCode >= 500 && attempt < c.maxRetries {
 			lastErr = fmt.Errorf("server returned %d: %s", resp.StatusCode, string(errorBody))
 			backoff := time.Duration(1<<uint(attempt)) * time.Second // 1s, 2s, 4s
-			if os.Getenv("DEBUG") != "" {
-				fmt.Fprintf(os.Stderr, "[DEBUG] Server error %d (attempt %d/%d). Retrying in %v...\n",
-					resp.StatusCode, attempt+1, c.maxRetries+1, backoff)
+			if debugEnabled {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Server error %d (t=%v, attempt %d/%d). Retrying in %v...\n",
+					resp.StatusCode, attemptDuration, attempt+1, c.maxRetries+1, backoff)
 			}
 			time.Sleep(backoff)
 			continue
@@ -230,6 +244,12 @@ func (c *ServerClient) Infer(ctx context.Context, req *InferenceRequest) (*Infer
 			Name: tc.Function.Name,
 			Args: args,
 		})
+	}
+
+	if debugEnabled {
+		respJSON, _ := json.MarshalIndent(chatResp, "", "  ")
+		totalDuration := time.Since(startTime)
+		fmt.Fprintf(os.Stderr, "[DEBUG] === RESPONSE (t=%v) ===\n%s\n", totalDuration, respJSON)
 	}
 
 	return &InferenceResponse{

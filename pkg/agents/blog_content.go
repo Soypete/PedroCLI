@@ -10,6 +10,7 @@ import (
 	"github.com/soypete/pedrocli/pkg/config"
 	"github.com/soypete/pedrocli/pkg/llm"
 	"github.com/soypete/pedrocli/pkg/llmcontext"
+	"github.com/soypete/pedrocli/pkg/prompts"
 	"github.com/soypete/pedrocli/pkg/storage/blog"
 	"github.com/soypete/pedrocli/pkg/tools"
 )
@@ -24,8 +25,10 @@ type BlogContentAgent struct {
 	outline       string
 	sections      []SectionContent
 	tldr          string
-	socialPosts   map[string]string       // platform -> post
-	toolsList     []tools.Tool            // Tools for InferenceExecutor
+	socialPosts   map[string]string   // platform -> post
+	toolsList     []tools.Tool        // Tools for InferenceExecutor
+	registry      *tools.ToolRegistry // Tool registry for dynamic prompts
+	toolPromptGen *prompts.ToolPromptGenerator
 	config        *config.Config          // Configuration for Notion publishing
 	styleAnalyzer *BlogStyleAnalyzerAgent // Optional style analyzer
 	useStyleGuide bool                    // Whether to use style guide in editor
@@ -45,9 +48,10 @@ type BlogContentAgentConfig struct {
 	Storage       blog.BlogStorage // Abstracted storage interface
 	WorkingDir    string
 	MaxIterations int
-	Transcription string         // Initial voice transcription
-	Title         string         // Optional initial title
-	Config        *config.Config // For tool initialization
+	Transcription string              // Initial voice transcription
+	Title         string              // Optional initial title
+	Config        *config.Config      // For tool initialization
+	Registry      *tools.ToolRegistry // Tool registry for dynamic prompts
 }
 
 // NewBlogContentAgent creates a new blog content agent
@@ -121,6 +125,12 @@ func NewBlogContentAgent(cfg BlogContentAgentConfig) *BlogContentAgent {
 		toolsList = append(toolsList, staticLinksTool)
 	}
 
+	// Initialize tool prompt generator if registry provided
+	var toolPromptGen *prompts.ToolPromptGenerator
+	if cfg.Registry != nil {
+		toolPromptGen = prompts.NewToolPromptGenerator(cfg.Registry)
+	}
+
 	// Initialize style analyzer if RSS feed is configured
 	var styleAnalyzer *BlogStyleAnalyzerAgent
 	useStyleGuide := false
@@ -139,12 +149,19 @@ func NewBlogContentAgent(cfg BlogContentAgentConfig) *BlogContentAgent {
 		tools:       registeredTools,
 	}
 
+	// If registry provided, use it for base agent too
+	if cfg.Registry != nil {
+		baseAgent.SetRegistry(cfg.Registry)
+	}
+
 	agent := &BlogContentAgent{
 		backend:       cfg.Backend,
 		storage:       cfg.Storage,
 		progress:      progress,
 		socialPosts:   make(map[string]string),
 		toolsList:     toolsList,
+		registry:      cfg.Registry,
+		toolPromptGen: toolPromptGen,
 		config:        cfg.Config,
 		styleAnalyzer: styleAnalyzer,
 		useStyleGuide: useStyleGuide,
@@ -288,35 +305,42 @@ IMPORTANT: Apply this writing style to maintain the author's authentic voice thr
 ---`, basePrompt, styleGuide)
 }
 
-// phaseResearch - Phase 2: Gather research data
-func (a *BlogContentAgent) phaseResearch(ctx context.Context) error {
-	a.progress.UpdatePhase("Research", PhaseStatusInProgress, "")
-	a.progress.PrintTree()
+// buildResearchSystemPrompt builds the system prompt for research phase using layered prompts
+func (a *BlogContentAgent) buildResearchSystemPrompt() string {
+	pb := prompts.NewPromptBuilder()
 
-	systemPrompt := `You are a research assistant for technical blog writing.
+	// Layer 1: Identity - research assistant for blog writing
+	pb.SetIdentity(`You are a research assistant for technical blog writing.
 
-CRITICAL: When writing about code, ALWAYS search the local codebase first using code introspection tools.
+When writing about code, ALWAYS search the local codebase first using code introspection tools.
+NEVER hallucinate code examples - always use tools to find real code from the repository.`)
 
-AVAILABLE TOOLS:
-- web_search: Search the web for relevant articles and documentation
-- web_scraper: Scrape content from URLs, GitHub repos, or local files (supports GitHub links!)
-- search: Search for code patterns (grep, find files, find definitions)
-  Actions: grep, find_files, find_in_file, find_definition
-- navigate: Navigate code structure (list dirs, get file outlines, analyze imports)
-- file: Read/write files from the local codebase
-- rss_feed: Get recent blog posts from RSS feed
-- calendar: Get recent events and activities
-- static_links: Get configured social media and newsletter links
+	// Layer 2: Mode - research mode with tool guidance
+	modeConstraints := prompts.DefaultModeConstraints["plan"].String()
+	pb.SetMode("plan", modeConstraints)
+
+	// Layer 3: Phase - Research phase
+	phaseTools := "web_search, web_scraper, search, navigate, file, rss_feed, calendar, static_links"
+	pb.SetPhase("research", "Gather research data from web, local codebase, RSS feeds, and calendar", phaseTools)
+
+	// Build with tool section
+	toolSection := ""
+	if a.toolPromptGen != nil {
+		toolSection = a.toolPromptGen.GenerateToolSection()
+	}
+
+	return pb.BuildWithToolSection(toolSection) + `
+
+CRITICAL: After 2-3 research iterations MAXIMUM, you MUST complete with RESEARCH_COMPLETE.
+Do NOT keep searching indefinitely. 2-3 good sources are enough.
 
 WORKFLOW:
-1. Analyze transcription to identify topics
-2. IF writing about code/implementation:
-   - Use search tool (action=grep or find_definition) to find relevant functions/types
-   - Use file to read actual source files
-   - Use navigate to understand code structure
-3. Use web_search for external articles/docs
-4. Use rss_feed for recent related posts
-5. When done, respond with "RESEARCH_COMPLETE" + summary
+1. Analyze transcription to identify 2-3 key topics
+2. Do 2-3 targeted searches maximum (not unlimited)
+3. After 2-3 tool uses, respond with RESEARCH_COMPLETE
+
+STRICT LIMIT: You have maximum 5 inference rounds. After that, you MUST complete.
+When done, respond with "RESEARCH_COMPLETE" + summary
 
 COMPLETION FORMAT:
 RESEARCH_COMPLETE
@@ -325,6 +349,14 @@ Summary:
 - [Finding 1 with file paths if code-related]
 - [Finding 2]
 - [Finding 3]`
+}
+
+// phaseResearch - Phase 2: Gather research data
+func (a *BlogContentAgent) phaseResearch(ctx context.Context) error {
+	a.progress.UpdatePhase("Research", PhaseStatusInProgress, "")
+	a.progress.PrintTree()
+
+	systemPrompt := a.buildResearchSystemPrompt()
 
 	userPrompt := fmt.Sprintf(`Gather research for this blog post:
 
@@ -354,6 +386,9 @@ Use the code introspection tools if writing about implementation details.`, a.cu
 	// Apply mode constraints (M2)
 	ApplyModeConstraintsToExecutor(executor, "blog_content", a.config.Modes)
 
+	// Force research to complete in 3 rounds max for speed
+	executor.SetMaxRounds(3)
+
 	// Track tool usage with progress callback
 	executor.SetProgressCallback(func(event ProgressEvent) {
 		if event.Type == ProgressEventToolCall {
@@ -365,9 +400,14 @@ Use the code introspection tools if writing about implementation details.`, a.cu
 	// Execute research with InferenceExecutor
 	err = executor.Execute(ctx, userPrompt)
 	if err != nil {
-		a.progress.UpdatePhase("Research", PhaseStatusFailed, err.Error())
-		a.progress.PrintTree()
-		return fmt.Errorf("research failed: %w", err)
+		// Check if it's just "max rounds reached" - we can still extract research from context
+		if strings.Contains(err.Error(), "max inference rounds") {
+			fmt.Println("⚠️  Research reached max rounds, extracting available data...")
+		} else {
+			a.progress.UpdatePhase("Research", PhaseStatusFailed, err.Error())
+			a.progress.PrintTree()
+			return fmt.Errorf("research failed: %w", err)
+		}
 	}
 
 	// Extract research data from context history
@@ -520,7 +560,7 @@ func (a *BlogContentAgent) phaseGenerateSections(ctx context.Context) error {
 		MaxBullets:  5,
 		MaxTokens:   200,
 		Temperature: 0.3,
-		UseGrammar:  false, // Grammar not supported by all servers
+		UseGrammar:  true,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to generate TLDR: %w", err)
@@ -603,7 +643,7 @@ func (a *BlogContentAgent) phaseAssemble(ctx context.Context) error {
 			Content:     contentSummary,
 			Link:        "https://soypetetech.substack.com/p/SLUG", // Placeholder
 			Temperature: 0.4,
-			UseGrammar:  false, // Grammar not supported by all servers
+			UseGrammar:  true,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to generate %s post: %w", platform, err)
@@ -819,21 +859,34 @@ func (a *BlogContentAgent) parseSectionsFromOutline(outline string) []string {
 	return sections
 }
 
-func (a *BlogContentAgent) generateSection(ctx context.Context, title string, index int) (string, int, error) {
-	baseSystemPrompt := `You are writing a section for a technical blog post.
+// buildSectionSystemPrompt builds the system prompt for section generation using layered prompts
+func (a *BlogContentAgent) buildSectionSystemPrompt() string {
+	pb := prompts.NewPromptBuilder()
+
+	// Layer 1: Identity - section writer
+	pb.SetIdentity(`You are writing a section for a technical blog post.
 
 CRITICAL CODE EXAMPLES RULE:
 - When writing about code, ALWAYS use search + file tools
 - Find real code from the repository being documented
 - Include file paths and line numbers (e.g., pkg/agents/executor.go:120-147)
-- NEVER hallucinate code examples
+- NEVER hallucinate code examples`)
 
-AVAILABLE TOOLS:
-- search: Find functions, types, patterns in codebase
-  Actions: grep, find_files, find_definition
-- navigate: Explore code structure
-- file: Read actual source files
-- web_search: Find external references
+	// Layer 2: Mode - content generation mode
+	modeConstraints := "Can write files: false\nMax inference rounds: 5"
+	pb.SetMode("build", modeConstraints)
+
+	// Layer 3: Phase - generate section
+	phaseTools := "search, navigate, file, web_search"
+	pb.SetPhase("generate", "Generate blog section content with real code examples", phaseTools)
+
+	// Build with tool section
+	toolSection := ""
+	if a.toolPromptGen != nil {
+		toolSection = a.toolPromptGen.GenerateToolSection()
+	}
+
+	return pb.BuildWithToolSection(toolSection) + `
 
 WORKFLOW:
 1. Determine if section needs code examples
@@ -851,8 +904,10 @@ COMPLETION FORMAT:
 SECTION_COMPLETE
 
 [Section content with real code examples and file paths]`
+}
 
-	systemPrompt := a.enhancePromptWithStyle(baseSystemPrompt)
+func (a *BlogContentAgent) generateSection(ctx context.Context, title string, index int) (string, int, error) {
+	systemPrompt := a.enhancePromptWithStyle(a.buildSectionSystemPrompt())
 
 	userPrompt := fmt.Sprintf(`Write the "%s" section for this blog post:
 

@@ -1,18 +1,19 @@
 {
   "model": {
     "type": "llamacpp",
-    "model_name": "Qwen3-Coder-30B-A3B-Instruct",
-    "server_url": "http://localhost:8082",
+    "model_name": "qwen3-coder-30b",
+    "server_url": "http://pedrogpt:8080",
     "model_path": "/Users/miriahpeterson/.cache/huggingface/hub/models--bartowski--Qwen2.5-Coder-32B-Instruct-GGUF/snapshots/40b525506a4f98ed425882fa6dfc90cc8139065e/Qwen2.5-Coder-32B-Instruct-Q4_K_M.gguf",
     "llamacpp_path": "/opt/homebrew/bin/llama-cli",
-    "context_size": 32768,
-    "usable_context": 24576,
-    "temperature": 0.2,
+    "context_size": 65536,
+    "usable_context": 48000,
+    "temperature": 0.1,
     "threads": 8,
     "n_gpu_layers": 35,
-    "enable_grammar": false,
+    "enable_grammar": true,
     "grammar_logging": true,
-    "enable_tools": true
+    "enable_tools": true,
+    "timeout_seconds": 1800
   },
   "project": {
     "name": "PedroCLI",
@@ -76,7 +77,7 @@
   },
   "blog": {
     "enabled": true,
-    "rss_feed_url": "https://soypetetech.substack.com/feed",
+    "rss_feed_url": "",
     "notion_drafts_db": "18aa4c9f-9845-81d5-aad1-e53b75ab3a2b",
     "notion_ideas_db": "18aa4c9f-9845-813f-80d3-e3c0eb66c165",
     "research": {

@@ -293,12 +293,14 @@ func (e *InferenceExecutor) Execute(ctx context.Context, initialPrompt string) e
 		// Validate tool calls before execution
 		validCalls, validationErrors := e.validateToolCalls(toolCalls)
 		if len(validationErrors) > 0 {
-			// Build helpful feedback prompt
+			// Build helpful feedback prompt with examples
 			currentPrompt = "Tool call errors:\n\n"
 			for _, err := range validationErrors {
 				currentPrompt += "❌ " + err + "\n"
 			}
-			currentPrompt += "\nPlease retry with correct tool names and parameters. Review the tool descriptions carefully."
+			currentPrompt += "\nIMPORTANT: You MUST provide the required parameters in JSON format."
+			currentPrompt += "\nExample: {\"tool\": \"web_search\", \"args\": {\"query\": \"search term here\"}}"
+			currentPrompt += "\nYou must include actual values, not empty objects {}. Each parameter is required."
 			continue
 		}
 		toolCalls = validCalls
@@ -688,7 +690,9 @@ func (e *InferenceExecutor) buildFeedbackPrompt(calls []llm.ToolCall, results []
 		}
 	}
 
-	prompt.WriteString("\nBased on these results, what should we do next? If the task is complete, respond with 'TASK_COMPLETE'. Otherwise, continue with the next steps using tool calls.")
+	prompt.WriteString("\nBased on these results, what should we do next? If the task is complete, respond with 'TASK_COMPLETE'. Otherwise, continue with the next steps using JSON tool calls:")
+	prompt.WriteString("\nFormat: {\"tool\": \"tool_name\", \"args\": {\"param\": \"value\"}}")
+	prompt.WriteString("\nExample: {\"tool\": \"web_search\", \"args\": {\"query\": \"search term\"}}")
 
 	return prompt.String()
 }
