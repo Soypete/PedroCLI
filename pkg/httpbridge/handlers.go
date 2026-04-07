@@ -24,6 +24,8 @@ type CreateJobRequest struct {
 	Symptoms    string `json:"symptoms"`    // For debugger
 	Logs        string `json:"logs"`        // For debugger
 	Branch      string `json:"branch"`      // For reviewer
+	PRURL       string `json:"pr_url"`      // For reviewer - full PR URL
+	Repo        string `json:"repo"`        // For reviewer - owner/repo or local path
 
 	// Blog job fields
 	Topic      string `json:"topic"`       // For blog orchestrator
@@ -233,6 +235,8 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		req.Symptoms = r.FormValue("symptoms")
 		req.Logs = r.FormValue("logs")
 		req.Branch = r.FormValue("branch")
+		req.PRURL = r.FormValue("pr_url")
+		req.Repo = r.FormValue("repo")
 		req.Topic = r.FormValue("topic")
 		req.Notes = r.FormValue("notes")
 		req.FocusTopic = r.FormValue("focus_topic")
@@ -287,17 +291,20 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		job, err = agent.Execute(s.ctx, input)
 
 	case "reviewer":
-		if req.Branch == "" {
+		if req.Branch == "" && req.PRURL == "" {
 			respondJSON(w, http.StatusBadRequest, JobResponse{
 				Success: false,
-				Error:   "Branch is required for reviewer jobs",
+				Error:   "Branch or PR URL is required for reviewer jobs",
 			})
 			return
 		}
 		agent := s.appCtx.NewReviewerAgent()
-		job, err = agent.Execute(s.ctx, map[string]interface{}{
+		input := map[string]interface{}{
 			"branch": req.Branch,
-		})
+			"pr_url": req.PRURL,
+			"repo":   req.Repo,
+		}
+		job, err = agent.Execute(s.ctx, input)
 
 	case "triager":
 		if req.Description == "" {
@@ -1052,22 +1059,51 @@ func renderJobCard(job *jobs.Job) string {
 		statusIcon = "⚠️"
 	}
 
+	// Build phase info if present
+	phaseInfo := ""
+	if job.CurrentPhase != "" && job.Status == jobs.StatusRunning {
+		phaseInfo = fmt.Sprintf(`<span class="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">Phase: %s</span>`, job.CurrentPhase)
+	}
+
+	// Build error info if failed
+	errorInfo := ""
+	if job.Status == jobs.StatusFailed && job.Error != "" {
+		// Truncate long error messages
+		errMsg := job.Error
+		if len(errMsg) > 200 {
+			errMsg = errMsg[:200] + "..."
+		}
+		errorInfo = fmt.Sprintf(`<div class="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">%s</div>`, errMsg)
+	}
+
+	// Build description
+	desc := job.Description
+	if desc == "" {
+		if job.WorkflowType != "" {
+			desc = fmt.Sprintf("%s workflow", job.WorkflowType)
+		} else {
+			desc = job.Type
+		}
+	}
+
 	return fmt.Sprintf(`
 	<div class="border rounded-lg p-4 mb-4 hover:shadow-md transition-shadow">
 		<div class="flex justify-between items-start mb-2">
 			<div>
 				<h3 class="font-semibold text-lg">%s</h3>
-				<p class="text-sm text-gray-600">%s</p>
+				<p class="text-sm text-gray-600">%s %s</p>
 			</div>
 			<span class="px-3 py-1 rounded-full text-sm font-medium %s">
 				%s %s
 			</span>
 		</div>
-		<div class="text-xs text-gray-500 mt-2">
+		%s
+		<div class="text-xs text-gray-500 mt-2 flex justify-between items-center">
 			<span>Created: %s</span>
+			<a href="/api/jobs/%s" class="text-blue-600 hover:text-blue-700">View Details →</a>
 		</div>
 	</div>
-	`, job.ID, job.Description, statusClass, statusIcon, job.Status, job.CreatedAt.Format("2006-01-02 15:04:05"))
+	`, job.ID, desc, phaseInfo, statusClass, statusIcon, job.Status, errorInfo, job.CreatedAt.Format("2006-01-02 15:04:05"), job.ID)
 }
 
 // parseUUID parses a UUID string, supporting both with and without dashes

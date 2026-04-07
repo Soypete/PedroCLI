@@ -4,6 +4,8 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"regexp"
+	"strconv"
 
 	"github.com/soypete/pedrocli/pkg/artifacts"
 	"github.com/soypete/pedrocli/pkg/config"
@@ -13,6 +15,20 @@ import (
 	"github.com/soypete/pedrocli/pkg/phases"
 	"github.com/soypete/pedrocli/pkg/tools"
 )
+
+var prURLRegex = regexp.MustCompile(`github\.com/([^/]+)/([^/]+)/pull/(\d+)`)
+
+func parsePRURL(prURL string) (owner, repo string, prNum int, branch string, err error) {
+	matches := prURLRegex.FindStringSubmatch(prURL)
+	if len(matches) != 4 {
+		return "", "", 0, "", fmt.Errorf("invalid PR URL format")
+	}
+	owner = matches[1]
+	repo = matches[2]
+	prNum, _ = strconv.Atoi(matches[3])
+	branch = fmt.Sprintf("pull/%d/head", prNum)
+	return owner, repo, prNum, branch, nil
+}
 
 //go:embed prompts/reviewer_phased_gather.md
 var reviewerGatherPrompt string
@@ -229,7 +245,38 @@ func (r *ReviewerPhasedAgent) Execute(ctx context.Context, input map[string]inte
 func (r *ReviewerPhasedAgent) buildInitialPrompt(input map[string]interface{}) string {
 	var prompt string
 
-	if prNum, ok := input["pr_number"].(float64); ok {
+	prURL, _ := input["pr_url"].(string)
+	repo, _ := input["repo"].(string)
+
+	if prURL != "" {
+		owner, repoName, prNum, _, err := parsePRURL(prURL)
+		if err != nil {
+			return fmt.Sprintf("# Code Review Request\n\nError parsing PR URL: %v\n", err)
+		}
+		repoFull := fmt.Sprintf("%s/%s", owner, repoName)
+		prompt = fmt.Sprintf(`# Code Review Request
+
+Review PR: %s
+
+## Repository: %s
+
+## Instructions
+
+You are starting a 5-phase code review workflow:
+1. **Gather** - Fetch PR details, checkout branch, get diff and diagnostics
+2. **Security** - Analyze for security vulnerabilities
+3. **Quality** - Review code quality, performance, maintainability
+4. **Compile** - Compile findings into structured review
+5. **Publish** - Post review to GitHub (optional)
+
+Start with the **Gather** phase:
+1. Use the github tool to fetch PR details: {"tool": "github", "args": {"action": "pr_fetch", "pr_number": %d, "repo": "%s", "include_diff": true}}
+2. Checkout the PR branch: {"tool": "github", "args": {"action": "pr_checkout", "pr_number": %d, "repo": "%s"}}
+3. Run LSP diagnostics on changed files
+4. Read key changed files to understand the changes
+
+When you've gathered all necessary information, summarize what you found and say PHASE_COMPLETE.`, prURL, repoFull, prNum, repoFull, prNum, repoFull)
+	} else if prNum, ok := input["pr_number"].(float64); ok {
 		prompt = fmt.Sprintf(`# Code Review Request
 
 Review PR #%d
@@ -251,9 +298,13 @@ Start with the **Gather** phase:
 
 When you've gathered all necessary information, summarize what you found and say PHASE_COMPLETE.`, int(prNum), int(prNum), int(prNum))
 	} else if branch, ok := input["branch"].(string); ok {
+		repoInfo := ""
+		if repo != "" {
+			repoInfo = fmt.Sprintf("\n## Repository: %s", repo)
+		}
 		prompt = fmt.Sprintf(`# Code Review Request
 
-Review branch: %s
+Review branch: %s%s
 
 ## Instructions
 
@@ -270,7 +321,7 @@ Start with the **Gather** phase:
 3. Run LSP diagnostics on changed files
 4. Read key changed files to understand the changes
 
-When you've gathered all necessary information, summarize what you found and say PHASE_COMPLETE.`, branch, branch, branch)
+When you've gathered all necessary information, summarize what you found and say PHASE_COMPLETE.`, branch, repoInfo, branch, branch)
 	}
 
 	// Add focus areas if specified

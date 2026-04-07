@@ -41,6 +41,9 @@ type Job struct {
 	CompletedAt *time.Time             `json:"completed_at,omitempty"`
 	WorkDir     string                 `json:"work_dir"`
 	ContextDir  string                 `json:"context_dir"`
+	// Phase tracking for phased workflows
+	CurrentPhase string `json:"current_phase,omitempty"`
+	WorkflowType string `json:"workflow_type,omitempty"`
 }
 
 // Manager manages jobs using file-based storage.

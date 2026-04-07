@@ -328,16 +328,18 @@ func (m *DBManager) CleanupMigratedFiles() error {
 // convertFromDBJob converts a storage.Job to a jobs.Job.
 func convertFromDBJob(dbJob *storage.Job) *Job {
 	job := &Job{
-		ID:          dbJob.ID,
-		Type:        string(dbJob.JobType),
-		Status:      Status(dbJob.Status),
-		Description: dbJob.Description,
-		Error:       dbJob.ErrorMessage,
-		WorkDir:     dbJob.WorkDir,
-		ContextDir:  dbJob.ContextDir,
-		CreatedAt:   dbJob.CreatedAt,
-		StartedAt:   dbJob.StartedAt,
-		CompletedAt: dbJob.CompletedAt,
+		ID:           dbJob.ID,
+		Type:         string(dbJob.JobType),
+		Status:       Status(dbJob.Status),
+		Description:  dbJob.Description,
+		Error:        dbJob.ErrorMessage,
+		WorkDir:      dbJob.WorkDir,
+		ContextDir:   dbJob.ContextDir,
+		CreatedAt:    dbJob.CreatedAt,
+		StartedAt:    dbJob.StartedAt,
+		CompletedAt:  dbJob.CompletedAt,
+		CurrentPhase: dbJob.CurrentPhase,
+		WorkflowType: dbJob.WorkflowType,
 	}
 
 	// Unmarshal input payload

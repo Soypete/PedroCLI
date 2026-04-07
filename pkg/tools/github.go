@@ -120,6 +120,7 @@ type IssueComment struct {
 // prFetch fetches PR details
 func (g *GitHubTool) prFetch(ctx context.Context, args map[string]interface{}) (*Result, error) {
 	var prIdentifier string
+	repo, _ := args["repo"].(string)
 
 	// Accept either pr_number or branch
 	if prNum, ok := args["pr_number"].(float64); ok {
@@ -128,7 +129,11 @@ func (g *GitHubTool) prFetch(ctx context.Context, args map[string]interface{}) (
 		prIdentifier = fmt.Sprintf("%d", prNum)
 	} else if branch, ok := args["branch"].(string); ok {
 		// Find PR by branch
-		cmd := exec.CommandContext(ctx, "gh", "pr", "list", "--head", branch, "--json", "number", "--jq", ".[0].number")
+		cmdArgs := []string{"pr", "list", "--head", branch, "--json", "number", "--jq", ".[0].number"}
+		cmd := exec.CommandContext(ctx, "gh", cmdArgs...)
+		if repo != "" {
+			cmd = exec.CommandContext(ctx, "gh", append([]string{"-R", repo}, cmdArgs...)...)
+		}
 		cmd.Dir = g.workDir
 		output, err := cmd.CombinedOutput()
 		if err != nil || strings.TrimSpace(string(output)) == "" {
@@ -140,8 +145,14 @@ func (g *GitHubTool) prFetch(ctx context.Context, args map[string]interface{}) (
 	}
 
 	// Fetch PR details
-	cmd := exec.CommandContext(ctx, "gh", "pr", "view", prIdentifier,
-		"--json", "number,title,body,state,headRefName,baseRefName,author,url,files,additions,deletions")
+	cmdArgs := []string{"pr", "view", prIdentifier,
+		"--json", "number,title,body,state,headRefName,baseRefName,author,url,files,additions,deletions"}
+	var cmd *exec.Cmd
+	if repo != "" {
+		cmd = exec.CommandContext(ctx, "gh", append([]string{"-R", repo}, cmdArgs...)...)
+	} else {
+		cmd = exec.CommandContext(ctx, "gh", cmdArgs...)
+	}
 	cmd.Dir = g.workDir
 
 	output, err := cmd.CombinedOutput()
@@ -242,7 +253,14 @@ func (g *GitHubTool) prCheckout(ctx context.Context, args map[string]interface{}
 		return &Result{Success: false, Error: "missing 'pr_number' parameter"}, nil
 	}
 
-	cmd := exec.CommandContext(ctx, "gh", "pr", "checkout", fmt.Sprintf("%d", prNum))
+	repo, _ := args["repo"].(string)
+	cmdArgs := []string{"pr", "checkout", fmt.Sprintf("%d", prNum)}
+	var cmd *exec.Cmd
+	if repo != "" {
+		cmd = exec.CommandContext(ctx, "gh", append([]string{"-R", repo}, cmdArgs...)...)
+	} else {
+		cmd = exec.CommandContext(ctx, "gh", cmdArgs...)
+	}
 	cmd.Dir = g.workDir
 
 	output, err := cmd.CombinedOutput()
