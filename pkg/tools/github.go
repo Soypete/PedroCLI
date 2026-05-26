@@ -437,6 +437,8 @@ func parsePRURL(urlStr string) (owner, repo string, prNum int, err error) {
 
 	urlStr = strings.TrimPrefix(urlStr, "https://")
 	urlStr = strings.TrimPrefix(urlStr, "http://")
+	urlStr = strings.TrimPrefix(urlStr, "github.com/")
+	urlStr = strings.TrimPrefix(urlStr, "github.com")
 	urlStr = strings.TrimSuffix(urlStr, "/")
 	urlStr = strings.TrimSuffix(urlStr, "/files")
 	urlStr = strings.TrimSuffix(urlStr, "/diff")
