@@ -1,6 +1,8 @@
 package tools
 
 import (
+	"os"
+
 	"github.com/soypete/pedrocli/pkg/config"
 )
 
@@ -24,6 +26,12 @@ type CodeToolsSetup struct {
 func NewCodeToolsSetup(cfg *config.Config, workDir string) *CodeToolsSetup {
 	registry := NewToolRegistry()
 
+	// Get GitHub token from config or environment variable
+	githubToken := cfg.GitHub.Token
+	if githubToken == "" {
+		githubToken = os.Getenv("GITHUB_TOKEN")
+	}
+
 	setup := &CodeToolsSetup{
 		Registry:     registry,
 		FileTool:     NewFileTool(),
@@ -33,7 +41,7 @@ func NewCodeToolsSetup(cfg *config.Config, workDir string) *CodeToolsSetup {
 		GitTool:      NewGitTool(workDir),
 		BashTool:     NewBashTool(cfg, workDir),
 		TestTool:     NewTestTool(workDir),
-		GitHubTool:   NewGitHubTool(workDir),
+		GitHubTool:   NewGitHubToolWithToken(workDir, githubToken),
 	}
 
 	// Register all tools with the registry for proper schemas

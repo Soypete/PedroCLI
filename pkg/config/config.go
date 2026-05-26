@@ -12,6 +12,7 @@ type Config struct {
 	Model       ModelConfig       `json:"model"`
 	Execution   ExecutionConfig   `json:"execution"`
 	Git         GitConfig         `json:"git"`
+	GitHub      GitHubConfig      `json:"github"`
 	Tools       ToolsConfig       `json:"tools"`
 	Project     ProjectConfig     `json:"project"`
 	Limits      LimitsConfig      `json:"limits"`
@@ -89,6 +90,11 @@ type GitConfig struct {
 	AlwaysDraftPR bool   `json:"always_draft_pr"`
 	BranchPrefix  string `json:"branch_prefix"`
 	Remote        string `json:"remote"`
+}
+
+// GitHubConfig contains GitHub API settings
+type GitHubConfig struct {
+	Token string `json:"token,omitempty"` // GitHub personal access token (prefer env var GITHUB_TOKEN)
 }
 
 // ToolsConfig contains tool settings

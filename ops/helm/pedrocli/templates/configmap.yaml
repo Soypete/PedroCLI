@@ -37,5 +37,11 @@ data:
       },
       "init": {
         "skip_checks": true
+      },
+      "debug": {
+        "keep_temp_files": {{ .Values.pedrocli.config.debug.keepTempFiles }}
+      },
+      "github": {
+        "token": ""
       }
     }

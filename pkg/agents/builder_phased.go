@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"os"
 
 	"github.com/soypete/pedrocli/pkg/artifacts"
 	"github.com/soypete/pedrocli/pkg/config"
@@ -143,8 +144,14 @@ func (b *BuilderPhasedAgent) Execute(ctx context.Context, input map[string]inter
 		b.RegisterTool(researchLinksTool)
 	}
 
+	// Get GitHub token
+	githubToken := b.config.GitHub.Token
+	if githubToken == "" {
+		githubToken = os.Getenv("GITHUB_TOKEN")
+	}
+
 	// Register GitHub tool
-	githubTool := tools.NewGitHubTool("")
+	githubTool := tools.NewGitHubToolWithToken("", githubToken)
 	b.RegisterTool(githubTool)
 
 	// Create job with workflow_type
@@ -189,7 +196,7 @@ func (b *BuilderPhasedAgent) Execute(ctx context.Context, input map[string]inter
 		// Update tool work directories
 		if githubTool, ok := b.tools["github"].(*tools.GitHubTool); ok {
 			// Re-register with correct workDir
-			b.RegisterTool(tools.NewGitHubTool(workDir))
+			b.RegisterTool(tools.NewGitHubToolWithToken(workDir, githubToken))
 			_ = githubTool // silence unused warning
 		}
 
