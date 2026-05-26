@@ -454,7 +454,9 @@ func parsePRURL(urlStr string) (owner, repo string, prNum int, err error) {
 	repo = parts[1]
 	prNumStr := parts[3]
 
-	fmt.Sscanf(prNumStr, "%d", &prNum)
+	if _, err := fmt.Sscanf(prNumStr, "%d", &prNum); err != nil {
+		return "", "", 0, fmt.Errorf("invalid PR number format: %s", prNumStr)
+	}
 	if prNum == 0 {
 		return "", "", 0, fmt.Errorf("invalid PR number: %s", prNumStr)
 	}
