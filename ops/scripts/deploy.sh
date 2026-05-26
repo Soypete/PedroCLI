@@ -41,6 +41,11 @@ if [[ -z "${CAL_API_KEY:-}" ]]; then
     CAL_API_KEY="$(_bao_get cal_api_key)"
 fi
 
+if [[ -z "${GITHUB_TOKEN:-}" ]]; then
+    echo "==> Fetching GITHUB_TOKEN from OpenBao..."
+    GITHUB_TOKEN="$(_bao_get github_credential)"
+fi
+
 if [[ -z "${DATABASE_URL:-}" ]]; then
     echo "ERROR: DATABASE_URL not found in OpenBao (${OPENBAO_ADDR} ${OPENBAO_SECRET_PATH}) and not set in environment." >&2
     exit 1
@@ -57,6 +62,10 @@ fi
 
 if [[ -n "${CAL_API_KEY:-}" ]]; then
     EXTRA_ARGS+=(--set-string "pedrocli.env.CAL_API_KEY=${CAL_API_KEY}")
+fi
+
+if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    EXTRA_ARGS+=(--set-string "pedrocli.env.GITHUB_TOKEN=${GITHUB_TOKEN}")
 fi
 
 # Pass any additional args (e.g. --dry-run, --set foo=bar)

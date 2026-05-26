@@ -2,7 +2,8 @@
 # Override with: helm upgrade --install pedrocli ./ops/helm/pedrocli \
 #   --set-string pedrocli.env.DATABASE_URL="$DATABASE_URL" \
 #   --set-string pedrocli.env.NOTION_TOKEN="$NOTION_TOKEN" \
-#   --set-string pedrocli.env.CAL_API_KEY="$CAL_API_KEY"
+#   --set-string pedrocli.env.CAL_API_KEY="$CAL_API_KEY" \
+#   --set-string pedrocli.env.GITHUB_TOKEN="$GITHUB_TOKEN"
 #
 # Secrets are stored in OpenBao at secret/apps/pedrocli and injected by deploy.sh.
 
@@ -16,7 +17,7 @@ pedrocli:
   config:
     model:
       type: llamacpp
-      modelName: gptoss20b2
+      modelName: gpt-oss-20b
       # pedrogpt runs llama.cpp and is reachable via Tailscale
       serverUrl: "http://100.121.229.114:8080"
       temperature: 0.2
@@ -29,6 +30,8 @@ pedrocli:
     web:
       port: 8080
       host: "0.0.0.0"
+    debug:
+      keepTempFiles: true
 
   # Environment variables (set via --set-string at deploy time)
   # Pulled from OpenBao (secret/apps/pedrocli) by ops/scripts/deploy.sh
@@ -36,6 +39,7 @@ pedrocli:
     DATABASE_URL: ""
     NOTION_TOKEN: ""
     CAL_API_KEY: ""
+    GITHUB_TOKEN: ""
 
   resources:
     requests:

@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"os"
 	"regexp"
 	"strconv"
 
@@ -156,8 +157,14 @@ func (r *ReviewerPhasedAgent) Execute(ctx context.Context, input map[string]inte
 		return nil, fmt.Errorf("missing 'pr_number' or 'branch' in input")
 	}
 
+	// Get GitHub token
+	githubToken := r.config.GitHub.Token
+	if githubToken == "" {
+		githubToken = os.Getenv("GITHUB_TOKEN")
+	}
+
 	// Register GitHub tool
-	githubTool := tools.NewGitHubTool("")
+	githubTool := tools.NewGitHubToolWithToken("", githubToken)
 	r.RegisterTool(githubTool)
 
 	// Create job
@@ -197,7 +204,7 @@ func (r *ReviewerPhasedAgent) Execute(ctx context.Context, input map[string]inte
 		}
 
 		// Update GitHub tool with correct workDir
-		r.RegisterTool(tools.NewGitHubTool(workDir))
+		r.RegisterTool(tools.NewGitHubToolWithToken(workDir, githubToken))
 
 		// Build initial prompt
 		initialPrompt := r.buildInitialPrompt(input)
