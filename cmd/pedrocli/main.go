@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -681,7 +682,9 @@ func runBlogInBackground(cfg *config.Config, transcription, title string) {
 		"job_dir":    jobDir,
 	}
 	metaJSON, _ := json.Marshal(jobMeta)
-	os.WriteFile(jobDir+"/meta.json", metaJSON, 0644)
+	if err := os.WriteFile(jobDir+"/meta.json", metaJSON, 0644); err != nil {
+		log.Printf("failed to write meta.json: %v", err)
+	}
 
 	fmt.Printf("📝 Blog job started in background: %s\n", jobID)
 	fmt.Printf("   Job directory: %s\n", jobDir)
@@ -748,11 +751,15 @@ func runBlogInBackground(cfg *config.Config, transcription, title string) {
 			jobMeta["error"] = err.Error()
 		}
 		metaJSON, _ = json.Marshal(jobMeta)
-		os.WriteFile(jobDir+"/meta.json", metaJSON, 0644)
+		if err := os.WriteFile(jobDir+"/meta.json", metaJSON, 0644); err != nil {
+			log.Printf("failed to write meta.json: %v", err)
+		}
 
 		if err == nil {
 			post := agent.GetCurrentPost()
-			os.WriteFile(jobDir+"/output.md", []byte(post.FinalContent), 0644)
+			if err := os.WriteFile(jobDir+"/output.md", []byte(post.FinalContent), 0644); err != nil {
+				log.Printf("failed to write output.md: %v", err)
+			}
 		}
 	}()
 
